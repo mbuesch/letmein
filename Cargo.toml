@@ -1,0 +1,21 @@
+# -*- coding: utf-8 -*-
+
+[workspace]
+members = [
+    "letmein",
+    "letmein-conf",
+    "letmein-proto",
+    "letmeind",
+]
+resolver = "2"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+panic = "abort"
+strip = "symbols"
+debug-assertions = false
+overflow-checks = true
+codegen-units = 1
+
+# vim: ts=4 sw=4 expandtab

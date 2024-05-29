@@ -1,0 +1,11 @@
+[Unit]
+Description=letmeind daemon socket
+Requires=letmeind.service
+
+[Socket]
+ListenStream=5800
+BindIPv6Only=both
+Accept=no
+
+[Install]
+WantedBy=multi-user.target

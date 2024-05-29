@@ -1,0 +1,18 @@
+# -*- coding: utf-8 -*-
+
+[package]
+name = "letmein"
+version = "1.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = [ "Michael Büsch <m@bues.ch>" ]
+publish = false
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+letmein-conf = { path = "../letmein-conf" }
+letmein-proto = { path = "../letmein-proto" }
+tokio = { version = "1", features = [ "rt", "net", "macros", ] }
+
+# vim: ts=4 sw=4 expandtab

@@ -1,0 +1,19 @@
+[Unit]
+Description=letmeind daemon
+PartOf=letmeind.socket
+
+[Service]
+Type=notify
+ExecStart=/opt/letmein/bin/letmeind
+ExecReload=/bin/kill -HUP $MAINPID
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+RestartSec=10
+User=root
+Group=root
+Nice=0
+#Environment=RUST_BACKTRACE=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+# -*- coding: utf-8 -*-
+
+[package]
+name = "letmein-conf"
+version = "1.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = [ "Michael Büsch <m@bues.ch>" ]
+publish = false
+
+[dependencies]
+anyhow = "1"
+configparser = "3"
+letmein-proto = { path = "../letmein-proto" }
+
+# vim: ts=4 sw=4 expandtab
