@@ -14,7 +14,7 @@ use crate::client::Client;
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::{Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant};
-use letmein_proto::{secure_random, Key, Message, Operation, PORT};
+use letmein_proto::{secure_random, Key, Message, Operation};
 use std::{net::IpAddr, path::Path, sync::Arc};
 
 const CONF_PATH: &str = "/opt/letmein/etc/letmein.conf";
@@ -48,10 +48,14 @@ async fn run_knock(
         return Err(err!("No key found in letmein.conf for user {user:08X}"));
     };
     let Some(resource) = conf.resource_id_by_port(port) else {
-        return Err(err!("Port {port} is not mapped to a resource in letmein.conf"));
+        return Err(err!(
+            "Port {port} is not mapped to a resource in letmein.conf"
+        ));
     };
 
-    let mut client = Client::new(addr, PORT).await.context("Client init")?;
+    let mut client = Client::new(addr, conf.port())
+        .await
+        .context("Client init")?;
 
     let mut knock = Message::new(Operation::Knock, user, resource);
     knock.generate_auth_no_challenge(key);

@@ -6,9 +6,12 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::systemd::{systemd_notify_ready, tcp_from_systemd};
+use crate::{
+    systemd::{systemd_notify_ready, tcp_from_systemd},
+    ConfigRef,
+};
 use anyhow::{self as ah, format_err as err, Context as _};
-use letmein_proto::{DeserializeResult, Message, MSG_SIZE, PORT};
+use letmein_proto::{DeserializeResult, Message, MSG_SIZE};
 use std::{io::ErrorKind, net::SocketAddr};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -86,7 +89,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub async fn new(no_systemd: bool) -> ah::Result<Self> {
+    pub async fn new(conf: &ConfigRef<'_>, no_systemd: bool) -> ah::Result<Self> {
         if !no_systemd {
             if let Some(listener) = tcp_from_systemd()? {
                 println!("Using socket from systemd.");
@@ -100,7 +103,9 @@ impl Server {
             }
         }
         Ok(Self {
-            listener: TcpListener::bind(("::0", PORT)).await.context("Bind")?,
+            listener: TcpListener::bind(("::0", conf.port()))
+                .await
+                .context("Bind")?,
         })
     }
 

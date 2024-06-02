@@ -10,7 +10,7 @@
 
 use anyhow::{self as ah, format_err as err, Context as _};
 use configparser::ini::Ini;
-use letmein_proto::Key;
+use letmein_proto::{Key, PORT};
 use std::{collections::HashMap, path::Path};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,6 +73,13 @@ fn get_debug(ini: &Ini) -> ah::Result<bool> {
         return parse_bool(&debug);
     }
     Ok(false)
+}
+
+fn get_port(ini: &Ini) -> ah::Result<u16> {
+    if let Some(port) = ini.get("GENERAL", "port") {
+        return parse_u16(&port);
+    }
+    Ok(PORT)
 }
 
 fn get_keys(ini: &Ini) -> ah::Result<HashMap<u32, Key>> {
@@ -168,6 +175,7 @@ pub enum ConfigVariant {
 #[derive(Clone, Default, Debug)]
 pub struct Config {
     debug: bool,
+    port: u16,
     keys: HashMap<u32, Key>,
     resources: HashMap<u32, Resource>,
     default_user: u32,
@@ -178,7 +186,10 @@ pub struct Config {
 
 impl Config {
     pub fn new(path: &Path, variant: ConfigVariant) -> ah::Result<Self> {
-        let mut this: Config = Default::default();
+        let mut this: Config = Self {
+            port: PORT,
+            ..Default::default()
+        };
         this.load(path, variant)?;
         Ok(this)
     }
@@ -199,6 +210,7 @@ impl Config {
         let mut nft_chain_input = Default::default();
 
         let debug = get_debug(&ini)?;
+        let port = get_port(&ini)?;
         let keys = get_keys(&ini)?;
         let resources = get_resources(&ini)?;
         if variant == ConfigVariant::Client {
@@ -211,6 +223,7 @@ impl Config {
         }
 
         self.debug = debug;
+        self.port = port;
         self.keys = keys;
         self.resources = resources;
         self.default_user = default_user;
@@ -222,6 +235,10 @@ impl Config {
 
     pub fn debug(&self) -> bool {
         self.debug
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
     pub fn key(&self, id: u32) -> Option<&Key> {

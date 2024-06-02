@@ -55,7 +55,9 @@ async fn main() -> ah::Result<()> {
     let (exit_sock_tx, mut exit_sock_rx) = sync::mpsc::channel(1);
     let (exit_fw_tx, mut exit_fw_rx) = sync::mpsc::channel(1);
 
-    let srv = Server::new(opts.no_systemd).await.context("Server init")?;
+    let srv = Server::new(&conf.read().await, opts.no_systemd)
+        .await
+        .context("Server init")?;
 
     // Task: Socket handler.
     let conf_clone = Arc::clone(&conf);
