@@ -171,12 +171,24 @@ impl Firewall {
         );
 
         let mut batch = Batch::new();
+
+        // Remove all rules from our chain.
         batch.add_cmd(NfCmd::Flush(FlushObject::Chain(chain)));
 
+        // Open the port letmeind is listening on.
+        batch.add(NfListObject::Rule(Rule::new(
+            family,
+            table.to_string(),
+            chain_input.to_string(),
+            vec![statement_match_dport(conf.port()), statement_accept()],
+        )));
+
+        // Open all lease ports, restricted to the peer addresses.
         for lease in self.leases.values() {
             batch.add(lease.gen_rule(family, table, chain_input));
         }
 
+        // Apply all rules to the kernel.
         let ruleset = batch.to_nftables();
         apply_ruleset(&ruleset, None, None).context("Apply nftables")?;
 
