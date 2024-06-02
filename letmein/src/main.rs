@@ -45,10 +45,10 @@ async fn run_knock(
 ) -> ah::Result<()> {
     let user = user.unwrap_or_else(|| conf.default_user());
     let Some(key) = conf.key(user) else {
-        return Err(err!("No key found for user {user:X}"));
+        return Err(err!("No key found in letmein.conf for user {user:08X}"));
     };
     let Some(resource) = conf.resource_id_by_port(port) else {
-        return Err(err!("Port {port} is not mapped to a resource"));
+        return Err(err!("Port {port} is not mapped to a resource in letmein.conf"));
     };
 
     let mut client = Client::new(addr, PORT).await.context("Client init")?;
