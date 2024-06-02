@@ -1,6 +1,7 @@
 [Unit]
 Description=letmeind daemon socket
-Requires=letmeind.service
+Requires=letmeind.service nftables.service
+After=nftables.service
 
 [Socket]
 ListenStream=5800
