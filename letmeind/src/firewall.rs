@@ -82,8 +82,14 @@ impl Lease {
         now >= self.timeout
     }
 
-    pub fn gen_rule(&self, family: NfFamily, table: &str, chain_input: &str) -> NfListObject {
-        NfListObject::Rule(Rule::new(
+    pub fn gen_rule(
+        &self,
+        conf: &ConfigRef<'_>,
+        family: NfFamily,
+        table: &str,
+        chain_input: &str,
+    ) -> NfListObject {
+        let rule = NfListObject::Rule(Rule::new(
             family,
             table.to_string(),
             chain_input.to_string(),
@@ -92,7 +98,11 @@ impl Lease {
                 statement_match_dport(self.port),
                 statement_accept(),
             ],
-        ))
+        ));
+        if conf.debug() {
+            println!("nftables: Rule saddr={}, dport={}", self.addr, self.port);
+        }
+        rule
     }
 }
 
@@ -107,7 +117,7 @@ impl Firewall {
         let mut this = Self {
             leases: HashMap::new(),
         };
-        this.clear(conf).await.context("Nftables initialization")?;
+        this.clear(conf).await.context("nftables initialization")?;
         Ok(this)
     }
 
@@ -182,17 +192,22 @@ impl Firewall {
             chain_input.to_string(),
             vec![statement_match_dport(conf.port()), statement_accept()],
         )));
+        if conf.debug() {
+            println!("nftables: Rule dport={}", conf.port());
+        }
 
         // Open all lease ports, restricted to the peer addresses.
         for lease in self.leases.values() {
-            batch.add(lease.gen_rule(family, table, chain_input));
+            batch.add(lease.gen_rule(conf, family, table, chain_input));
         }
 
         // Apply all rules to the kernel.
         let ruleset = batch.to_nftables();
         apply_ruleset(&ruleset, None, None).context("Apply nftables")?;
 
-        println!("Nftables rules applied");
+        if conf.debug() {
+            println!("nftables: {} rules installed.", self.leases.len() + 1);
+        }
         Ok(())
     }
 }
