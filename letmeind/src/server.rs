@@ -15,6 +15,8 @@ use letmein_proto::{DeserializeResult, Message, MSG_SIZE};
 use std::{io::ErrorKind, net::SocketAddr};
 use tokio::net::{TcpListener, TcpStream};
 
+const DEBUG: bool = false;
+
 pub struct Connection {
     stream: TcpStream,
     addr: SocketAddr,
@@ -49,6 +51,9 @@ impl Connection {
                         else {
                             return Err(err!("RX deserialization failed"));
                         };
+                        if DEBUG {
+                            println!("RX: {msg:?} {rxbuf:?}");
+                        }
                         return Ok(Some(msg));
                     }
                 }
@@ -72,6 +77,9 @@ impl Connection {
                 Ok(n) => {
                     txcount += n;
                     if txcount >= txbuf.len() {
+                        if DEBUG {
+                            println!("TX: {msg:?} {txbuf:?}");
+                        }
                         return Ok(());
                     }
                 }
