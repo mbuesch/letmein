@@ -17,14 +17,17 @@ use sha3::Sha3_256;
 use subtle::ConstantTimeEq as _;
 
 pub const PORT: u16 = 5800;
-pub const MSG_SIZE: usize = 4 + 4 + 4 + 4 + AUTH_SIZE;
+pub const MSG_SIZE: usize = 4 + 4 + 4 + 4 + SALT_SIZE + AUTH_SIZE;
 const MAGIC: u32 = 0x3B1BB719;
 
+const SALT_SIZE: usize = 8;
 const AUTH_SIZE: usize = 32;
 const KEY_SIZE: usize = 32;
-pub type Key = [u8; KEY_SIZE];
+pub type Salt = [u8; SALT_SIZE];
 pub type Auth = [u8; AUTH_SIZE];
+pub type Key = [u8; KEY_SIZE];
 pub type Challenge = Auth;
+const ZERO_SALT: Salt = [0; SALT_SIZE];
 const ZERO_AUTH: Auth = [0; AUTH_SIZE];
 
 pub fn secure_random<const SZ: usize>() -> [u8; SZ] {
@@ -66,6 +69,7 @@ pub struct Message {
     operation: Operation,
     user: u32,
     resource: u32,
+    salt: Salt,
     auth: Auth,
 }
 
@@ -76,6 +80,7 @@ impl Message {
             operation,
             user,
             resource,
+            salt: secure_random(),
             auth: ZERO_AUTH,
         };
         debug_assert_eq!(
@@ -105,12 +110,14 @@ impl Message {
     fn authenticate(&self, shared_key: &[u8], challenge: &[u8]) -> Auth {
         assert_eq!(shared_key.len(), KEY_SIZE);
         assert_eq!(challenge.len(), AUTH_SIZE);
+        assert_ne!(self.salt, ZERO_SALT);
 
         let mut mac = Hmac::<Sha3_256>::new_from_slice(shared_key)
             .expect("HMAC<SHA3-256> initialization failed");
         mac.update(&(self.operation as u32).to_be_bytes());
         mac.update(&self.user.to_be_bytes());
         mac.update(&self.resource.to_be_bytes());
+        mac.update(&self.salt);
         mac.update(challenge);
         let mac_bytes = mac.finalize().into_bytes();
 
