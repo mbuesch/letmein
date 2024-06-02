@@ -11,7 +11,9 @@
 use anyhow::{self as ah, format_err as err, Context as _};
 use configparser::ini::Ini;
 use letmein_proto::{Key, PORT};
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, time::Duration};
+
+const DEFAULT_NFT_TIMEOUT: u32 = 3600;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Resource {
@@ -34,6 +36,15 @@ fn parse_u16(s: &str) -> ah::Result<u16> {
         Ok(u16::from_str_radix(s, 16)?)
     } else {
         Ok(s.parse::<u16>()?)
+    }
+}
+
+fn parse_u32(s: &str) -> ah::Result<u32> {
+    let s = s.trim();
+    if let Some(s) = s.strip_prefix("0x") {
+        Ok(u32::from_str_radix(s, 16)?)
+    } else {
+        Ok(s.parse::<u32>()?)
     }
 }
 
@@ -166,6 +177,14 @@ fn get_nft_chain_input(ini: &Ini) -> ah::Result<String> {
     }
 }
 
+fn get_nft_timeout(ini: &Ini) -> ah::Result<u32> {
+    if let Some(nft_timeout) = ini.get("NFTABLES", "timeout") {
+        parse_u32(&nft_timeout)
+    } else {
+        Ok(DEFAULT_NFT_TIMEOUT)
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ConfigVariant {
     Server,
@@ -182,12 +201,14 @@ pub struct Config {
     nft_family: String,
     nft_table: String,
     nft_chain_input: String,
+    nft_timeout: u32,
 }
 
 impl Config {
     pub fn new(path: &Path, variant: ConfigVariant) -> ah::Result<Self> {
         let mut this: Config = Self {
             port: PORT,
+            nft_timeout: DEFAULT_NFT_TIMEOUT,
             ..Default::default()
         };
         this.load(path, variant)?;
@@ -208,6 +229,7 @@ impl Config {
         let mut nft_family = Default::default();
         let mut nft_table = Default::default();
         let mut nft_chain_input = Default::default();
+        let mut nft_timeout = DEFAULT_NFT_TIMEOUT;
 
         let debug = get_debug(&ini)?;
         let port = get_port(&ini)?;
@@ -220,6 +242,7 @@ impl Config {
             nft_family = get_nft_family(&ini)?;
             nft_table = get_nft_table(&ini)?;
             nft_chain_input = get_nft_chain_input(&ini)?;
+            nft_timeout = get_nft_timeout(&ini)?;
         }
 
         self.debug = debug;
@@ -230,6 +253,7 @@ impl Config {
         self.nft_family = nft_family;
         self.nft_table = nft_table;
         self.nft_chain_input = nft_chain_input;
+        self.nft_timeout = nft_timeout;
         Ok(())
     }
 
@@ -275,6 +299,10 @@ impl Config {
 
     pub fn nft_chain_input(&self) -> &str {
         &self.nft_chain_input
+    }
+
+    pub fn nft_timeout(&self) -> Duration {
+        Duration::from_secs(self.nft_timeout.into())
     }
 }
 

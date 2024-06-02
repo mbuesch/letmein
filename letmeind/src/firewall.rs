@@ -16,11 +16,7 @@ use nftables::{
     stmt::{Match, Operator, Statement},
     types::NfFamily,
 };
-use std::{
-    collections::HashMap,
-    net::IpAddr,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, net::IpAddr, time::Instant};
 
 fn statement_match_saddr(addr: IpAddr) -> Statement {
     let protocol = match addr {
@@ -56,8 +52,6 @@ fn statement_accept() -> Statement {
     Statement::Accept(None)
 }
 
-const LEASE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
-
 struct Lease {
     addr: IpAddr,
     port: u16,
@@ -65,8 +59,8 @@ struct Lease {
 }
 
 impl Lease {
-    pub fn new(addr: IpAddr, port: u16) -> Self {
-        let timeout = Instant::now() + LEASE_TIMEOUT;
+    pub fn new(conf: &ConfigRef<'_>, addr: IpAddr, port: u16) -> Self {
+        let timeout = Instant::now() + conf.nft_timeout();
         Self {
             addr,
             port,
@@ -74,8 +68,8 @@ impl Lease {
         }
     }
 
-    pub fn refresh_timeout(&mut self) {
-        self.timeout = Instant::now() + LEASE_TIMEOUT;
+    pub fn refresh_timeout(&mut self, conf: &ConfigRef<'_>) {
+        self.timeout = Instant::now() + conf.nft_timeout();
     }
 
     pub fn is_timed_out(&self, now: Instant) -> bool {
@@ -146,9 +140,9 @@ impl Firewall {
     ) -> ah::Result<()> {
         let id = (remote_addr, port);
         if let Some(lease) = self.leases.get_mut(&id) {
-            lease.refresh_timeout();
+            lease.refresh_timeout(conf);
         } else {
-            self.leases.insert(id, Lease::new(remote_addr, port));
+            self.leases.insert(id, Lease::new(conf, remote_addr, port));
             if let Err(e) = self.apply_nftables(conf) {
                 self.leases.remove(&id);
                 return Err(e);
