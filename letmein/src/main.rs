@@ -13,7 +13,7 @@ mod client;
 use crate::client::Client;
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::{Parser, Subcommand};
-use letmein_conf::Config;
+use letmein_conf::{Config, ConfigVariant};
 use letmein_proto::{secure_random, Key, Message, Operation, PORT};
 use std::{net::IpAddr, path::Path, sync::Arc};
 
@@ -101,7 +101,9 @@ enum Command {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ah::Result<()> {
     let opts = Opts::parse();
-    let conf = Arc::new(Config::new(Path::new(CONF_PATH)).context("Configuration file")?);
+    let conf = Arc::new(
+        Config::new(Path::new(CONF_PATH), ConfigVariant::Client).context("Configuration file")?,
+    );
 
     match opts.command {
         Command::Knock { addr, port, user } => run_knock(conf, addr, port, user).await?,

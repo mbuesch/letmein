@@ -159,6 +159,12 @@ fn get_nft_chain_input(ini: &Ini) -> ah::Result<String> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ConfigVariant {
+    Server,
+    Client,
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct Config {
     debug: bool,
@@ -171,25 +177,38 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(path: &Path) -> ah::Result<Self> {
+    pub fn new(path: &Path, variant: ConfigVariant) -> ah::Result<Self> {
         let mut this: Config = Default::default();
-        this.load(path)?;
+        this.load(path, variant)?;
         Ok(this)
     }
 
-    pub fn load(&mut self, path: &Path) -> ah::Result<()> {
+    pub fn load(&mut self, path: &Path, variant: ConfigVariant) -> ah::Result<()> {
         let mut ini = Ini::new_cs();
         if let Err(e) = ini.load(path) {
-            return Err(err!("Failed to load configuration {path:?}: {e}"));
+            if variant == ConfigVariant::Server {
+                return Err(err!("Failed to load configuration {path:?}: {e}"));
+            } else {
+                return Ok(());
+            }
         };
+
+        let mut default_user = Default::default();
+        let mut nft_family = Default::default();
+        let mut nft_table = Default::default();
+        let mut nft_chain_input = Default::default();
 
         let debug = get_debug(&ini)?;
         let keys = get_keys(&ini)?;
         let resources = get_resources(&ini)?;
-        let default_user = get_default_user(&ini)?;
-        let nft_family = get_nft_family(&ini)?;
-        let nft_table = get_nft_table(&ini)?;
-        let nft_chain_input = get_nft_chain_input(&ini)?;
+        if variant == ConfigVariant::Client {
+            default_user = get_default_user(&ini)?;
+        }
+        if variant == ConfigVariant::Server {
+            nft_family = get_nft_family(&ini)?;
+            nft_table = get_nft_table(&ini)?;
+            nft_chain_input = get_nft_chain_input(&ini)?;
+        }
 
         self.debug = debug;
         self.keys = keys;

@@ -14,7 +14,7 @@ mod systemd;
 use crate::{firewall::Firewall, processor::Processor, server::Server};
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
-use letmein_conf::Config;
+use letmein_conf::{Config, ConfigVariant};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -44,7 +44,7 @@ struct Opts {
 async fn main() -> ah::Result<()> {
     let opts = Opts::parse();
     let conf = Arc::new(RwLock::new(
-        Config::new(Path::new(CONF_PATH)).context("Configuration file")?,
+        Config::new(Path::new(CONF_PATH), ConfigVariant::Server).context("Configuration file")?,
     ));
     let fw = Arc::new(Mutex::new(Firewall::new(&conf.read().await).await?));
 
@@ -114,7 +114,7 @@ async fn main() -> ah::Result<()> {
             }
             _ = sighup.recv() => {
                 println!("SIGHUP: Reloading.");
-                if let Err(e) = conf.write().await.load(Path::new(CONF_PATH)) {
+                if let Err(e) = conf.write().await.load(Path::new(CONF_PATH), ConfigVariant::Server) {
                     eprintln!("Failed to load configuration file: {e}");
                 }
             }
