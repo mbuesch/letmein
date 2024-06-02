@@ -87,17 +87,21 @@ struct Opts {
     command: Command,
 }
 
+fn parse_hex(s: &str) -> ah::Result<u32> {
+    Ok(u32::from_str_radix(s.trim(), 16)?)
+}
+
 #[derive(Subcommand, Debug)]
 enum Command {
     Knock {
         addr: IpAddr,
         port: u16,
 
-        #[arg(long, short)]
+        #[arg(long, short, value_parser = parse_hex)]
         user: Option<u32>,
     },
     GenKey {
-        #[arg(long, short)]
+        #[arg(long, short, value_parser = parse_hex)]
         user: Option<u32>,
     },
 }
