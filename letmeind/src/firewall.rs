@@ -76,6 +76,14 @@ impl Lease {
         now >= self.timeout
     }
 
+    pub fn addr(&self) -> IpAddr {
+        self.addr
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
     pub fn gen_rule(
         &self,
         conf: &ConfigRef<'_>,
@@ -124,7 +132,17 @@ impl Firewall {
         let old_len = self.leases.len();
 
         let now = Instant::now();
-        self.leases.retain(|_, lease| !lease.is_timed_out(now));
+        self.leases.retain(|_, lease| {
+            let timed_out = lease.is_timed_out(now);
+            if timed_out && conf.debug() {
+                println!(
+                    "nftables: Lease saddr={}, dport={} timed out",
+                    lease.addr(),
+                    lease.port()
+                );
+            }
+            !timed_out
+        });
 
         if old_len != self.leases.len() {
             self.apply_nftables(conf)?;
