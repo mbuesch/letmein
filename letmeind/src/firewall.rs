@@ -134,9 +134,7 @@ impl Firewall {
         self.apply_nftables(conf)
     }
 
-    pub async fn maintain(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
-        let old_len = self.leases.len();
-
+    async fn check_all_timeouts(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
         let now = Instant::now();
         self.leases.retain(|_, lease| {
             let timed_out = lease.is_timed_out(now);
@@ -149,10 +147,21 @@ impl Firewall {
             }
             !timed_out
         });
+        Ok(())
+    }
 
+    pub async fn maintain(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
+        let old_len = self.leases.len();
+        self.check_all_timeouts(conf).await?;
         if old_len != self.leases.len() {
             self.apply_nftables(conf)?;
         }
+        Ok(())
+    }
+
+    pub async fn reload(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
+        self.check_all_timeouts(conf).await?;
+        self.apply_nftables(conf)?;
         Ok(())
     }
 

@@ -116,8 +116,18 @@ async fn main() -> ah::Result<()> {
             }
             _ = sighup.recv() => {
                 println!("SIGHUP: Reloading.");
-                if let Err(e) = conf.write().await.load(Path::new(CONF_PATH), ConfigVariant::Server) {
-                    eprintln!("Failed to load configuration file: {e}");
+                {
+                    let mut conf = conf.write().await;
+                    if let Err(e) = conf.load(Path::new(CONF_PATH), ConfigVariant::Server) {
+                        eprintln!("Failed to load configuration file: {e}");
+                    }
+                }
+                {
+                    let conf = conf.read().await;
+                    let mut fw = fw.lock().await;
+                    if let Err(e) = fw.reload(&conf).await {
+                        eprintln!("Failed to reload filewall rules: {e}");
+                    }
                 }
             }
             code = exit_sock_rx.recv() => {
