@@ -300,7 +300,6 @@ name = "letmeind"
 version = "1.0.0"
 dependencies = [
  "anyhow",
- "bincode",
  "clap",
  "letmein-conf",
  "letmein-proto",
