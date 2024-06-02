@@ -19,9 +19,15 @@ use nftables::{
 use std::{collections::HashMap, net::IpAddr, time::Instant};
 
 fn statement_match_saddr(addr: IpAddr) -> Statement {
-    let protocol = match addr {
-        IpAddr::V4(_) => "ip",
-        IpAddr::V6(_) => "ip6",
+    let (protocol, addr) = match addr {
+        IpAddr::V4(addr) => ("ip", addr.to_string()),
+        IpAddr::V6(addr) => {
+            if let Some(addr) = addr.to_ipv4_mapped() {
+                ("ip", addr.to_string())
+            } else {
+                ("ip6", addr.to_string())
+            }
+        }
     };
     Statement::Match(Match {
         left: Expression::Named(NamedExpression::Payload(Payload::PayloadField(
@@ -30,7 +36,7 @@ fn statement_match_saddr(addr: IpAddr) -> Statement {
                 field: "saddr".to_string(),
             },
         ))),
-        right: Expression::String(addr.to_string()),
+        right: Expression::String(addr),
         op: Operator::EQ,
     })
 }
