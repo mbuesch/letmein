@@ -8,7 +8,7 @@
 
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_proto::{DeserializeResult, Message, MSG_SIZE};
-use std::{io::ErrorKind, net::IpAddr};
+use std::io::ErrorKind;
 use tokio::net::TcpStream;
 
 const DEBUG: bool = false;
@@ -18,8 +18,8 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn new(addr: IpAddr, port: u16) -> ah::Result<Self> {
-        let stream = TcpStream::connect((addr, port))
+    pub async fn new(host: &str, port: u16) -> ah::Result<Self> {
+        let stream = TcpStream::connect((host, port))
             .await
             .context("Connect to server")?;
         Ok(Self { stream })

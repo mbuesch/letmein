@@ -15,7 +15,7 @@ use anyhow::{self as ah, format_err as err, Context as _};
 use clap::{Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant};
 use letmein_proto::{secure_random, Key, Message, Operation};
-use std::{net::IpAddr, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 const CONF_PATH: &str = "/opt/letmein/etc/letmein.conf";
 
@@ -37,12 +37,7 @@ async fn recv_msg(client: &mut Client, expect_operation: Operation) -> ah::Resul
     Ok(reply)
 }
 
-async fn run_knock(
-    conf: Arc<Config>,
-    addr: IpAddr,
-    port: u16,
-    user: Option<u32>,
-) -> ah::Result<()> {
+async fn run_knock(conf: Arc<Config>, addr: &str, port: u16, user: Option<u32>) -> ah::Result<()> {
     let user = user.unwrap_or_else(|| conf.default_user());
     let Some(key) = conf.key(user) else {
         return Err(err!("No key found in letmein.conf for user {user:08X}"));
@@ -94,7 +89,7 @@ fn parse_hex(s: &str) -> ah::Result<u32> {
 #[derive(Subcommand, Debug)]
 enum Command {
     Knock {
-        addr: IpAddr,
+        host: String,
         port: u16,
 
         #[arg(long, short, value_parser = parse_hex)]
@@ -114,7 +109,7 @@ async fn main() -> ah::Result<()> {
     );
 
     match opts.command {
-        Command::Knock { addr, port, user } => run_knock(conf, addr, port, user).await?,
+        Command::Knock { host, port, user } => run_knock(conf, &host, port, user).await?,
         Command::GenKey { user } => run_genkey(conf, user).await?,
     }
 
