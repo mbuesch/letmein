@@ -4,9 +4,7 @@
 
 [Git repository](https://bues.ch/cgit/letmein.git)
 
-## Building
-
-Run the `build.sh` script to build letmein.
+## Prerequisites
 
 The build requires the `cargo-audit` and `cargo-auditable` Rust crates installed:
 
@@ -14,7 +12,18 @@ The build requires the `cargo-audit` and `cargo-auditable` Rust crates installed
 cargo install cargo-audit cargo-auditable
 ```
 
-After installing all build dependencies, run the build script:
+At runtime the nftables `nft` binary is required to be installed in the `$PATH`.
+On Debian please install the `nftables` package:
+
+```sh
+apt install nftables
+```
+
+## Building
+
+Run the `build.sh` script to build letmein.
+
+After installing all build prerequisites, run the build script:
 
 ```sh
 ./build.sh
