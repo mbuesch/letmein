@@ -13,7 +13,7 @@ use configparser::ini::Ini;
 use letmein_proto::{Key, PORT};
 use std::{collections::HashMap, path::Path, time::Duration};
 
-const DEFAULT_NFT_TIMEOUT: u32 = 3600;
+const DEFAULT_NFT_TIMEOUT: u32 = 600;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Resource {
@@ -358,15 +358,17 @@ mod tests {
     fn test_nft() {
         let mut ini = Ini::new_cs();
         ini.read(
-            "[NFTABLES]\nfamily = inet\ntable = filter\nchain-input = LETMEIN-INPUT\n".to_string(),
+            "[NFTABLES]\nfamily = inet\ntable = filter\nchain-input = LETMEIN-INPUT\ntimeout = 50\n".to_string(),
         )
         .unwrap();
         let nft_family = get_nft_family(&ini).unwrap();
         let nft_table = get_nft_table(&ini).unwrap();
         let nft_chain_input = get_nft_chain_input(&ini).unwrap();
+        let nft_timeout = get_nft_timeout(&ini).unwrap();
         assert_eq!(nft_family, "inet");
         assert_eq!(nft_table, "filter");
         assert_eq!(nft_chain_input, "LETMEIN-INPUT");
+        assert_eq!(nft_timeout, 50);
     }
 }
 
