@@ -6,7 +6,7 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use anyhow::{self as ah, Context as _};
+use anyhow::{self as ah, format_err as err, Context as _};
 use std::{net::TcpListener, os::fd::FromRawFd as _};
 
 /// Create a new [TcpListener] with the socket provided by systemd.
@@ -19,6 +19,10 @@ pub fn tcp_from_systemd() -> ah::Result<Option<TcpListener>> {
             // SAFETY:
             // The fd from systemd is good and lives for the lifetime of the program.
             return Ok(Some(unsafe { TcpListener::from_raw_fd(fd) }));
+        } else {
+            return Err(err!(
+                "Booted with systemd, but no listen_fds received from systemd."
+            ));
         }
     }
     Ok(None)
