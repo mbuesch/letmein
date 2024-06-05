@@ -51,6 +51,8 @@ entry_checks()
 stop_services()
 {
     try_systemctl stop letmeind
+    try_systemctl disable letmeind.service
+    try_systemctl disable letmeind.socket
 }
 
 start_services()
@@ -93,7 +95,7 @@ install_letmeind()
             /opt/letmein/etc/letmeind.conf
     fi
 
-    do_systemctl enable letmeind.service
+    do_systemctl enable letmeind.socket
 }
 
 release="release"

@@ -16,6 +16,3 @@ User=root
 Group=root
 Nice=0
 #Environment=RUST_BACKTRACE=1
-
-[Install]
-WantedBy=multi-user.target
