@@ -50,7 +50,8 @@ entry_checks()
 
 stop_services()
 {
-    try_systemctl stop letmeind
+    try_systemctl stop letmeind.socket
+    try_systemctl stop letmeind.service
     try_systemctl disable letmeind.service
     try_systemctl disable letmeind.socket
 }
