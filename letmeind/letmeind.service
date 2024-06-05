@@ -6,6 +6,7 @@ After=nftables.service
 
 [Service]
 Type=notify
+NotifyAccess=main
 ExecStart=/opt/letmein/bin/letmeind
 ExecReload=/bin/kill -HUP $MAINPID
 StandardOutput=journal
