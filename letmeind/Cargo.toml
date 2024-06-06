@@ -13,8 +13,8 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 letmein-conf = { path = "../letmein-conf" }
 letmein-proto = { path = "../letmein-proto" }
+letmein-systemd = { path = "../letmein-systemd" }
 nftables = "0.4"
-sd-notify = { git = "https://github.com/lnicola/sd-notify.git", rev = "5f9cbef17f33549c60d322342dead37fe11f18a7" }
 tokio = { version = "1", features = [ "rt", "net", "macros", "signal", "sync", "time" ] }
 
 # vim: ts=4 sw=4 expandtab

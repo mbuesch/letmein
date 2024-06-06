@@ -296,6 +296,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "letmein-systemd"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "sd-notify",
+]
+
+[[package]]
 name = "letmeind"
 version = "1.0.0"
 dependencies = [
@@ -303,8 +311,8 @@ dependencies = [
  "clap",
  "letmein-conf",
  "letmein-proto",
+ "letmein-systemd",
  "nftables",
- "sd-notify",
  "tokio",
 ]
 

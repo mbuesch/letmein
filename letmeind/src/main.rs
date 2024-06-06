@@ -6,10 +6,11 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+#![forbid(unsafe_code)]
+
 mod firewall;
 mod processor;
 mod server;
-mod systemd;
 
 use crate::{firewall::Firewall, processor::Processor, server::Server};
 use anyhow::{self as ah, format_err as err, Context as _};

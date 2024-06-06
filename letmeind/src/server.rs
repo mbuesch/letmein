@@ -6,12 +6,10 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{
-    systemd::{systemd_notify_ready, tcp_from_systemd},
-    ConfigRef,
-};
+use crate::ConfigRef;
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_proto::{DeserializeResult, Message, MSG_SIZE};
+use letmein_systemd::{systemd_notify_ready, tcp_from_systemd};
 use std::{io::ErrorKind, net::SocketAddr};
 use tokio::net::{TcpListener, TcpStream};
 

@@ -5,6 +5,7 @@ members = [
     "letmein",
     "letmein-conf",
     "letmein-proto",
+    "letmein-systemd",
     "letmeind",
 ]
 resolver = "2"
