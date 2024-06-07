@@ -15,8 +15,10 @@ use std::{collections::HashMap, path::Path, time::Duration};
 
 const DEFAULT_NFT_TIMEOUT: u32 = 600;
 
+/// Configured resource.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Resource {
+    /// Port resource.
     Port(u16),
 }
 
@@ -185,12 +187,16 @@ fn get_nft_timeout(ini: &Ini) -> ah::Result<u32> {
     }
 }
 
+/// Configuration variant.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ConfigVariant {
+    /// Parse the configuration as a server configuration (letmeind.conf).
     Server,
+    /// Parse the configuration as a client configuration (letmein.conf).
     Client,
 }
 
+/// Parsed letmein.conf or letmeind.conf. (See [ConfigVariant]).
 #[derive(Clone, Default, Debug)]
 pub struct Config {
     debug: bool,
@@ -205,6 +211,7 @@ pub struct Config {
 }
 
 impl Config {
+    /// Parse a configuration file.
     pub fn new(path: &Path, variant: ConfigVariant) -> ah::Result<Self> {
         let mut this: Config = Self {
             port: PORT,
@@ -215,6 +222,7 @@ impl Config {
         Ok(this)
     }
 
+    /// (Re-)load a configuration from a file.
     pub fn load(&mut self, path: &Path, variant: ConfigVariant) -> ah::Result<()> {
         let mut ini = Ini::new_cs();
         if let Err(e) = ini.load(path) {
