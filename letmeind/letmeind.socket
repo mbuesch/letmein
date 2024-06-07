@@ -10,4 +10,4 @@ BindIPv6Only=both
 Accept=no
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=sockets.target
