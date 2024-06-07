@@ -2,6 +2,7 @@
 Description=letmeind daemon
 Requires=nftables.service
 After=nftables.service
+StartLimitIntervalSec=0
 
 [Service]
 Type=notify
