@@ -16,8 +16,8 @@ keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-letmein-conf = { path = "../letmein-conf" }
-letmein-proto = { path = "../letmein-proto" }
+letmein-conf = "1"
+letmein-proto = "1"
 tokio = { version = "1", features = [ "rt", "net", "macros", ] }
 
 # vim: ts=4 sw=4 expandtab

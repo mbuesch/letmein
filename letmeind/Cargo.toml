@@ -16,9 +16,9 @@ keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-letmein-conf = { path = "../letmein-conf" }
-letmein-proto = { path = "../letmein-proto" }
-letmein-systemd = { path = "../letmein-systemd" }
+letmein-conf = "1"
+letmein-proto = "1"
+letmein-systemd = "1"
 nftables = "0.4"
 tokio = { version = "1", features = [ "rt", "net", "macros", "signal", "sync", "time" ] }
 

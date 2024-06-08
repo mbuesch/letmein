@@ -16,6 +16,6 @@ keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
 [dependencies]
 anyhow = "1"
 configparser = "3"
-letmein-proto = { path = "../letmein-proto" }
+letmein-proto = "1"
 
 # vim: ts=4 sw=4 expandtab
