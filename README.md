@@ -147,9 +147,10 @@ The client is used to send a knock packet to the server.
 The main design goals of letmein are:
 
 - It is implemented in a memory-safe programming language that makes certain classes of severe bugs impossible.
-- The algorithms and implementation must be as simple as reasonably possible.
-- It does not implement complicated cryptographic algorithms such as asynchronous public/private key crypto. It uses a shared secret together with HMAC/SHA3 for authentication instead.
-- It has a replay protection. Replaying a knock packet sequence will not result in a successful authentication.
+- The algorithms and implementation are as simple as reasonably possible.
+- It does not implement complicated cryptographic algorithms such as asymmetric public/private key crypto. It uses a shared secret together with HMAC/SHA3 for authentication instead.
+- It has a replay protection. Replaying a knock packet sequence does not result in a successful authentication.
+- A MiM attack has no security impact.
 - It only opens the port for the IP address that made the knock request.
 - Please read the code and comment on it. Feel free to open an issue, if you have questions, suggestions or requests. Please discuss the pros and cons of these design decisions. I am interested to hear your opinion.
 
