@@ -11,7 +11,7 @@ Machines that can't successfully authenticate the knock sequence won't be able t
 
 Letmein requires an `nftables` based firewall. It will *not* work with `iptables`.
 
-[Homepage](https://bues.ch/)
+[Homepage](https://bues.ch/h/letmein)
 
 [Git repository](https://bues.ch/cgit/letmein.git)
 

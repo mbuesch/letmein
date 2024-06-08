@@ -2,11 +2,16 @@
 
 [package]
 name = "letmein-proto"
+description = "Authenticated port knocking - Wire protocol"
 version = "1.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = [ "Michael Büsch <m@bues.ch>" ]
-publish = false
+homepage = "https://bues.ch/h/letmein"
+repository = "https://github.com/mbuesch/letmein"
+readme = "README.md"
+categories = [ "authentication", "network-programming", "command-line-utilities", "cryptography" ]
+keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
 
 [dependencies]
 anyhow = "1"
