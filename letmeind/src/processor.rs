@@ -102,15 +102,15 @@ impl<'a> Processor<'a> {
         };
 
         // Generate and send a challenge.
-        let mut challenge_msg = Message::new(Operation::Challenge, user_id, resource_id);
-        let challenge = challenge_msg.generate_challenge();
-        self.send_msg(challenge_msg).await?;
+        let mut challenge = Message::new(Operation::Challenge, user_id, resource_id);
+        challenge.generate_challenge();
+        self.send_msg(challenge.clone()).await?;
 
         // Receive the response.
         let response = self.recv_msg(Operation::Response).await?;
 
         // Authenticate the challenge-response.
-        if !response.check_auth_ok(key, &challenge) {
+        if !response.check_auth_ok(key, challenge) {
             let _ = self.send_go_away().await;
             return Err(err!("Response: Authentication failed"));
         }

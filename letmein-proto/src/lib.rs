@@ -44,9 +44,6 @@ pub type Auth = [u8; AUTH_SIZE];
 /// Type of the authentication key.
 pub type Key = [u8; KEY_SIZE];
 
-/// Type of the challenge token.
-pub type Challenge = Auth;
-
 /// Invalid all-zero salt.
 const ZERO_SALT: Salt = [0; SALT_SIZE];
 
@@ -209,10 +206,11 @@ impl Message {
     /// Check if the authentication token in this message is valid
     /// given the provided `shared_key` and `challenge`.
     #[must_use]
-    pub fn check_auth_ok(&self, shared_key: &[u8], challenge: &[u8]) -> bool {
+    pub fn check_auth_ok(&self, shared_key: &[u8], challenge: Message) -> bool {
+        assert_eq!(challenge.operation(), Operation::Challenge);
         assert_eq!(self.operation(), Operation::Response);
         self.auth
-            .ct_eq(&self.authenticate(shared_key, challenge))
+            .ct_eq(&self.authenticate(shared_key, &challenge.auth))
             .into()
     }
 
@@ -245,10 +243,9 @@ impl Message {
 
     /// Generate a new random challenge nonce and store it in
     /// the authentication field of this message.
-    pub fn generate_challenge(&mut self) -> Challenge {
+    pub fn generate_challenge(&mut self) {
         assert_eq!(self.operation(), Operation::Challenge);
         self.auth = secure_random();
-        self.auth
     }
 
     /// Serialize this message into a byte stream.
@@ -362,7 +359,7 @@ mod tests {
                 148, 235, 110, 140, 84, 128, 141, 33, 147, 29, 235, 185, 202, 42
             ]
         );
-        assert!(response.check_auth_ok(&key, &challenge.auth));
+        assert!(response.check_auth_ok(&key, challenge.clone()));
         check_ser_de(&response);
     }
 
