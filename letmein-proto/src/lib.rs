@@ -130,7 +130,7 @@ pub enum Operation {
 }
 
 /// The message data type.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Message {
     magic: u32,
     operation: Operation,
@@ -267,6 +267,141 @@ impl Message {
             }
             Ok(DeserializeResult::Ok(msg))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_secure_random() {
+        // secure_random has always-on assertions internally.
+        let _buf: [u8; 8] = secure_random();
+    }
+
+    #[test]
+    #[should_panic(expected = "SZ >= 8")]
+    fn test_secure_random_too_small() {
+        let _buf: [u8; 7] = secure_random();
+    }
+
+    fn check_ser_de(msg: &Message) {
+        let bytes = msg.msg_serialize().unwrap();
+        let DeserializeResult::Ok(msg_de) = Message::try_msg_deserialize(&bytes).unwrap() else {
+            panic!("try_msg_deserialize not Ok");
+        };
+        assert_eq!(*msg, msg_de);
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_msg_knock() {
+        let mut msg = Message::new(Operation::Knock, 0xA423DDA7, 0xBC5D8077);
+        msg.salt = [0x4A; 8]; // override random salt
+        let key = [0x9E; 32];
+        msg.generate_auth_no_challenge(&key);
+        assert_eq!(msg.operation(), Operation::Knock);
+        assert_eq!(msg.user(), 0xA423DDA7);
+        assert_eq!(msg.resource(), 0xBC5D8077);
+        assert_eq!(
+            msg.auth,
+            [
+                99, 153, 229, 224, 255, 22, 33, 154, 94, 191, 98, 153, 196, 29, 202, 24, 154, 47,
+                118, 25, 189, 10, 178, 234, 95, 129, 184, 174, 249, 254, 6, 0
+            ]
+        );
+        assert!(msg.check_auth_ok_no_challenge(&key));
+
+        let bytes = msg.msg_serialize().unwrap();
+        assert_eq!(
+            bytes,
+            [
+                0x3B, 0x1B, 0xB7, 0x19, // magic
+                0x00, 0x00, 0x00, 0x00, // operation
+                0xA4, 0x23, 0xDD, 0xA7, // user
+                0xBC, 0x5D, 0x80, 0x77, // resource
+                0x4A, 0x4A, 0x4A, 0x4A, 0x4A, 0x4A, 0x4A, 0x4A, // salt
+                msg.auth[0], msg.auth[1], msg.auth[2], msg.auth[3], // auth
+                msg.auth[4], msg.auth[5], msg.auth[6], msg.auth[7], // auth
+                msg.auth[8], msg.auth[9], msg.auth[10], msg.auth[11], // auth
+                msg.auth[12], msg.auth[13], msg.auth[14], msg.auth[15], // auth
+                msg.auth[16], msg.auth[17], msg.auth[18], msg.auth[19], // auth
+                msg.auth[20], msg.auth[21], msg.auth[22], msg.auth[23], // auth
+                msg.auth[24], msg.auth[25], msg.auth[26], msg.auth[27], // auth
+                msg.auth[28], msg.auth[29], msg.auth[30], msg.auth[31], // auth
+            ]
+        );
+        check_ser_de(&msg);
+    }
+
+    #[test]
+    fn test_msg_challenge_response() {
+        let key = [0x6B; 32];
+        let mut challenge = Message::new(Operation::Challenge, 0x280D04F3, 0xE2EE7397);
+        challenge.salt = [0x91; 8]; // override random salt
+        challenge.generate_challenge();
+        assert_eq!(challenge.operation(), Operation::Challenge);
+        assert_eq!(challenge.user(), 0x280D04F3);
+        assert_eq!(challenge.resource(), 0xE2EE7397);
+        assert_ne!(challenge.auth, [0; 32]);
+        challenge.auth = [0xB8; 32]; // override random challenge
+        check_ser_de(&challenge);
+
+        let mut response =
+            Message::new(Operation::Response, challenge.user(), challenge.resource());
+        response.salt = [0x62; 8]; // override salt
+        response.generate_auth(&key, challenge.clone());
+        assert_eq!(response.operation(), Operation::Response);
+        assert_eq!(response.user(), 0x280D04F3);
+        assert_eq!(response.resource(), 0xE2EE7397);
+        assert_eq!(
+            response.auth,
+            [
+                172, 65, 151, 51, 129, 213, 147, 73, 88, 172, 2, 136, 153, 251, 144, 161, 48, 188,
+                148, 235, 110, 140, 84, 128, 141, 33, 147, 29, 235, 185, 202, 42
+            ]
+        );
+        assert!(response.check_auth_ok(&key, &challenge.auth));
+        check_ser_de(&response);
+    }
+
+    #[test]
+    fn test_msg_comein() {
+        let mut msg = Message::new(Operation::ComeIn, 0xF90201B2, 0xB3E46B6C);
+        msg.salt = [0xEB; 8]; // override random salt
+        assert_eq!(msg.operation(), Operation::ComeIn);
+        assert_eq!(msg.user(), 0xF90201B2);
+        assert_eq!(msg.resource(), 0xB3E46B6C);
+        assert_eq!(msg.auth, [0; 32]);
+
+        let bytes = msg.msg_serialize().unwrap();
+        assert_eq!(
+            bytes,
+            [
+                0x3B, 0x1B, 0xB7, 0x19, // magic
+                0x00, 0x00, 0x00, 0x03, // operation
+                0xF9, 0x02, 0x01, 0xB2, // user
+                0xB3, 0xE4, 0x6B, 0x6C, // resource
+                0xEB, 0xEB, 0xEB, 0xEB, 0xEB, 0xEB, 0xEB, 0xEB, // salt
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // auth
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // auth
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // auth
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // auth
+            ]
+        );
+        check_ser_de(&msg);
+    }
+
+    #[test]
+    fn test_msg_goaway() {
+        let mut msg = Message::new(Operation::GoAway, 0x0F52E045, 0x9AF4EFA0);
+        msg.salt = [0x8C; 8]; // override random salt
+        assert_eq!(msg.operation(), Operation::GoAway);
+        assert_eq!(msg.user(), 0x0F52E045);
+        assert_eq!(msg.resource(), 0x9AF4EFA0);
+        assert_eq!(msg.auth, [0; 32]);
+        check_ser_de(&msg);
     }
 }
 
