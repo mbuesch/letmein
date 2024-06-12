@@ -44,9 +44,6 @@ pub type Auth = [u8; AUTH_SIZE];
 /// Type of the authentication key.
 pub type Key = [u8; KEY_SIZE];
 
-/// Invalid all-zero salt.
-const ZERO_SALT: Salt = [0; SALT_SIZE];
-
 /// Invalid all-zero authentication token.
 const ZERO_AUTH: Auth = [0; AUTH_SIZE];
 
@@ -179,7 +176,6 @@ impl Message {
     fn authenticate(&self, shared_key: &[u8], challenge: &[u8]) -> Auth {
         assert_eq!(shared_key.len(), KEY_SIZE);
         assert_eq!(challenge.len(), AUTH_SIZE);
-        assert_ne!(self.salt, ZERO_SALT);
 
         let mut mac = Hmac::<Sha3_256>::new_from_slice(shared_key)
             .expect("HMAC<SHA3-256> initialization failed");
