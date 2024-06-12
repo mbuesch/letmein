@@ -290,9 +290,11 @@ mod tests {
     #[test]
     #[rustfmt::skip]
     fn test_msg_knock() {
-        let mut msg = Message::new(Operation::Knock, 0xA423DDA7, 0xBC5D8077);
-        msg.salt = [0x4A; 8]; // override random salt
         let key = [0x9E; 32];
+
+        let mut msg = Message::new(Operation::Knock, 0xA423DDA7, 0xBC5D8077);
+        assert_ne!(msg.salt, [0; 8]);
+        msg.salt = [0x4A; 8]; // override random salt
         msg.generate_auth_no_challenge(&key);
         assert_eq!(msg.operation(), Operation::Knock);
         assert_eq!(msg.user(), 0xA423DDA7);
@@ -331,7 +333,9 @@ mod tests {
     #[test]
     fn test_msg_challenge_response() {
         let key = [0x6B; 32];
+
         let mut challenge = Message::new(Operation::Challenge, 0x280D04F3, 0xE2EE7397);
+        assert_ne!(challenge.salt, [0; 8]);
         challenge.salt = [0x91; 8]; // override random salt
         challenge.generate_challenge();
         assert_eq!(challenge.operation(), Operation::Challenge);
@@ -343,6 +347,7 @@ mod tests {
 
         let mut response =
             Message::new(Operation::Response, challenge.user(), challenge.resource());
+        assert_ne!(response.salt, [0; 8]);
         response.salt = [0x62; 8]; // override salt
         response.generate_auth(&key, challenge.clone());
         assert_eq!(response.operation(), Operation::Response);
@@ -362,6 +367,7 @@ mod tests {
     #[test]
     fn test_msg_comein() {
         let mut msg = Message::new(Operation::ComeIn, 0xF90201B2, 0xB3E46B6C);
+        assert_ne!(msg.salt, [0; 8]);
         msg.salt = [0xEB; 8]; // override random salt
         assert_eq!(msg.operation(), Operation::ComeIn);
         assert_eq!(msg.user(), 0xF90201B2);
@@ -389,6 +395,7 @@ mod tests {
     #[test]
     fn test_msg_goaway() {
         let mut msg = Message::new(Operation::GoAway, 0x0F52E045, 0x9AF4EFA0);
+        assert_ne!(msg.salt, [0; 8]);
         msg.salt = [0x8C; 8]; // override random salt
         assert_eq!(msg.operation(), Operation::GoAway);
         assert_eq!(msg.user(), 0x0F52E045);
