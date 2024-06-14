@@ -15,6 +15,12 @@ use tokio::net::{TcpListener, TcpStream};
 
 const DEBUG: bool = false;
 
+pub trait ConnectionOps {
+    fn addr(&self) -> SocketAddr;
+    async fn recv_msg(&mut self) -> ah::Result<Option<Message>>;
+    async fn send_msg(&mut self, msg: Message) -> ah::Result<()>;
+}
+
 pub struct Connection {
     stream: TcpStream,
     addr: SocketAddr,
@@ -24,12 +30,14 @@ impl Connection {
     fn new(stream: TcpStream, addr: SocketAddr) -> ah::Result<Self> {
         Ok(Self { stream, addr })
     }
+}
 
-    pub fn addr(&self) -> SocketAddr {
+impl ConnectionOps for Connection {
+    fn addr(&self) -> SocketAddr {
         self.addr
     }
 
-    pub async fn recv_msg(&mut self) -> ah::Result<Option<Message>> {
+    async fn recv_msg(&mut self) -> ah::Result<Option<Message>> {
         let mut rxbuf = [0; MSG_SIZE];
         let mut rxcount = 0;
         loop {
@@ -63,7 +71,7 @@ impl Connection {
         }
     }
 
-    pub async fn send_msg(&mut self, msg: Message) -> ah::Result<()> {
+    async fn send_msg(&mut self, msg: Message) -> ah::Result<()> {
         let txbuf = msg.msg_serialize()?;
         let mut txcount = 0;
         loop {

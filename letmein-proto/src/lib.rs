@@ -186,9 +186,8 @@ impl Message {
         mac.update(challenge);
         let mac_bytes = mac.finalize().into_bytes();
 
-        let mut auth: Auth = ZERO_AUTH;
-        auth.copy_from_slice(mac_bytes.as_slice());
-        assert_ne!(auth, ZERO_AUTH);
+        let auth: Auth = mac_bytes.into();
+        debug_assert_ne!(auth, ZERO_AUTH);
 
         auth
     }

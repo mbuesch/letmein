@@ -188,9 +188,10 @@ fn get_nft_timeout(ini: &Ini) -> ah::Result<u32> {
 }
 
 /// Configuration variant.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub enum ConfigVariant {
     /// Parse the configuration as a server configuration (letmeind.conf).
+    #[default]
     Server,
     /// Parse the configuration as a client configuration (letmein.conf).
     Client,
@@ -199,6 +200,7 @@ pub enum ConfigVariant {
 /// Parsed letmein.conf or letmeind.conf. (See [ConfigVariant]).
 #[derive(Clone, Default, Debug)]
 pub struct Config {
+    variant: ConfigVariant,
     debug: bool,
     port: u16,
     keys: HashMap<u32, Key>,
@@ -212,45 +214,48 @@ pub struct Config {
 
 impl Config {
     /// Parse a configuration file.
-    pub fn new(path: &Path, variant: ConfigVariant) -> ah::Result<Self> {
-        let mut this: Config = Self {
+    pub fn new(variant: ConfigVariant) -> Self {
+        Self {
+            variant,
             port: PORT,
             nft_timeout: DEFAULT_NFT_TIMEOUT,
             ..Default::default()
-        };
-        this.load(path, variant)?;
-        Ok(this)
+        }
     }
 
     /// (Re-)load a configuration from a file.
-    pub fn load(&mut self, path: &Path, variant: ConfigVariant) -> ah::Result<()> {
+    pub fn load(&mut self, path: &Path) -> ah::Result<()> {
         let mut ini = Ini::new_cs();
         if let Err(e) = ini.load(path) {
-            if variant == ConfigVariant::Server {
+            if self.variant == ConfigVariant::Server {
                 return Err(err!("Failed to load configuration {path:?}: {e}"));
             } else {
                 return Ok(());
             }
         };
+        self.load_ini(&ini)
+    }
 
+    /// (Re-)load a configuration from a parsed [Ini] instance.
+    pub fn load_ini(&mut self, ini: &Ini) -> ah::Result<()> {
         let mut default_user = Default::default();
         let mut nft_family = Default::default();
         let mut nft_table = Default::default();
         let mut nft_chain_input = Default::default();
         let mut nft_timeout = DEFAULT_NFT_TIMEOUT;
 
-        let debug = get_debug(&ini)?;
-        let port = get_port(&ini)?;
-        let keys = get_keys(&ini)?;
-        let resources = get_resources(&ini)?;
-        if variant == ConfigVariant::Client {
-            default_user = get_default_user(&ini)?;
+        let debug = get_debug(ini)?;
+        let port = get_port(ini)?;
+        let keys = get_keys(ini)?;
+        let resources = get_resources(ini)?;
+        if self.variant == ConfigVariant::Client {
+            default_user = get_default_user(ini)?;
         }
-        if variant == ConfigVariant::Server {
-            nft_family = get_nft_family(&ini)?;
-            nft_table = get_nft_table(&ini)?;
-            nft_chain_input = get_nft_chain_input(&ini)?;
-            nft_timeout = get_nft_timeout(&ini)?;
+        if self.variant == ConfigVariant::Server {
+            nft_family = get_nft_family(ini)?;
+            nft_table = get_nft_table(ini)?;
+            nft_chain_input = get_nft_chain_input(ini)?;
+            nft_timeout = get_nft_timeout(ini)?;
         }
 
         self.debug = debug;

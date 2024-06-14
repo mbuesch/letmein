@@ -6,23 +6,23 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{firewall::Firewall, server::Connection, ConfigRef};
+use crate::{firewall::Firewall, server::ConnectionOps, ConfigRef};
 use anyhow::{self as ah, format_err as err};
 use letmein_conf::Resource;
 use letmein_proto::{Message, Operation};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub struct Processor<'a> {
-    conn: Connection,
+pub struct Processor<'a, C: ConnectionOps> {
+    conn: C,
     conf: &'a ConfigRef<'a>,
     fw: Arc<Mutex<Firewall>>,
     user_id: Option<u32>,
     resource_id: Option<u32>,
 }
 
-impl<'a> Processor<'a> {
-    pub fn new(conn: Connection, conf: &'a ConfigRef<'a>, fw: Arc<Mutex<Firewall>>) -> Self {
+impl<'a, C: ConnectionOps> Processor<'a, C> {
+    pub fn new(conn: C, conf: &'a ConfigRef<'a>, fw: Arc<Mutex<Firewall>>) -> Self {
         Self {
             conn,
             conf,

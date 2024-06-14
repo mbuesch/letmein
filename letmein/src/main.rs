@@ -135,9 +135,11 @@ enum Command {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ah::Result<()> {
     let opts = Opts::parse();
-    let conf = Arc::new(
-        Config::new(Path::new(CONF_PATH), ConfigVariant::Client).context("Configuration file")?,
-    );
+
+    let mut conf = Config::new(ConfigVariant::Client);
+    conf.load(Path::new(CONF_PATH))
+        .context("Configuration file")?;
+    let conf = Arc::new(conf);
 
     match opts.command {
         Command::Knock {

@@ -44,9 +44,12 @@ struct Opts {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ah::Result<()> {
     let opts = Opts::parse();
-    let conf = Arc::new(RwLock::new(
-        Config::new(Path::new(CONF_PATH), ConfigVariant::Server).context("Configuration file")?,
-    ));
+
+    let mut conf = Config::new(ConfigVariant::Server);
+    conf.load(Path::new(CONF_PATH))
+        .context("Configuration file")?;
+    let conf = Arc::new(RwLock::new(conf));
+
     let fw = Arc::new(Mutex::new(Firewall::new(&conf.read().await).await?));
 
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
@@ -119,7 +122,7 @@ async fn main() -> ah::Result<()> {
                 println!("SIGHUP: Reloading.");
                 {
                     let mut conf = conf.write().await;
-                    if let Err(e) = conf.load(Path::new(CONF_PATH), ConfigVariant::Server) {
+                    if let Err(e) = conf.load(Path::new(CONF_PATH)) {
                         eprintln!("Failed to load configuration file: {e}");
                     }
                 }
