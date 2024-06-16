@@ -32,6 +32,7 @@ use tokio::{
 };
 
 const CONF_PATH: &str = "/opt/letmein/etc/letmeind.conf";
+const FW_MAINTAIN_PERIOD: Duration = Duration::from_millis(5000);
 
 pub type ConfigRef<'a> = RwLockReadGuard<'a, Config>;
 
@@ -97,7 +98,7 @@ async fn main() -> ah::Result<()> {
     let conf_clone = Arc::clone(&conf);
     let fw_clone = Arc::clone(&fw);
     task::spawn(async move {
-        let mut interval = time::interval(Duration::from_millis(5000));
+        let mut interval = time::interval(FW_MAINTAIN_PERIOD);
         loop {
             interval.tick().await;
             let conf = conf_clone.read().await;
