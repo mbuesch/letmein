@@ -127,10 +127,13 @@ impl Lease {
 
 type LeaseId = (IpAddr, u16);
 
-pub trait FirewallOps {
+pub trait FirewallMaintain {
     async fn clear(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()>;
     async fn maintain(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()>;
     async fn reload(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()>;
+}
+
+pub trait FirewallOpen {
     async fn open_port(
         &mut self,
         conf: &ConfigRef<'_>,
@@ -225,7 +228,7 @@ impl Firewall {
     }
 }
 
-impl FirewallOps for Firewall {
+impl FirewallMaintain for Firewall {
     /// Remove all leases and remove all rules from the kernel.
     async fn clear(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
         self.leases.clear();
@@ -250,7 +253,9 @@ impl FirewallOps for Firewall {
         self.apply_nftables(conf)?;
         Ok(())
     }
+}
 
+impl FirewallOpen for Firewall {
     /// Add a lease and open the port for the specified IP address.
     /// If a lease for this port/address is already present, the timeout will be reset.
     /// Apply the rules to the kernel, if required.

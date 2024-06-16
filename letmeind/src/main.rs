@@ -13,7 +13,7 @@ mod processor;
 mod server;
 
 use crate::{
-    firewall::{Firewall, FirewallOps},
+    firewall::{Firewall, FirewallMaintain},
     processor::Processor,
     server::Server,
 };
