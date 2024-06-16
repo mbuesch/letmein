@@ -142,6 +142,10 @@ Then run the `install-client.sh` to install the letmein client to `/opt/letmein/
 
 The client is used to send a knock packet to the server.
 
+## Platform
+
+This application is Linux-only, because it only supports `nftables` as firewall backend.
+
 ## Internals and design goals
 
 The main design goals of letmein are:
