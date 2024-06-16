@@ -127,6 +127,18 @@ impl Lease {
 
 type LeaseId = (IpAddr, u16);
 
+pub trait FirewallOps {
+    async fn clear(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()>;
+    async fn maintain(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()>;
+    async fn reload(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()>;
+    async fn open_port(
+        &mut self,
+        conf: &ConfigRef<'_>,
+        remote_addr: IpAddr,
+        port: u16,
+    ) -> ah::Result<()>;
+}
+
 pub struct Firewall {
     leases: HashMap<LeaseId, Lease>,
 }
@@ -140,12 +152,6 @@ impl Firewall {
         };
         this.clear(conf).await.context("nftables initialization")?;
         Ok(this)
-    }
-
-    /// Remove all leases and remove all rules from the kernel.
-    pub async fn clear(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
-        self.leases.clear();
-        self.apply_nftables(conf)
     }
 
     /// Prune all leases that have timed out.
@@ -162,47 +168,6 @@ impl Firewall {
             }
             !timed_out
         });
-        Ok(())
-    }
-
-    /// Run the periodic maintenance of the firewall.
-    /// This will remove timed-out leases.
-    pub async fn maintain(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
-        let old_len = self.leases.len();
-        self.check_all_timeouts(conf).await?;
-        if old_len != self.leases.len() {
-            self.apply_nftables(conf)?;
-        }
-        Ok(())
-    }
-
-    /// Perform a reload (SIGHUP) of the firewall.
-    /// This will always re-apply the rules to the kernel.
-    pub async fn reload(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
-        self.check_all_timeouts(conf).await?;
-        self.apply_nftables(conf)?;
-        Ok(())
-    }
-
-    /// Add a lease and open the port for the specified IP address.
-    /// If a lease for this port/address is already present, the timeout will be reset.
-    /// Apply the rules to the kernel, if required.
-    pub async fn open_port(
-        &mut self,
-        conf: &ConfigRef<'_>,
-        remote_addr: IpAddr,
-        port: u16,
-    ) -> ah::Result<()> {
-        let id = (remote_addr, port);
-        if let Some(lease) = self.leases.get_mut(&id) {
-            lease.refresh_timeout(conf);
-        } else {
-            self.leases.insert(id, Lease::new(conf, remote_addr, port));
-            if let Err(e) = self.apply_nftables(conf) {
-                self.leases.remove(&id);
-                return Err(e);
-            }
-        }
         Ok(())
     }
 
@@ -255,6 +220,55 @@ impl Firewall {
 
         if conf.debug() {
             println!("nftables: {} rules installed.", self.leases.len() + 1);
+        }
+        Ok(())
+    }
+}
+
+impl FirewallOps for Firewall {
+    /// Remove all leases and remove all rules from the kernel.
+    async fn clear(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
+        self.leases.clear();
+        self.apply_nftables(conf)
+    }
+
+    /// Run the periodic maintenance of the firewall.
+    /// This will remove timed-out leases.
+    async fn maintain(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
+        let old_len = self.leases.len();
+        self.check_all_timeouts(conf).await?;
+        if old_len != self.leases.len() {
+            self.apply_nftables(conf)?;
+        }
+        Ok(())
+    }
+
+    /// Perform a reload (SIGHUP) of the firewall.
+    /// This will always re-apply the rules to the kernel.
+    async fn reload(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
+        self.check_all_timeouts(conf).await?;
+        self.apply_nftables(conf)?;
+        Ok(())
+    }
+
+    /// Add a lease and open the port for the specified IP address.
+    /// If a lease for this port/address is already present, the timeout will be reset.
+    /// Apply the rules to the kernel, if required.
+    async fn open_port(
+        &mut self,
+        conf: &ConfigRef<'_>,
+        remote_addr: IpAddr,
+        port: u16,
+    ) -> ah::Result<()> {
+        let id = (remote_addr, port);
+        if let Some(lease) = self.leases.get_mut(&id) {
+            lease.refresh_timeout(conf);
+        } else {
+            self.leases.insert(id, Lease::new(conf, remote_addr, port));
+            if let Err(e) = self.apply_nftables(conf) {
+                self.leases.remove(&id);
+                return Err(e);
+            }
         }
         Ok(())
     }

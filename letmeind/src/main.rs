@@ -12,7 +12,11 @@ mod firewall;
 mod processor;
 mod server;
 
-use crate::{firewall::Firewall, processor::Processor, server::Server};
+use crate::{
+    firewall::{Firewall, FirewallOps},
+    processor::Processor,
+    server::Server,
+};
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant};
