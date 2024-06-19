@@ -16,6 +16,8 @@ keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+hickory-proto = { version = "0.24" }
+hickory-resolver = { version = "0.24" }
 letmein-conf = "1"
 letmein-proto = "1"
 tokio = { version = "1", features = [ "rt", "net", "macros", ] }

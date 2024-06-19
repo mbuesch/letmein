@@ -6,6 +6,7 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use crate::resolver::{resolve, ResMode};
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_proto::{DeserializeResult, Message, MSG_SIZE};
 use std::io::ErrorKind;
@@ -18,8 +19,9 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn new(host: &str, port: u16) -> ah::Result<Self> {
-        let stream = TcpStream::connect((host, port))
+    pub async fn new(host: &str, port: u16, mode: ResMode) -> ah::Result<Self> {
+        let addr = resolve(host, mode).await.context("Resolve host name")?;
+        let stream = TcpStream::connect((addr, port))
             .await
             .context("Connect to server")?;
         Ok(Self { stream })
