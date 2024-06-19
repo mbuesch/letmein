@@ -40,24 +40,6 @@ impl From<(bool, bool)> for AddrMode {
     }
 }
 
-async fn recv_msg(client: &mut Client, expect_operation: Operation) -> ah::Result<Message> {
-    let reply = client.recv_msg().await.context("Receive knock reply")?;
-    let Some(reply) = reply else {
-        return Err(err!("Connection terminated"));
-    };
-    if reply.operation() == Operation::GoAway {
-        return Err(err!("The server rejected the request"));
-    }
-    if reply.operation() != expect_operation {
-        return Err(err!(
-            "Invalid reply message operation. Expected {:?}, got {:?}",
-            expect_operation,
-            reply.operation()
-        ));
-    }
-    Ok(reply)
-}
-
 async fn knock_seq(
     addr: &str,
     server_port: u16,
@@ -74,13 +56,13 @@ async fn knock_seq(
     knock.generate_auth_no_challenge(key);
     client.send_msg(knock).await.context("Send knock")?;
 
-    let challenge = recv_msg(&mut client, Operation::Challenge).await?;
+    let challenge = client.recv_specific_msg(Operation::Challenge).await?;
 
     let mut response = Message::new(Operation::Response, user, resource);
     response.generate_auth(key, challenge);
     client.send_msg(response).await.context("Send response")?;
 
-    let _ = recv_msg(&mut client, Operation::ComeIn).await?;
+    let _ = client.recv_specific_msg(Operation::ComeIn).await?;
 
     Ok(())
 }

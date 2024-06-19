@@ -8,7 +8,7 @@
 
 use crate::resolver::{resolve, ResMode};
 use anyhow::{self as ah, format_err as err, Context as _};
-use letmein_proto::{DeserializeResult, Message, MSG_SIZE};
+use letmein_proto::{DeserializeResult, Message, Operation, MSG_SIZE};
 use std::io::ErrorKind;
 use tokio::net::TcpStream;
 
@@ -59,6 +59,24 @@ impl Client {
                 }
             }
         }
+    }
+
+    pub async fn recv_specific_msg(&mut self, expect_operation: Operation) -> ah::Result<Message> {
+        let reply = self.recv_msg().await.context("Receive knock reply")?;
+        let Some(reply) = reply else {
+            return Err(err!("Connection terminated"));
+        };
+        if reply.operation() == Operation::GoAway {
+            return Err(err!("The server rejected the request"));
+        }
+        if reply.operation() != expect_operation {
+            return Err(err!(
+                "Invalid reply message operation. Expected {:?}, got {:?}",
+                expect_operation,
+                reply.operation()
+            ));
+        }
+        Ok(reply)
     }
 
     pub async fn send_msg(&mut self, msg: Message) -> ah::Result<()> {
