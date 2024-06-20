@@ -147,6 +147,7 @@ The client is used to send a knock packet to the server.
 The server application `letmeind` is Linux-only, because it only supports `nftables` as firewall backend.
 
 The client application `letmein` is portable and should run on all major platforms.
+But it's currently only tested on Linux.
 
 ## Internals and design goals
 
@@ -157,7 +158,7 @@ The main design goals of letmein are:
 - It does not implement complicated cryptographic algorithms such as asymmetric public/private key crypto. It uses a shared secret together with HMAC/SHA3 for authentication instead.
 - It has a replay protection. Replaying a knock packet sequence does not result in a successful authentication.
 - A MiM attack has no security impact.
-- It only opens the port for the IP address that made the knock request.
+- It only opens the port for the IP address that made the knock request. By default for both IPv4 and IPv6, if available. This behavior can be adjusted with the `-4` and `-6` client command line options.
 
 ## Security analysis
 
