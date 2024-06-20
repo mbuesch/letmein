@@ -6,6 +6,12 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+//! This crate implements the server and client configuration
+//! file parsing of `letmein`.
+//!
+//! Defaults for missing configuration files
+//! or missing individual configuration entries are implemented here.
+
 #![forbid(unsafe_code)]
 
 use anyhow::{self as ah, format_err as err, Context as _};
@@ -213,7 +219,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Parse a configuration file.
+    /// Create a new configuration instance with all-default values.
     pub fn new(variant: ConfigVariant) -> Self {
         Self {
             variant,
@@ -270,22 +276,27 @@ impl Config {
         Ok(())
     }
 
+    /// Get the `debug` option from `[GENERAL]` section.
     pub fn debug(&self) -> bool {
         self.debug
     }
 
+    /// Get the `port` option from `[GENERAL]` section.
     pub fn port(&self) -> u16 {
         self.port
     }
 
+    /// Get a key value by key identifier from the `[KEYS]` section.
     pub fn key(&self, id: u32) -> Option<&Key> {
         self.keys.get(&id)
     }
 
+    /// Get a resource value by resource identifier from the `[RESOURCES]` section.
     pub fn resource(&self, id: u32) -> Option<&Resource> {
         self.resources.get(&id)
     }
 
+    /// Lookup a resource id by a port number in the `[RESOURCES]` section.
     pub fn resource_id_by_port(&self, port: u16) -> Option<u32> {
         for (k, v) in &self.resources {
             match v {
@@ -298,22 +309,27 @@ impl Config {
         None
     }
 
+    /// Get the `default-user` option from `[CLIENT]` section.
     pub fn default_user(&self) -> u32 {
         self.default_user
     }
 
+    /// Get the `family` option from `[NFTABLES]` section.
     pub fn nft_family(&self) -> &str {
         &self.nft_family
     }
 
+    /// Get the `table` option from `[NFTABLES]` section.
     pub fn nft_table(&self) -> &str {
         &self.nft_table
     }
 
+    /// Get the `chain-input` option from `[NFTABLES]` section.
     pub fn nft_chain_input(&self) -> &str {
         &self.nft_chain_input
     }
 
+    /// Get the `timeout` option from `[NFTABLES]` section.
     pub fn nft_timeout(&self) -> Duration {
         Duration::from_secs(self.nft_timeout.into())
     }
