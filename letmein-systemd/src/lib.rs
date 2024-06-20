@@ -6,6 +6,8 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+//! This crate is an abstraction of the `systemd` interfaces needed by `letmein`.
+
 use anyhow::{self as ah, format_err as err, Context as _};
 use std::{net::TcpListener, os::fd::FromRawFd as _};
 
