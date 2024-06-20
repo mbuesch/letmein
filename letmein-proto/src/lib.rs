@@ -6,6 +6,13 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+//! This crate implements the `letmein` wire protocol.
+//!
+//! Serializing messages to a raw byte stream and
+//! deserializing raw byte stream to a message is implemented here.
+//!
+//! The `letmein` authentication algorithm primitives are implemented here.
+
 #![forbid(unsafe_code)]
 
 use anyhow::{self as ah, format_err as err};
@@ -48,14 +55,20 @@ pub type Key = [u8; KEY_SIZE];
 const ZERO_AUTH: Auth = [0; AUTH_SIZE];
 
 /// Generate a cryptographically secure random token.
+///
+/// This function can only generate tokens longer than 7 bytes.
 /// Returns an array of random bytes.
 pub fn secure_random<const SZ: usize>() -> [u8; SZ] {
+    // For lengths bigger than 8 bytes the likelyhood of the sanity checks below
+    // triggering on good generator is low enough.
     assert!(SZ >= 8);
-    let mut buf: [u8; SZ] = [0; SZ];
+
     // Get secure random bytes from the operating system.
+    let mut buf: [u8; SZ] = [0; SZ];
     if getrandom(&mut buf).is_err() {
         panic!("Failed to read secure random bytes from the operating system. (getrandom failed)");
     }
+
     // Sanity check if getrandom implementation
     // is a no-op or otherwise trivially broken.
     assert_ne!(buf, [0; SZ]);
