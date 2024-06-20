@@ -159,6 +159,11 @@ The main design goals of letmein are:
 - It has a replay protection. Replaying a knock packet sequence does not result in a successful authentication.
 - A MiM attack has no security impact.
 - It only opens the port for the IP address that made the knock request. By default for both IPv4 and IPv6, if available. This behavior can be adjusted with the `-4` and `-6` client command line options.
+- letmein does not link to libraries (.so) written in unsafe languages, except for the ones required by the operating system or by the Rust compiler. The only dynamically linked libraries are:
+  - libc.so
+  - libm.so
+  - libgcc_s.so
+  - linux-vdso.so
 
 ## Security analysis
 
