@@ -158,7 +158,22 @@ The main design goals of letmein are:
 - It has a replay protection. Replaying a knock packet sequence does not result in a successful authentication.
 - A MiM attack has no security impact.
 - It only opens the port for the IP address that made the knock request.
-- Please read the code and comment on it. Feel free to open an issue, if you have questions, suggestions or requests. Please discuss the pros and cons of these design decisions. I am interested to hear your opinion.
+
+## Security analysis
+
+The program has carefully been design to be secure, to the best of my knowledge.
+
+However, nobody is infallible.
+
+- Please read the code and comment on it.
+- Feel free to open an issue, if you have questions, suggestions or requests.
+- Please discuss the pros and cons of the design decisions.
+
+I am interested to hear your opinion.
+
+If you find a security vulnerability, you deserve all the credit and feel free to have a good ROFLMAO over my broken design.
+I deserve all the blame and I have all the responsibility for fixing the problem.
+Therefore, I'd like to ask you to fully disclose the details of your valuable findings either in public in a Github issue or privately via mail to me.
 
 # License
 
