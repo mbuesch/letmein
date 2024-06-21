@@ -216,6 +216,7 @@ impl Message {
     #[must_use]
     pub fn check_auth_ok(&self, shared_key: &[u8], challenge: Message) -> bool {
         assert_eq!(challenge.operation(), Operation::Challenge);
+        #[cfg(not(test))]
         assert_eq!(self.operation(), Operation::Response);
         self.auth
             .ct_eq(&self.authenticate(shared_key, &challenge.auth))
@@ -226,6 +227,7 @@ impl Message {
     /// given the provided `shared_key`.
     #[must_use]
     pub fn check_auth_ok_no_challenge(&self, shared_key: &[u8]) -> bool {
+        #[cfg(not(test))]
         assert_eq!(self.operation(), Operation::Knock);
         self.auth
             .ct_eq(&self.authenticate_no_challenge(shared_key))
@@ -346,6 +348,11 @@ mod tests {
         );
         check_ser_de(&msg);
 
+        // A modified `operation` field causes an authentication failure.
+        let mut msg_clone = msg.clone();
+        msg_clone.operation = Operation::Response;
+        assert!(!msg_clone.check_auth_ok_no_challenge(&key));
+
         // A modified `user` field causes an authentication failure.
         let mut msg_clone = msg.clone();
         msg_clone.user += 1;
@@ -401,6 +408,11 @@ mod tests {
         );
         assert!(response.check_auth_ok(&key, challenge.clone()));
         check_ser_de(&response);
+
+        // A modified `operation` field causes an authentication failure.
+        let mut msg_clone = response.clone();
+        msg_clone.operation = Operation::Knock;
+        assert!(!msg_clone.check_auth_ok(&key, challenge.clone()));
 
         // A modified `user` field causes an authentication failure.
         let mut msg_clone = response.clone();
