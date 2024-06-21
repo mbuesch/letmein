@@ -53,7 +53,7 @@ In the `[RESOURCES]` section of the server configuration file `/opt/letmein/etc/
 
 The resource identifier is an 8 digit hexdecimal number. In this example it is 22(hex), but it can be any number. It just has to be the same number on the server and the client. After `port:` the port number (in decimal) that can be knocked-open is specified.
 
-Add the same resource identifier with the same resource identifier and the same port number to the client configuration in `/opt/letmein/etc/letmein.conf`.
+Add the same resource with the same resource identifier and the same port number to the client configuration in `/opt/letmein/etc/letmein.conf`.
 
 Restart the letmein server:
 
@@ -61,7 +61,7 @@ Restart the letmein server:
 systemctl restart letmeind.service
 ```
 
-Now remove the `sshd` port (22) `accept` from your `nftables.conf`.
+Now remove your static `sshd` port (22) `accept` from your `nftables.conf` firewall configuration.
 Letmein will install such a rule dynamically into the letmein input chain after successful knock authentication.
 Then restart nftables:
 
@@ -188,6 +188,12 @@ I am interested to hear your opinion.
 If you find a security vulnerability, you deserve all the credit and feel free to have a good ROFLMAO over my broken design.
 I deserve all the blame and I have all the responsibility for fixing the problem.
 Therefore, I'd like to ask you to fully disclose the details of your valuable findings either in public in a Github issue or privately via mail to me.
+
+## TODO
+
+Ideas for future changes and improvements in `letmein`:
+
+- Currently all users that are configured on the server can access (knock-open) all resources that are configured on the server. It might be useful to restrict certain users to certain resources only.
 
 # License
 
