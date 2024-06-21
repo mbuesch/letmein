@@ -14,11 +14,9 @@ mod resolver;
 use crate::{client::Client, resolver::ResMode};
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::{Parser, Subcommand};
-use letmein_conf::{Config, ConfigVariant};
+use letmein_conf::{Config, ConfigVariant, CLIENT_CONF_PATH, INSTALL_PREFIX};
 use letmein_proto::{secure_random, Key, Message, Operation};
-use std::{path::Path, sync::Arc};
-
-const CONF_PATH: &str = "/opt/letmein/etc/letmein.conf";
+use std::{path::PathBuf, sync::Arc};
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum AddrMode {
@@ -119,6 +117,10 @@ async fn run_genkey(conf: Arc<Config>, user: Option<u32>) -> ah::Result<()> {
 
 #[derive(Parser, Debug)]
 struct Opts {
+    /// Override the default path to the configuration file.
+    #[arg(short, long)]
+    config: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -129,6 +131,7 @@ fn parse_hex(s: &str) -> ah::Result<u32> {
 
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Knock a port open on a server.
     Knock {
         /// The host name, IPv4 or IPv6 address that you want to knock on.
         host: String,
@@ -191,6 +194,8 @@ enum Command {
         #[arg(short = '6', long)]
         ipv6: bool,
     },
+
+    /// Generate a new shared secret key.
     GenKey {
         /// The user identifier (8 digits hex number) to use in the
         /// generated key string.
@@ -208,8 +213,12 @@ async fn main() -> ah::Result<()> {
     let opts = Opts::parse();
 
     let mut conf = Config::new(ConfigVariant::Client);
-    conf.load(Path::new(CONF_PATH))
-        .context("Configuration file")?;
+    conf.load(
+        &opts
+            .config
+            .unwrap_or_else(|| format!("{INSTALL_PREFIX}{CLIENT_CONF_PATH}").into()),
+    )
+    .context("Configuration file")?;
     let conf = Arc::new(conf);
 
     match opts.command {

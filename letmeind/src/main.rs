@@ -19,31 +19,40 @@ use crate::{
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
-use letmein_conf::{Config, ConfigVariant};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
+use letmein_conf::{Config, ConfigVariant, INSTALL_PREFIX, SERVER_CONF_PATH};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::{
     signal::unix::{signal, SignalKind},
     sync::{self, Mutex, RwLock, RwLockReadGuard},
     task, time,
 };
 
-const CONF_PATH: &str = "/opt/letmein/etc/letmeind.conf";
 const FW_MAINTAIN_PERIOD: Duration = Duration::from_millis(5000);
 
 pub type ConfigRef<'a> = RwLockReadGuard<'a, Config>;
 
 #[derive(Parser, Debug, Clone)]
 struct Opts {
-    /// Path to the configuration file.
-    #[arg(long, default_value = CONF_PATH)]
-    config: PathBuf,
+    /// Override the default path to the configuration file.
+    #[arg(short, long)]
+    config: Option<PathBuf>,
 
+    /// Force-disable use of systemd socket.
+    ///
+    /// Do not use systemd socket,
+    /// even if a systemd socket has been passed to the application.
     #[arg(long, default_value = "false")]
     no_systemd: bool,
+}
+
+impl Opts {
+    pub fn get_config(&self) -> PathBuf {
+        if let Some(config) = &self.config {
+            config.clone()
+        } else {
+            format!("{INSTALL_PREFIX}{SERVER_CONF_PATH}").into()
+        }
+    }
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -51,7 +60,7 @@ async fn main() -> ah::Result<()> {
     let opts = Opts::parse();
 
     let mut conf = Config::new(ConfigVariant::Server);
-    conf.load(Path::new(CONF_PATH))
+    conf.load(&opts.get_config())
         .context("Configuration file")?;
     let conf = Arc::new(RwLock::new(conf));
 
@@ -127,7 +136,7 @@ async fn main() -> ah::Result<()> {
                 println!("SIGHUP: Reloading.");
                 {
                     let mut conf = conf.write().await;
-                    if let Err(e) = conf.load(Path::new(CONF_PATH)) {
+                    if let Err(e) = conf.load(&opts.get_config()) {
                         eprintln!("Failed to load configuration file: {e}");
                     }
                 }
