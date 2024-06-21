@@ -142,6 +142,14 @@ Then run the `install-client.sh` to install the letmein client to `/opt/letmein/
 
 The client is used to send a knock packet to the server.
 
+## Security attention: User identifiers and resource identifiers
+
+Please be aware that the user identifiers and resource identifiers from the configuration files are transmitted over the network without encryption in clear text.
+
+Make sure the user identifiers and resource identifiers do **not** include any private information.
+
+These identifiers are merely meant to be an abstract identification for managing different `letmein` keys, installations and setups.
+
 ## Platform support
 
 The server application `letmeind` is Linux-only, because it only supports `nftables` as firewall backend.
