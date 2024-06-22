@@ -32,35 +32,61 @@ impl From<(bool, bool)> for AddrMode {
     }
 }
 
-async fn knock_seq(
-    addr: &str,
-    server_port: u16,
-    resolver_mode: ResMode,
-    user: u32,
-    resource: u32,
-    key: &Key,
-) -> ah::Result<()> {
-    let mut client = Client::new(addr, server_port, resolver_mode)
-        .await
-        .context("Client init")?;
+struct KnockSeq<'a> {
+    pub verbose: bool,
+    pub addr: &'a str,
+    pub server_port: u16,
+    pub user: u32,
+    pub resource: u32,
+    pub key: &'a Key,
+}
 
-    let mut knock = Message::new(Operation::Knock, user, resource);
-    knock.generate_auth_no_challenge(key);
-    client.send_msg(knock).await.context("Send knock")?;
+impl<'a> KnockSeq<'a> {
+    pub async fn knock_sequence(&self, resolver_mode: ResMode) -> ah::Result<()> {
+        if self.verbose {
+            println!(
+                "Connecting to letmein server '{}:{}'.",
+                self.addr, self.server_port
+            );
+        }
+        let mut client = Client::new(self.addr, self.server_port, resolver_mode)
+            .await
+            .context("Client init")?;
 
-    let challenge = client.recv_specific_msg(Operation::Challenge).await?;
+        if self.verbose {
+            println!("Sending 'Knock' packet.");
+        }
+        let mut knock = Message::new(Operation::Knock, self.user, self.resource);
+        knock.generate_auth_no_challenge(self.key);
+        client.send_msg(knock).await.context("Send knock")?;
 
-    let mut response = Message::new(Operation::Response, user, resource);
-    response.generate_auth(key, challenge);
-    client.send_msg(response).await.context("Send response")?;
+        if self.verbose {
+            println!("Receiving 'Challenge' packet.");
+        }
+        let challenge = client.recv_specific_msg(Operation::Challenge).await?;
 
-    let _ = client.recv_specific_msg(Operation::ComeIn).await?;
+        if self.verbose {
+            println!("Sending 'Response' packet.");
+        }
+        let mut response = Message::new(Operation::Response, self.user, self.resource);
+        response.generate_auth(self.key, challenge);
+        client.send_msg(response).await.context("Send response")?;
 
-    Ok(())
+        if self.verbose {
+            println!("Receiving 'ComeIn' packet.");
+        }
+        let _ = client.recv_specific_msg(Operation::ComeIn).await?;
+
+        if self.verbose {
+            println!("Knock sequence successful.");
+        }
+        Ok(())
+    }
 }
 
 pub async fn run_knock(
     conf: Arc<Config>,
+    verbose: bool,
     addr: &str,
     addr_mode: AddrMode,
     server_port: Option<u16>,
@@ -78,23 +104,44 @@ pub async fn run_knock(
     };
     let server_port = server_port.unwrap_or_else(|| conf.port());
 
+    let seq = KnockSeq {
+        verbose,
+        addr,
+        server_port,
+        user,
+        resource,
+        key,
+    };
+
     match addr_mode {
         AddrMode::TryBoth => {
-            let res6 = knock_seq(addr, server_port, ResMode::Ipv6, user, resource, key).await;
-            let res4 = knock_seq(addr, server_port, ResMode::Ipv4, user, resource, key).await;
+            if verbose {
+                println!("Trying to knock on '{addr}:{knock_port}' IPv6 and IPv4.");
+            }
+            let res6 = seq.knock_sequence(ResMode::Ipv6).await;
+            let res4 = seq.knock_sequence(ResMode::Ipv4).await;
             if res6.is_err() && res4.is_err() {
                 return res6;
             }
         }
         AddrMode::Both => {
-            knock_seq(addr, server_port, ResMode::Ipv6, user, resource, key).await?;
-            knock_seq(addr, server_port, ResMode::Ipv4, user, resource, key).await?;
+            if verbose {
+                println!("Knocking on '{addr}:{knock_port}' IPv6 and IPv4.");
+            }
+            seq.knock_sequence(ResMode::Ipv6).await?;
+            seq.knock_sequence(ResMode::Ipv4).await?;
         }
         AddrMode::Ipv6 => {
-            knock_seq(addr, server_port, ResMode::Ipv6, user, resource, key).await?;
+            if verbose {
+                println!("Knocking on '{addr}:{knock_port}' IPv6.");
+            }
+            seq.knock_sequence(ResMode::Ipv6).await?;
         }
         AddrMode::Ipv4 => {
-            knock_seq(addr, server_port, ResMode::Ipv4, user, resource, key).await?;
+            if verbose {
+                println!("Knocking on '{addr}:{knock_port}' IPv4.");
+            }
+            seq.knock_sequence(ResMode::Ipv4).await?;
         }
     }
     Ok(())

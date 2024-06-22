@@ -24,6 +24,10 @@ struct Opts {
     #[arg(short, long)]
     config: Option<PathBuf>,
 
+    /// Show detailed information about what happens internally.
+    #[arg(long)]
+    verbose: bool,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -133,7 +137,16 @@ async fn main() -> ah::Result<()> {
             ipv4,
             ipv6,
         } => {
-            run_knock(conf, &host, (ipv4, ipv6).into(), server_port, port, user).await?;
+            run_knock(
+                conf,
+                opts.verbose,
+                &host,
+                (ipv4, ipv6).into(),
+                server_port,
+                port,
+                user,
+            )
+            .await?;
         }
         Command::GenKey { user } => run_genkey(conf, user).await?,
     }
