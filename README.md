@@ -152,10 +152,18 @@ These identifiers are merely meant to be an abstract identification for managing
 
 ## Platform support
 
+### Server
+
 The server application `letmeind` is Linux-only, because it only supports `nftables` as firewall backend.
 
+### Client
+
 The client application `letmein` is portable and should run on all major platforms.
-But it's currently only tested on Linux.
+Tested platforms are:
+
+- Linux
+- Android, under [Termux](https://termux.dev/)
+- Windows
 
 ## Internals and design goals
 

@@ -20,13 +20,20 @@ use letmein_proto::{Key, PORT};
 use std::{collections::HashMap, path::Path, time::Duration};
 
 /// The default install prefix.
+#[cfg(not(target_os = "windows"))]
 pub const INSTALL_PREFIX: &str = "/opt/letmein";
+#[cfg(target_os = "windows")]
+pub const INSTALL_PREFIX: &str = "";
 
 /// The default server configuration path, relative to the install prefix.
+#[cfg(not(target_os = "windows"))]
 pub const SERVER_CONF_PATH: &str = "/etc/letmeind.conf";
 
 /// The default client configuration path, relative to the install prefix.
+#[cfg(not(target_os = "windows"))]
 pub const CLIENT_CONF_PATH: &str = "/etc/letmein.conf";
+#[cfg(target_os = "windows")]
+pub const CLIENT_CONF_PATH: &str = "letmein.conf";
 
 const DEFAULT_NFT_TIMEOUT: u32 = 600;
 
