@@ -32,6 +32,16 @@ struct Opts {
     command: Command,
 }
 
+impl Opts {
+    pub fn get_config(&self) -> PathBuf {
+        if let Some(config) = &self.config {
+            config.clone()
+        } else {
+            format!("{INSTALL_PREFIX}{CLIENT_CONF_PATH}").into()
+        }
+    }
+}
+
 fn parse_hex(s: &str) -> ah::Result<u32> {
     Ok(u32::from_str_radix(s.trim(), 16)?)
 }
@@ -120,12 +130,8 @@ async fn main() -> ah::Result<()> {
     let opts = Opts::parse();
 
     let mut conf = Config::new(ConfigVariant::Client);
-    conf.load(
-        &opts
-            .config
-            .unwrap_or_else(|| format!("{INSTALL_PREFIX}{CLIENT_CONF_PATH}").into()),
-    )
-    .context("Configuration file")?;
+    conf.load(&opts.get_config())
+        .context("Configuration file")?;
     let conf = Arc::new(conf);
 
     match opts.command {
