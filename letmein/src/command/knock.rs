@@ -42,6 +42,26 @@ struct KnockSeq<'a> {
 }
 
 impl<'a> KnockSeq<'a> {
+    fn check_reply(&self, msg: &Message) -> ah::Result<()> {
+        if msg.user() != self.user {
+            eprintln!(
+                "Warning: The server replied with a different user identifier. \
+                 Expected {:08X}, but received {:08X}.",
+                self.user,
+                msg.user(),
+            );
+        }
+        if msg.resource() != self.resource {
+            eprintln!(
+                "Warning: The server replied with a different resource identifier. \
+                 Expected {:08X}, but received {:08X}.",
+                self.resource,
+                msg.resource(),
+            );
+        }
+        Ok(())
+    }
+
     pub async fn knock_sequence(&self, resolver_mode: ResMode) -> ah::Result<()> {
         if self.verbose {
             println!(
@@ -64,6 +84,7 @@ impl<'a> KnockSeq<'a> {
             println!("Receiving 'Challenge' packet.");
         }
         let challenge = client.recv_specific_msg(Operation::Challenge).await?;
+        self.check_reply(&challenge)?;
 
         if self.verbose {
             println!("Sending 'Response' packet.");
@@ -75,7 +96,8 @@ impl<'a> KnockSeq<'a> {
         if self.verbose {
             println!("Receiving 'ComeIn' packet.");
         }
-        let _ = client.recv_specific_msg(Operation::ComeIn).await?;
+        let comein = client.recv_specific_msg(Operation::ComeIn).await?;
+        self.check_reply(&comein)?;
 
         if self.verbose {
             println!("Knock sequence successful.");
