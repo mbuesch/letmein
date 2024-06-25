@@ -84,6 +84,12 @@ letmein knock -u 00000000 your-server.com 22
 ssh your-server.com
 ```
 
+To automatically knock the port before connecting with ssh, you can add a `Match exec` rule to your `~/.ssh/config` file:
+
+```
+Match host your-server.com exec "letmein knock -u 00000000 your-server.com 22"
+```
+
 ## Prerequisites
 
 The Rust compiler must be installed to build letmein.
