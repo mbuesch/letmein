@@ -4,18 +4,18 @@
 name = "letmein-conf"
 description = "Authenticated port knocking - Configuration parser"
 version = "1.0.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
-authors = [ "Michael Büsch <m@bues.ch>" ]
-homepage = "https://bues.ch/h/letmein"
-repository = "https://github.com/mbuesch/letmein"
+edition = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 readme = "README.md"
-categories = [ "authentication", "network-programming", "command-line-utilities", "cryptography" ]
-keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
+categories = { workspace = true }
+keywords = { workspace = true }
 
 [dependencies]
-anyhow = "1"
-configparser = "3"
-letmein-proto = "1"
+anyhow = { workspace = true }
+configparser = { workspace = true }
+letmein-proto = { workspace = true }
 
 # vim: ts=4 sw=4 expandtab

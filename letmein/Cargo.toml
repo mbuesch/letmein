@@ -4,22 +4,22 @@
 name = "letmein"
 description = "Authenticated port knocking - Client"
 version = "1.0.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
-authors = [ "Michael Büsch <m@bues.ch>" ]
-homepage = "https://bues.ch/h/letmein"
-repository = "https://github.com/mbuesch/letmein"
-readme = "README.md"
-categories = [ "authentication", "network-programming", "command-line-utilities", "cryptography" ]
-keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
+edition = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+categories = { workspace = true }
+keywords = { workspace = true }
 
 [dependencies]
-anyhow = "1"
-clap = { version = "4", features = ["derive"] }
-hickory-proto = { version = "0.24" }
-hickory-resolver = { version = "0.24" }
-letmein-conf = "1"
-letmein-proto = "1"
-tokio = { version = "1", features = [ "rt", "net", "macros", ] }
+anyhow = { workspace = true }
+clap = { workspace = true }
+hickory-proto = { workspace = true }
+hickory-resolver = { workspace = true }
+letmein-conf = { workspace = true }
+letmein-proto = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "net", "macros", ] }
 
 # vim: ts=4 sw=4 expandtab

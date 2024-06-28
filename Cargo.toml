@@ -10,6 +10,36 @@ members = [
 ]
 resolver = "2"
 
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = [ "Michael Büsch <m@bues.ch>" ]
+homepage = "https://bues.ch/h/letmein"
+repository = "https://github.com/mbuesch/letmein"
+readme = "README.md"
+categories = [ "authentication", "network-programming", "command-line-utilities", "cryptography" ]
+keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
+
+[workspace.dependencies]
+anyhow = "1"
+bincode = "1"
+clap = "4"
+configparser = "3"
+getrandom = "0.2"
+hickory-proto = "0.24"
+hickory-resolver = "0.24"
+hmac = "0.12"
+nftables = "0.4"
+sd-notify = { git = "https://github.com/lnicola/sd-notify.git", rev = "5f9cbef17f33549c60d322342dead37fe11f18a7" }
+serde = "1"
+sha3 = "0.10"
+subtle = "2"
+tokio = "1"
+
+letmein-conf = { version = "1", path = "./letmein-conf" }
+letmein-proto = { version = "1", path = "./letmein-proto" }
+letmein-systemd = { version = "1", path = "./letmein-systemd" }
+
 [profile.release]
 opt-level = 3
 lto = "fat"
@@ -18,10 +48,5 @@ strip = "symbols"
 debug-assertions = false
 overflow-checks = true
 codegen-units = 1
-
-[patch.crates-io]
-letmein-conf = { path = "./letmein-conf" }
-letmein-proto = { path = "./letmein-proto" }
-letmein-systemd = { path = "./letmein-systemd" }
 
 # vim: ts=4 sw=4 expandtab
