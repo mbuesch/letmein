@@ -28,11 +28,12 @@ check_dynlibs()
 {
     local bin="$1"
     ldd "$bin" | while read line; do
-        printf '%s' "$line" | grep -qe 'linux-vdso\.so' && continue
-        printf '%s' "$line" | grep -qe 'libgcc_s\.so' && continue
-        printf '%s' "$line" | grep -qe 'libm\.so' && continue
-        printf '%s' "$line" | grep -qe 'libc\.so' && continue
-        printf '%s' "$line" | grep -qe 'ld-linux-.*\.so' && continue
+        printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'linux-vdso\.so' && continue
+        printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libgcc_s\.so' && continue
+        printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libm\.so' && continue
+        printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libc\.so' && continue
+        printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'ld-linux-.*\.so' && continue
+        printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libarmmem-.*\.so' && continue
         die "Found unknown dynamically linked library '$line' in '$bin'"
     done
 }
