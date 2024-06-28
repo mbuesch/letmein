@@ -11,6 +11,12 @@ Machines that can't successfully authenticate the knock sequence won't be able t
 
 Letmein requires an `nftables` based firewall. It will *not* work with `iptables`.
 
+## Typical letmein operation flow
+
+![image](pic/letmein_overview.png)
+
+## Project links
+
 [Homepage](https://bues.ch/h/letmein)
 
 [Git repository](https://bues.ch/cgit/letmein.git)
@@ -148,7 +154,7 @@ Then run the `install-client.sh` to install the letmein client to `/opt/letmein/
 
 The client is used to send a knock packet to the server.
 
-## Security attention: User identifiers and resource identifiers
+## Security notice: User identifiers and resource identifiers
 
 Please be aware that the user identifiers and resource identifiers from the configuration files are transmitted over the network without encryption in clear text.
 
@@ -189,7 +195,7 @@ The main design goals of letmein are:
 
 ## Security analysis
 
-The program has carefully been design to be secure, to the best of my knowledge.
+The program has carefully been designed to be secure, to the best of my knowledge.
 
 However, nobody is infallible.
 
