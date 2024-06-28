@@ -24,6 +24,19 @@ die()
     exit 1
 }
 
+check_dynlibs()
+{
+    local bin="$1"
+    ldd "$bin" | while read line; do
+        printf '%s' "$line" | grep -qe 'linux-vdso\.so' && continue
+        printf '%s' "$line" | grep -qe 'libgcc_s\.so' && continue
+        printf '%s' "$line" | grep -qe 'libm\.so' && continue
+        printf '%s' "$line" | grep -qe 'libc\.so' && continue
+        printf '%s' "$line" | grep -qe 'ld-linux-.*\.so' && continue
+        die "Found unknown dynamically linked library '$line' in '$bin'"
+    done
+}
+
 [ -f "$basedir/Cargo.toml" ] || die "basedir sanity check failed"
 
 cd "$basedir" || die "cd basedir failed."
@@ -34,5 +47,7 @@ cargo audit bin --deny warnings \
     target/release/letmein \
     target/release/letmeind \
     || die "Cargo audit failed."
+check_dynlibs target/release/letmein
+check_dynlibs target/release/letmeind
 
 # vim: ts=4 sw=4 expandtab
