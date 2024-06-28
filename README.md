@@ -185,7 +185,6 @@ The main design goals of letmein are:
 - The algorithms and implementation are as simple as reasonably possible.
 - It does not implement complicated cryptographic algorithms such as asymmetric public/private key crypto. It uses a shared secret together with HMAC/SHA3 for authentication instead.
 - It has a replay protection. Replaying a knock packet sequence does not result in a successful authentication.
-- A MiM attack has no security impact.
 - It only opens the port for the IP address that made the knock request. By default for both IPv4 and IPv6, if available. This behavior can be adjusted with the `-4` and `-6` client command line options.
 - letmein does not link to libraries (.so) written in unsafe languages, except for the ones required by the operating system or by the Rust compiler. The only dynamically linked libraries are:
   - libc.so
@@ -208,6 +207,45 @@ I am interested to hear your opinion.
 If you find a security vulnerability, you deserve all the credit and feel free to have a good ROFLMAO over my broken design.
 I deserve all the blame and I have all the responsibility for fixing the problem.
 Therefore, I'd like to ask you to fully disclose the details of your valuable findings either in public in a Github issue or privately via mail to me.
+
+### Known weaknesses
+
+There are a couple of known weaknesses that exist in letmein.
+In this paragraph we discuss why these weaknesses exist.
+
+These weaknesses are not addressed by the design of letmein to make the design simpler.
+It is a tradeoff between a simple design and a weakness that doesn't practically impact security.
+
+It is believed that these weaknesses do **not** make letmein insecure in practical use.
+The simple design is supposed to reduce the attack surface and as such improve security.
+
+- **weakness**: The user identifiers and resource identifiers from the configurations are transmitted in plain text over the network.
+  - **rationale**: The user identifiers and resource identifiers shall not include private or secret information.
+
+- **weakness**: The first `Knock` packet is not protected against a replay attack.
+  - **rationale**: It is true that the `Knock` packet can successfully be replayed by an attacker.
+  But that doesn't mean much.
+  The attacker will still not be able to successfully solve the `Challenge`.
+  The authentication of the `Knock` is only in place, because it's easy to implement in the given design and it stops port knocks that don't have a key at all early.
+
+- **weakness**: After a successful knock sequence from legitimate user an [MiM attacker](https://en.wikipedia.org/wiki/Man-in-the-middle_attack) can use the knocked-open port, if she is able to use the same sender-IP-address as the legitimate user.
+  - **rationale**: letmein only authenticates what happens during the knock sequence.
+  What happens after the knock sequence once the firewall is opened for an IP address is completely out of scope of letmein.
+  However, there is a time limit for how long the port is kept open after a successful knock sequence.
+  After the knock sequence has been completed, there is only a limited amount of time an MiM could use it.
+
+- **weakness**: The authentication key is a shared secret that is stored in plain text on the server and on the client.
+  - **rationale**: It is true that an attacker that can successfully take over a server or client can steal the keys and authenticate future sessions.
+  This is a tradeoff between implementing complicated public-private-key cryptography, the overall goal of what letmein is supposed to protect and simplicity of the design.
+  letmein is **not** supposed to protect otherwise unprotected services.
+  It is only supposed to be an *additional* barrier of security in an already secure system.
+  Think of this as [2FA](https://en.wikipedia.org/wiki/Multi-factor_authentication).
+  If an attacker could gain access to the letmein keys there are two scenarios:
+  Either there is a second barrier of security (e.g. ssh server login) or all bets are lost anyway, because the attacker has full access already anyway.
+
+- **weakness**: The wire protocol does not have mechanisms for future changes and updates.
+  - **rationale**: While this makes updating to a new protocol version harder, it improves security by simplification of the design.
+  It is not expected that there will be many incompatible protocol changes in the future.
 
 ## TODO
 
