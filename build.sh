@@ -27,7 +27,7 @@ die()
 check_dynlibs()
 {
     local bin="$1"
-    ldd "$bin" | while read line; do
+    ldd "$bin" | while read line || die "ldd failed"; do
         printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'linux-vdso\.so' && continue
         printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libgcc_s\.so' && continue
         printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libm\.so' && continue
