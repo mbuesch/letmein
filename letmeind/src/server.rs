@@ -7,13 +7,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::ConfigRef;
-use anyhow::{self as ah, format_err as err, Context as _};
-use letmein_proto::{DeserializeResult, Message, MSG_SIZE};
+use anyhow::{self as ah, Context as _};
+use letmein_proto::Message;
 use letmein_systemd::{systemd_notify_ready, tcp_from_systemd};
-use std::{io::ErrorKind, net::SocketAddr};
+use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
-
-const DEBUG: bool = false;
 
 pub trait ConnectionOps {
     fn addr(&self) -> SocketAddr;
@@ -38,63 +36,11 @@ impl ConnectionOps for Connection {
     }
 
     async fn recv_msg(&mut self) -> ah::Result<Option<Message>> {
-        let mut rxbuf = [0; MSG_SIZE];
-        let mut rxcount = 0;
-        loop {
-            self.stream
-                .readable()
-                .await
-                .context("Socket polling (rx)")?;
-            match self.stream.try_read(&mut rxbuf[rxcount..]) {
-                Ok(n) => {
-                    if n == 0 {
-                        return Ok(None);
-                    }
-                    rxcount += n;
-                    assert!(rxcount <= MSG_SIZE);
-                    if rxcount == MSG_SIZE {
-                        let DeserializeResult::Ok(msg) = Message::try_msg_deserialize(&rxbuf)?
-                        else {
-                            return Err(err!("RX deserialization failed"));
-                        };
-                        if DEBUG {
-                            println!("RX: {msg:?} {rxbuf:?}");
-                        }
-                        return Ok(Some(msg));
-                    }
-                }
-                Err(e) if e.kind() == ErrorKind::WouldBlock => (),
-                Err(e) => {
-                    return Err(err!("Socket read: {e}"));
-                }
-            }
-        }
+        Message::recv(&mut self.stream).await
     }
 
     async fn send_msg(&mut self, msg: Message) -> ah::Result<()> {
-        let txbuf = msg.msg_serialize()?;
-        let mut txcount = 0;
-        loop {
-            self.stream
-                .writable()
-                .await
-                .context("Socket polling (tx)")?;
-            match self.stream.try_write(&txbuf[txcount..]) {
-                Ok(n) => {
-                    txcount += n;
-                    if txcount >= txbuf.len() {
-                        if DEBUG {
-                            println!("TX: {msg:?} {txbuf:?}");
-                        }
-                        return Ok(());
-                    }
-                }
-                Err(e) if e.kind() == ErrorKind::WouldBlock => (),
-                Err(e) => {
-                    return Err(err!("Socket write: {e}"));
-                }
-            }
-        }
+        msg.send(&mut self.stream).await
     }
 }
 

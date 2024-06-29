@@ -497,6 +497,7 @@ dependencies = [
  "serde",
  "sha3",
  "subtle",
+ "tokio",
 ]
 
 [[package]]

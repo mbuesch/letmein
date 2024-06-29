@@ -15,13 +15,18 @@
 
 #![forbid(unsafe_code)]
 
-use anyhow::{self as ah, format_err as err};
+use anyhow::{self as ah, format_err as err, Context as _};
 use bincode::Options as _;
 use getrandom::getrandom;
 use hmac::{Hmac, Mac as _};
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
+use std::io::ErrorKind;
 use subtle::ConstantTimeEq as _;
+use tokio::net::TcpStream;
+
+/// Internal debugging.
+const DEBUG: bool = false;
 
 /// Default letmeind port number.
 pub const PORT: u16 = 5800;
@@ -273,6 +278,61 @@ impl Message {
                 return Err(err!("Deserialize: Invalid magic code."));
             }
             Ok(DeserializeResult::Ok(msg))
+        }
+    }
+
+    /// Send this message over a [TcpStream].
+    pub async fn send(&self, stream: &mut TcpStream) -> ah::Result<()> {
+        let txbuf = self.msg_serialize()?;
+        let mut txcount = 0;
+        loop {
+            stream.writable().await.context("Socket polling (tx)")?;
+            match stream.try_write(&txbuf[txcount..]) {
+                Ok(n) => {
+                    txcount += n;
+                    if txcount >= txbuf.len() {
+                        if DEBUG {
+                            println!("TX: {self:?} {txbuf:?}");
+                        }
+                        return Ok(());
+                    }
+                }
+                Err(e) if e.kind() == ErrorKind::WouldBlock => (),
+                Err(e) => {
+                    return Err(err!("Socket write: {e}"));
+                }
+            }
+        }
+    }
+
+    /// Try to receive this message from a [TcpStream].
+    pub async fn recv(stream: &mut TcpStream) -> ah::Result<Option<Self>> {
+        let mut rxbuf = [0; MSG_SIZE];
+        let mut rxcount = 0;
+        loop {
+            stream.readable().await.context("Socket polling (rx)")?;
+            match stream.try_read(&mut rxbuf[rxcount..]) {
+                Ok(n) => {
+                    if n == 0 {
+                        return Ok(None);
+                    }
+                    rxcount += n;
+                    assert!(rxcount <= MSG_SIZE);
+                    if rxcount == MSG_SIZE {
+                        let DeserializeResult::Ok(msg) = Self::try_msg_deserialize(&rxbuf)? else {
+                            return Err(err!("RX deserialization failed"));
+                        };
+                        if DEBUG {
+                            println!("RX: {msg:?} {rxbuf:?}");
+                        }
+                        return Ok(Some(msg));
+                    }
+                }
+                Err(e) if e.kind() == ErrorKind::WouldBlock => (),
+                Err(e) => {
+                    return Err(err!("Socket read: {e}"));
+                }
+            }
         }
     }
 }
