@@ -6,7 +6,10 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{client::Client, resolver::ResMode};
+use crate::{
+    client::Client,
+    resolver::{is_ipv4_addr, is_ipv6_addr, ResMode},
+};
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::Config;
 use letmein_proto::{Key, Message, Operation};
@@ -140,10 +143,19 @@ pub async fn run_knock(
             if verbose {
                 println!("Trying to knock on '{addr}:{knock_port}' IPv6 and IPv4.");
             }
-            let res6 = seq.knock_sequence(ResMode::Ipv6).await;
-            let res4 = seq.knock_sequence(ResMode::Ipv4).await;
-            if res6.is_err() && res4.is_err() {
-                return res6;
+            if is_ipv4_addr(addr) {
+                // For a raw IPv4 address only knock IPv4.
+                seq.knock_sequence(ResMode::Ipv4).await?;
+            } else if is_ipv6_addr(addr) {
+                // For a raw IPv6 address only knock IPv6.
+                seq.knock_sequence(ResMode::Ipv6).await?;
+            } else {
+                // For host names try both.
+                let res6 = seq.knock_sequence(ResMode::Ipv6).await;
+                let res4 = seq.knock_sequence(ResMode::Ipv4).await;
+                if res6.is_err() && res4.is_err() {
+                    return res6;
+                }
             }
         }
         AddrMode::Both => {

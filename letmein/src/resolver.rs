@@ -18,18 +18,26 @@ pub enum ResMode {
     Ipv4,
 }
 
+pub fn is_ipv4_addr(host: &str) -> bool {
+    host.parse::<IpAddr>().map(|a| a.is_ipv4()).unwrap_or(false)
+}
+
+pub fn is_ipv6_addr(host: &str) -> bool {
+    host.parse::<IpAddr>().map(|a| a.is_ipv6()).unwrap_or(false)
+}
+
 pub async fn resolve(host: &str, mode: ResMode) -> ah::Result<IpAddr> {
     // Try to parse host as an IP address.
     if let Ok(addr) = host.parse::<IpAddr>() {
         match mode {
             ResMode::Ipv4 if !addr.is_ipv4() => {
                 return Err(err!(
-                    "Supplied a raw IPv4 address, but resolution mode is set to IPv6"
+                    "Supplied a raw IPv6 address, but resolution mode is set to IPv4"
                 ));
             }
             ResMode::Ipv6 if !addr.is_ipv6() => {
                 return Err(err!(
-                    "Supplied a raw IPv6 address, but resolution mode is set to IPv4"
+                    "Supplied a raw IPv4 address, but resolution mode is set to IPv6"
                 ));
             }
             _ => (),
