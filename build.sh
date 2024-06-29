@@ -33,7 +33,9 @@ check_dynlibs()
         printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libm\.so' && continue
         printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libc\.so' && continue
         printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'ld-linux-.*\.so' && continue
+        printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'ld-android\.so' && continue
         printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libarmmem-.*\.so' && continue
+        printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libdl\.so' && continue
         die "Found unknown dynamically linked library '$line' in '$bin'"
     done
 }

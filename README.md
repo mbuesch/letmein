@@ -191,6 +191,9 @@ The main design goals of letmein are:
   - libm.so
   - libgcc_s.so
   - linux-vdso.so
+  - ld-linux-*.so
+  - ld-android.so (Android only)
+  - libdl.so (Android only)
   - libarmmem-*.so (Raspberry Pi only)
 
 ## Security analysis
