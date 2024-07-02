@@ -22,7 +22,6 @@ keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
 
 [workspace.dependencies]
 anyhow = "1"
-bincode = "1"
 clap = "4"
 configparser = "3"
 getrandom = "0.2"
@@ -31,7 +30,6 @@ hickory-resolver = "0.24"
 hmac = "0.12"
 nftables = "0.4"
 sd-notify = { git = "https://github.com/lnicola/sd-notify.git", rev = "5f9cbef17f33549c60d322342dead37fe11f18a7" }
-serde = "1"
 sha3 = "0.10"
 subtle = "2"
 tokio = "1"

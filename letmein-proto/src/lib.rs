@@ -16,10 +16,8 @@
 #![forbid(unsafe_code)]
 
 use anyhow::{self as ah, format_err as err, Context as _};
-use bincode::Options as _;
 use getrandom::getrandom;
 use hmac::{Hmac, Mac as _};
-use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
 use std::io::ErrorKind;
 use subtle::ConstantTimeEq as _;
@@ -30,10 +28,6 @@ const DEBUG: bool = false;
 
 /// Default letmeind port number.
 pub const PORT: u16 = 5800;
-
-/// letmeind message size, in bytes.
-/// All message types have the same size.
-pub const MSG_SIZE: usize = 4 + 4 + 4 + 4 + SALT_SIZE + AUTH_SIZE;
 
 /// Magic code in the message header.
 const MAGIC: u32 = 0x3B1BB719;
@@ -93,20 +87,8 @@ pub enum DeserializeResult<M> {
     Pending(usize),
 }
 
-/// Create a `bincode` instance that is used to serialize/deserialize the messages.
-///
-/// This serializer writes all integers as big-endian fixed-width ints.
-#[inline]
-fn bincode_config() -> impl bincode::Options {
-    bincode::DefaultOptions::new()
-        .with_limit(MSG_SIZE.try_into().unwrap())
-        .with_big_endian()
-        .with_fixint_encoding()
-        .reject_trailing_bytes()
-}
-
 /// The operation the message shall perform.
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u32)]
 pub enum Operation {
     /// The `Knock` message is the initial message from the client
@@ -141,8 +123,61 @@ pub enum Operation {
     GoAway,
 }
 
+const OPERATION_KNOCK: u32 = Operation::Knock as u32;
+const OPERATION_CHALLENGE: u32 = Operation::Challenge as u32;
+const OPERATION_RESPONSE: u32 = Operation::Response as u32;
+const OPERATION_COMEIN: u32 = Operation::ComeIn as u32;
+const OPERATION_GOAWAY: u32 = Operation::GoAway as u32;
+
+impl TryFrom<u32> for Operation {
+    type Error = ah::Error;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            OPERATION_KNOCK => Ok(Self::Knock),
+            OPERATION_CHALLENGE => Ok(Self::Challenge),
+            OPERATION_RESPONSE => Ok(Self::Response),
+            OPERATION_COMEIN => Ok(Self::ComeIn),
+            OPERATION_GOAWAY => Ok(Self::GoAway),
+            _ => Err(err!("Invalid Message/Operation value")),
+        }
+    }
+}
+
+/// letmeind message size, in bytes.
+/// All message types have the same size.
+pub const MSG_SIZE: usize = 4 + 4 + 4 + 4 + SALT_SIZE + AUTH_SIZE;
+
+/// Byte offset of the `magic` field.
+const MSG_OFFS_MAGIC: usize = 0;
+
+/// Byte offset of the `operation` field.
+const MSG_OFFS_OPERATION: usize = 4;
+
+/// Byte offset of the `user` field.
+const MSG_OFFS_USER: usize = 8;
+
+/// Byte offset of the `resource` field.
+const MSG_OFFS_RESOURCE: usize = 12;
+
+/// Byte offset of the `salt` field.
+const MSG_OFFS_SALT: usize = 16;
+
+/// Byte offset of the `auth` field.
+const MSG_OFFS_AUTH: usize = 24;
+
+#[inline]
+fn serialize_u32(buf: &mut [u8], value: u32) {
+    buf[0..4].copy_from_slice(&value.to_be_bytes());
+}
+
+#[inline]
+fn deserialize_u32(buf: &[u8]) -> ah::Result<u32> {
+    Ok(u32::from_be_bytes(buf[0..4].try_into()?))
+}
+
 /// The message data type.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Message {
     magic: u32,
     operation: Operation,
@@ -155,23 +190,14 @@ pub struct Message {
 impl Message {
     /// Create a new message instance.
     pub fn new(operation: Operation, user: u32, resource: u32) -> Self {
-        let msg = Self {
+        Self {
             magic: MAGIC,
             operation,
             user,
             resource,
             salt: secure_random(),
             auth: ZERO_AUTH,
-        };
-        debug_assert_eq!(
-            MSG_SIZE,
-            bincode_config()
-                .serialized_size(&msg)
-                .unwrap()
-                .try_into()
-                .unwrap()
-        );
-        msg
+        }
     }
 
     /// Get the [Operation] of this message.
@@ -264,20 +290,52 @@ impl Message {
     }
 
     /// Serialize this message into a byte stream.
-    pub fn msg_serialize(&self) -> ah::Result<Vec<u8>> {
-        Ok(bincode_config().serialize(self)?)
+    pub fn msg_serialize(&self) -> ah::Result<[u8; MSG_SIZE]> {
+        // The serialization is simple enough to do manually.
+        // Therefore, we don't use the `serde` crate here.
+
+        let mut buf = [0; MSG_SIZE];
+        serialize_u32(&mut buf[MSG_OFFS_MAGIC..], self.magic);
+        serialize_u32(&mut buf[MSG_OFFS_OPERATION..], self.operation as u32);
+        serialize_u32(&mut buf[MSG_OFFS_USER..], self.user);
+        serialize_u32(&mut buf[MSG_OFFS_RESOURCE..], self.resource);
+        buf[MSG_OFFS_SALT..MSG_OFFS_SALT + SALT_SIZE].copy_from_slice(&self.salt);
+        buf[MSG_OFFS_AUTH..MSG_OFFS_AUTH + AUTH_SIZE].copy_from_slice(&self.auth);
+
+        Ok(buf)
     }
 
     /// Try to deserialize a byte stream into a message.
     pub fn try_msg_deserialize(buf: &[u8]) -> ah::Result<DeserializeResult<Message>> {
-        if buf.len() < MSG_SIZE {
-            Ok(DeserializeResult::Pending(MSG_SIZE - buf.len()))
-        } else {
-            let msg: Message = bincode_config().deserialize(&buf[0..MSG_SIZE])?;
-            if msg.magic != MAGIC {
-                return Err(err!("Deserialize: Invalid magic code."));
+        match buf.len() {
+            MSG_SIZE => {
+                // The deserialization is simple enough to do manually.
+                // Therefore, we don't use the `serde` crate here.
+
+                let magic = deserialize_u32(&buf[MSG_OFFS_MAGIC..])?;
+                let operation = deserialize_u32(&buf[MSG_OFFS_OPERATION..])?;
+                let user = deserialize_u32(&buf[MSG_OFFS_USER..])?;
+                let resource = deserialize_u32(&buf[MSG_OFFS_RESOURCE..])?;
+                let salt = &buf[MSG_OFFS_SALT..MSG_OFFS_SALT + SALT_SIZE];
+                let auth = &buf[MSG_OFFS_AUTH..MSG_OFFS_AUTH + AUTH_SIZE];
+
+                let msg = Self {
+                    magic,
+                    operation: operation.try_into()?,
+                    user,
+                    resource,
+                    salt: salt.try_into()?,
+                    auth: auth.try_into()?,
+                };
+
+                if msg.magic != MAGIC {
+                    return Err(err!("Deserialize: Invalid magic code."));
+                }
+
+                Ok(DeserializeResult::Ok(msg))
             }
-            Ok(DeserializeResult::Ok(msg))
+            len if len < MSG_SIZE => Ok(DeserializeResult::Pending(MSG_SIZE - len)),
+            _len => Err(err!("Deserialize: Raw message is too long.")),
         }
     }
 
@@ -305,7 +363,7 @@ impl Message {
         }
     }
 
-    /// Try to receive this message from a [TcpStream].
+    /// Try to receive a message from a [TcpStream].
     pub async fn recv(stream: &mut TcpStream) -> ah::Result<Option<Self>> {
         let mut rxbuf = [0; MSG_SIZE];
         let mut rxcount = 0;
@@ -575,7 +633,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "expected variant index 0 <= i < 5")]
+    #[should_panic(expected = "Invalid Message/Operation value")]
     fn test_msg_raw_invalid_operation() {
         let bytes = [
             0x3B, 0x1B, 0xB7, 0x19, // magic

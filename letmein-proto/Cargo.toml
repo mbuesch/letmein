@@ -15,10 +15,8 @@ keywords = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-bincode = { workspace = true }
 getrandom = { workspace = true }
 hmac = { workspace = true }
-serde = { workspace = true, features = [ "derive" ] }
 sha3 = { workspace = true }
 subtle = { workspace = true }
 tokio = { workspace = true, features = [ "net" ] }

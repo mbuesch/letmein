@@ -272,7 +272,6 @@ The simple design is supposed to reduce the attack surface and as such improve s
 Ideas for future changes and improvements in `letmein`:
 
 - Currently all users that are configured on the server can access (knock-open) all resources that are configured on the server. It might be useful to restrict certain users to certain resources only.
-- The `serde` related crates could be replaced with a much simpler local handcoded serialization/deserialization. That would reduce the dependency tree.
 - Check if `tokio` can be replaced with another simpler async runtime to reduce the dependency tree complexity.
 - The `anyhow` crate could probably be replaced with something much simpler.
 - A simple `.ini` file parser can be written in a few dozen lines of code. It might be worth doing that and removing the `configparser` dependency. We don't need most of the features it provides.
