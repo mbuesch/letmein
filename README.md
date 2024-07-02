@@ -247,6 +247,11 @@ The simple design is supposed to reduce the attack surface and as such improve s
   If an attacker could gain access to the letmein keys there are two scenarios:
   Either there is a second barrier of security (e.g. ssh server login) or all bets are lost anyway, because the attacker has full access already anyway.
 
+- **weakness**: If you knock a port open from behind a [NAT](https://en.wikipedia.org/wiki/Network_address_translation), then the port will be opened for the whole NATed network, because from the outside the NATed network has only one IP address.
+  Everybody from within the NATed network will be able to access the knocked-open port.
+  - **rationale**: The port is only open for a short and limited amount of time and there is supposed to be a second layer of security (see 2FA discussion above).
+  While it's an unfortunate fact that the port will be open for the whole NATed network, this is still much better than having it open for the whole internet (without port knocker).
+
 - **weakness**: The wire protocol does not have mechanisms for future changes and updates.
   - **rationale**: While this makes updating to a new protocol version harder, it improves security by simplification of the design.
   It is not expected that there will be many incompatible protocol changes in the future.
@@ -256,6 +261,9 @@ The simple design is supposed to reduce the attack surface and as such improve s
 Ideas for future changes and improvements in `letmein`:
 
 - Currently all users that are configured on the server can access (knock-open) all resources that are configured on the server. It might be useful to restrict certain users to certain resources only.
+- The `serde` related crates could be replaced with a much simpler local handcoded serialization/deserialization. That would reduce the dependency tree.
+- Check if `tokio` can be replaced with another simpler async runtime to reduce the dependency tree complexity.
+- The `anyhow` crate could probably be replaced with something much simpler.
 
 # License
 
