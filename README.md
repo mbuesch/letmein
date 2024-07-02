@@ -264,6 +264,7 @@ Ideas for future changes and improvements in `letmein`:
 - The `serde` related crates could be replaced with a much simpler local handcoded serialization/deserialization. That would reduce the dependency tree.
 - Check if `tokio` can be replaced with another simpler async runtime to reduce the dependency tree complexity.
 - The `anyhow` crate could probably be replaced with something much simpler.
+- Check if the split into two daemons would make sense. One daemon handling network traffic as non-root and one firewall daemon running as root.
 
 # License
 
