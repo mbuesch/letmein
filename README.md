@@ -1,15 +1,21 @@
 # letmein - Authenticated port knocking
 
 Letmein is a simple port knocker with a simple and secure authentication mechanism.
+It can be used to harden against pre-authentication attacks on services like SSH, VPN, IMAP and many more.
 
-It can be used to hide services on a server behind a knock authentication to reduce the attack surface of a service.
+Letmein hides services on a server behind a knock authentication barrier to reduce the attack surface of a service.
 The service will not be accessible unless a knock authentication is successful.
 In case of a successful knock, the letmeind server will only open the knocked port for the client IP address that performed the knocking.
 Machines with different IP addresses still won't have access to the protected service.
 
 Machines that can't successfully authenticate the knock sequence won't be able to access the protected service.
+They will receive a TCP/ICMP reject on the protected service port.
 
-Letmein requires an `nftables` based firewall. It will *not* work with `iptables`.
+Letmein requires an `nftables` based firewall.
+It will *not* work with `iptables`.
+If you use an `iptables` based firewall, please convert to `nftables` before installing letmein.
+There are descriptions about how to do that on the Internet.
+It's not as hard and as much work as it sounds. :)
 
 ## Typical letmein operation flow
 
@@ -238,6 +244,11 @@ The simple design is supposed to reduce the attack surface and as such improve s
   However, there is a time limit for how long the port is kept open after a successful knock sequence.
   After the knock sequence has been completed, there is only a limited amount of time an MiM could use it.
 
+- **weakness**: If you knock a port open from behind a [NAT](https://en.wikipedia.org/wiki/Network_address_translation), then the port will be opened for the whole NATed network, because from the outside the NATed network has only one IP address.
+  Everybody from within the NATed network will be able to access the knocked-open port.
+  - **rationale**: The port is only open for a short and limited amount of time and there is supposed to be a second layer of security (see 2FA discussion below).
+  While it's an unfortunate fact that the port will be open for the whole NATed network, this is still much better than having it open for the whole internet (without port knocker).
+
 - **weakness**: The authentication key is a shared secret that is stored in plain text on the server and on the client.
   - **rationale**: It is true that an attacker that can successfully take over a server or client can steal the keys and authenticate future sessions.
   This is a tradeoff between implementing complicated public-private-key cryptography, the overall goal of what letmein is supposed to protect and simplicity of the design.
@@ -247,10 +258,10 @@ The simple design is supposed to reduce the attack surface and as such improve s
   If an attacker could gain access to the letmein keys there are two scenarios:
   Either there is a second barrier of security (e.g. ssh server login) or all bets are lost anyway, because the attacker has full access already anyway.
 
-- **weakness**: If you knock a port open from behind a [NAT](https://en.wikipedia.org/wiki/Network_address_translation), then the port will be opened for the whole NATed network, because from the outside the NATed network has only one IP address.
-  Everybody from within the NATed network will be able to access the knocked-open port.
-  - **rationale**: The port is only open for a short and limited amount of time and there is supposed to be a second layer of security (see 2FA discussion above).
-  While it's an unfortunate fact that the port will be open for the whole NATed network, this is still much better than having it open for the whole internet (without port knocker).
+- **weakness**: All users that can successfully authenticate to letmein can start to attack the protected service.
+  - **rationale**: Yes, this is pretty much impossible to prevent.
+  (It could be mitigated for different users that are allowed to access *different* ports. See TODO section below)
+  Letmein is supposed to prevent pre-authentication attacks.
 
 - **weakness**: The wire protocol does not have mechanisms for future changes and updates.
   - **rationale**: While this makes updating to a new protocol version harder, it improves security by simplification of the design.
@@ -264,6 +275,7 @@ Ideas for future changes and improvements in `letmein`:
 - The `serde` related crates could be replaced with a much simpler local handcoded serialization/deserialization. That would reduce the dependency tree.
 - Check if `tokio` can be replaced with another simpler async runtime to reduce the dependency tree complexity.
 - The `anyhow` crate could probably be replaced with something much simpler.
+- A simple `.ini` file parser can be written in a few dozen lines of code. It might be worth doing that and removing the `configparser` dependency. We don't need most of the features it provides.
 - Check if the split into two daemons would make sense. One daemon handling network traffic as non-root and one firewall daemon running as root.
 
 # License
