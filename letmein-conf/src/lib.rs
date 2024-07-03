@@ -14,8 +14,10 @@
 
 #![forbid(unsafe_code)]
 
+mod ini;
+
+use crate::ini::Ini;
 use anyhow::{self as ah, format_err as err, Context as _};
-use configparser::ini::Ini;
 use letmein_proto::{Key, PORT};
 use std::{collections::HashMap, path::Path, time::Duration};
 
@@ -105,34 +107,31 @@ fn parse_hex<const SIZE: usize>(s: &str) -> ah::Result<[u8; SIZE]> {
 
 fn get_debug(ini: &Ini) -> ah::Result<bool> {
     if let Some(debug) = ini.get("GENERAL", "debug") {
-        return parse_bool(&debug);
+        return parse_bool(debug);
     }
     Ok(false)
 }
 
 fn get_port(ini: &Ini) -> ah::Result<u16> {
     if let Some(port) = ini.get("GENERAL", "port") {
-        return parse_u16(&port);
+        return parse_u16(port);
     }
     Ok(PORT)
 }
 
 fn get_keys(ini: &Ini) -> ah::Result<HashMap<u32, Key>> {
     let mut keys = HashMap::new();
-    if let Some(sect_keys) = ini.get_map_ref().get("KEYS") {
-        for (key_id, key_val) in sect_keys.iter() {
-            let Some(key_val) = key_val else {
-                return Err(err!("Missing key value"));
-            };
-            let key_id = parse_hex_u32(key_id).context("KEYS")?;
-            let key_val = parse_hex(key_val).context("KEYS")?;
-            if key_val == [0; std::mem::size_of::<Key>()] {
-                return Err(err!("Invalid key {key_id:08X}: Key is all zeros (00)"));
+    if let Some(options) = ini.options_iter("KEYS") {
+        for (id, key) in options {
+            let id = parse_hex_u32(id).context("KEYS")?;
+            let key = parse_hex(key).context("KEYS")?;
+            if key == [0; std::mem::size_of::<Key>()] {
+                return Err(err!("Invalid key {id:08X}: Key is all zeros (00)"));
             }
-            if key_val == [0xFF; std::mem::size_of::<Key>()] {
-                return Err(err!("Invalid key {key_id:08X}: Key is all ones (FF)"));
+            if key == [0xFF; std::mem::size_of::<Key>()] {
+                return Err(err!("Invalid key {id:08X}: Key is all ones (FF)"));
             }
-            keys.insert(key_id, key_val);
+            keys.insert(id, key);
         }
     }
     Ok(keys)
@@ -140,24 +139,22 @@ fn get_keys(ini: &Ini) -> ah::Result<HashMap<u32, Key>> {
 
 fn get_resources(ini: &Ini) -> ah::Result<HashMap<u32, Resource>> {
     let mut resources = HashMap::new();
-    if let Some(sect_resources) = ini.get_map_ref().get("RESOURCES") {
-        for (res_id, res_val) in sect_resources.iter() {
-            let Some(res_val) = res_val else {
-                return Err(err!("Missing resource value"));
-            };
-            let res_id = parse_hex_u32(res_id).context("RESOURCES")?;
-            let Some(idx) = res_val.find(':') else {
+    if let Some(options) = ini.options_iter("RESOURCES") {
+        for (id, resource) in options {
+            let id = parse_hex_u32(id).context("RESOURCES")?;
+            let Some(idx) = resource.find(':') else {
                 return Err(err!("Invalid resource value. No colon."));
             };
-            let res_name = res_val[0..idx].trim();
-            let res_value = res_val[idx + 1..].trim();
+            let chlen = ':'.len_utf8();
+            let res_name = resource[..=(idx - chlen)].trim();
+            let res_value = resource[idx + chlen..].trim();
             let res = match res_name {
                 "port" => Resource::Port(parse_u16(res_value)?),
                 n => {
                     return Err(err!("Unknown resource name: {n}"));
                 }
             };
-            resources.insert(res_id, res);
+            resources.insert(id, res);
         }
     }
     Ok(resources)
@@ -165,7 +162,7 @@ fn get_resources(ini: &Ini) -> ah::Result<HashMap<u32, Resource>> {
 
 fn get_default_user(ini: &Ini) -> ah::Result<u32> {
     if let Some(default_user) = ini.get("CLIENT", "default-user") {
-        return parse_hex_u32(&default_user);
+        return parse_hex_u32(default_user);
     }
     Ok(0)
 }
@@ -203,7 +200,7 @@ fn get_nft_chain_input(ini: &Ini) -> ah::Result<String> {
 
 fn get_nft_timeout(ini: &Ini) -> ah::Result<u32> {
     if let Some(nft_timeout) = ini.get("NFTABLES", "timeout") {
-        parse_u32(&nft_timeout)
+        parse_u32(nft_timeout)
     } else {
         Ok(DEFAULT_NFT_TIMEOUT)
     }
@@ -247,19 +244,16 @@ impl Config {
 
     /// (Re-)load a configuration from a file.
     pub fn load(&mut self, path: &Path) -> ah::Result<()> {
-        let mut ini = Ini::new_cs();
-        if let Err(e) = ini.load(path) {
-            if self.variant == ConfigVariant::Server {
-                return Err(err!("Failed to load configuration {path:?}: {e}"));
-            } else {
-                return Ok(());
-            }
-        };
-        self.load_ini(&ini)
+        if let Ok(ini) = Ini::new_from_file(path) {
+            self.load_ini(&ini)?;
+        } else if self.variant == ConfigVariant::Server {
+            return Err(err!("Failed to load configuration {path:?}"));
+        }
+        Ok(())
     }
 
     /// (Re-)load a configuration from a parsed [Ini] instance.
-    pub fn load_ini(&mut self, ini: &Ini) -> ah::Result<()> {
+    fn load_ini(&mut self, ini: &Ini) -> ah::Result<()> {
         let mut default_user = Default::default();
         let mut nft_family = Default::default();
         let mut nft_table = Default::default();
@@ -357,17 +351,16 @@ mod tests {
 
     #[test]
     fn test_general() {
-        let mut ini = Ini::new_cs();
-        ini.read("[GENERAL]\ndebug = true\n".to_string()).unwrap();
+        let mut ini = Ini::new();
+        ini.parse_str("[GENERAL]\ndebug = true\n").unwrap();
         assert!(get_debug(&ini).unwrap());
     }
 
     #[test]
     fn test_keys() {
-        let mut ini = Ini::new_cs();
-        ini.read(
-            "[KEYS]\nABCD1234 = 998877665544332211009988776655443322110099887766554433221100CDEF\n"
-                .to_string(),
+        let mut ini = Ini::new();
+        ini.parse_str(
+            "[KEYS]\nABCD1234 = 998877665544332211009988776655443322110099887766554433221100CDEF\n",
         )
         .unwrap();
         let keys = get_keys(&ini).unwrap();
@@ -383,8 +376,8 @@ mod tests {
 
     #[test]
     fn test_resources() {
-        let mut ini = Ini::new_cs();
-        ini.read("[RESOURCES]\n9876ABCD = port : 4096\n".to_string())
+        let mut ini = Ini::new();
+        ini.parse_str("[RESOURCES]\n9876ABCD = port : 4096\n")
             .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(resources.get(&0x9876ABCD).unwrap(), &Resource::Port(4096));
@@ -392,18 +385,17 @@ mod tests {
 
     #[test]
     fn test_client() {
-        let mut ini = Ini::new_cs();
-        ini.read("[CLIENT]\ndefault-user = 123\n".to_string())
-            .unwrap();
+        let mut ini = Ini::new();
+        ini.parse_str("[CLIENT]\ndefault-user = 123\n").unwrap();
         let default_user = get_default_user(&ini).unwrap();
         assert_eq!(default_user, 0x123);
     }
 
     #[test]
     fn test_nft() {
-        let mut ini = Ini::new_cs();
-        ini.read(
-            "[NFTABLES]\nfamily = inet\ntable = filter\nchain-input = LETMEIN-INPUT\ntimeout = 50\n".to_string(),
+        let mut ini = Ini::new();
+        ini.parse_str(
+            "[NFTABLES]\nfamily = inet\ntable = filter\nchain-input = LETMEIN-INPUT\ntimeout = 50\n",
         )
         .unwrap();
         let nft_family = get_nft_family(&ini).unwrap();

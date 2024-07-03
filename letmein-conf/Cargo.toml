@@ -15,7 +15,6 @@ keywords = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-configparser = { workspace = true }
 letmein-proto = { workspace = true }
 
 # vim: ts=4 sw=4 expandtab
