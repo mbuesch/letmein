@@ -260,23 +260,12 @@ The simple design is supposed to reduce the attack surface and as such improve s
 
 - **weakness**: All users that can successfully authenticate to letmein can start to attack the protected service.
   - **rationale**: Yes, this is pretty much impossible to prevent.
-  (It could be mitigated for different users that are allowed to access *different* ports. See TODO section below)
+  (It could be mitigated for different users that are allowed to access *different* ports. See [the issue on Github](https://github.com/mbuesch/letmein/issues/1))
   Letmein is supposed to prevent pre-authentication attacks.
 
 - **weakness**: The wire protocol does not have mechanisms for future changes and updates.
   - **rationale**: While this makes updating to a new protocol version harder, it improves security by simplification of the design.
   It is not expected that there will be many incompatible protocol changes in the future.
-
-## TODO
-
-Ideas for future changes and improvements in `letmein`:
-
-- Currently all users that are configured on the server can access (knock-open) all resources that are configured on the server. It might be useful to restrict certain users to certain resources only.
-- Check if `tokio` can be replaced with another simpler async runtime to reduce the dependency tree complexity.
-- The things that we do with the firewall are not very complex. Can we have a simpler crate than `nftables` to reduce the dependency tree complexity?
-- The `anyhow` crate could probably be replaced with something much simpler.
-- A simple `.ini` file parser can be written in a few dozen lines of code. It might be worth doing that and removing the `configparser` dependency. We don't need most of the features it provides.
-- Check if the split into two daemons would make sense. One daemon handling network traffic as non-root and one firewall daemon running as root.
 
 # License
 
