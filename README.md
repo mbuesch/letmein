@@ -273,6 +273,7 @@ Ideas for future changes and improvements in `letmein`:
 
 - Currently all users that are configured on the server can access (knock-open) all resources that are configured on the server. It might be useful to restrict certain users to certain resources only.
 - Check if `tokio` can be replaced with another simpler async runtime to reduce the dependency tree complexity.
+- The things that we do with the firewall are not very complex. Can we have a simpler crate than `nftables` to reduce the dependency tree complexity?
 - The `anyhow` crate could probably be replaced with something much simpler.
 - A simple `.ini` file parser can be written in a few dozen lines of code. It might be worth doing that and removing the `configparser` dependency. We don't need most of the features it provides.
 - Check if the split into two daemons would make sense. One daemon handling network traffic as non-root and one firewall daemon running as root.

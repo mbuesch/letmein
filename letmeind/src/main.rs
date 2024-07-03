@@ -13,7 +13,7 @@ mod processor;
 mod server;
 
 use crate::{
-    firewall::{Firewall, FirewallMaintain},
+    firewall::{nftables::NftFirewall, FirewallMaintain},
     processor::Processor,
     server::Server,
 };
@@ -64,7 +64,7 @@ async fn main() -> ah::Result<()> {
         .context("Configuration file")?;
     let conf = Arc::new(RwLock::new(conf));
 
-    let fw = Arc::new(Mutex::new(Firewall::new(&conf.read().await).await?));
+    let fw = Arc::new(Mutex::new(NftFirewall::new(&conf.read().await).await?));
 
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
     let mut sigint = signal(SignalKind::interrupt()).unwrap();
