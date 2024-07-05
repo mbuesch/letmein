@@ -23,7 +23,7 @@ use letmein_conf::{Config, ConfigVariant, INSTALL_PREFIX, SERVER_CONF_PATH};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::{
     signal::unix::{signal, SignalKind},
-    sync::{self, Mutex, RwLock, RwLockReadGuard},
+    sync::{self, Mutex, RwLock, RwLockReadGuard, Semaphore},
     task, time,
 };
 
@@ -36,6 +36,10 @@ struct Opts {
     /// Override the default path to the configuration file.
     #[arg(short, long)]
     config: Option<PathBuf>,
+
+    /// Maximum number of simultaneous connections.
+    #[arg(short, long, default_value = "8")]
+    num_connections: usize,
 
     /// Force-disable use of systemd socket.
     ///
@@ -81,19 +85,22 @@ async fn main() -> ah::Result<()> {
     let conf_clone = Arc::clone(&conf);
     let fw_clone = Arc::clone(&fw);
     task::spawn(async move {
+        let conn_semaphore = Semaphore::new(opts.num_connections);
         loop {
             let conf = Arc::clone(&conf_clone);
             let fw = Arc::clone(&fw_clone);
             match srv.accept().await {
                 Ok(conn) => {
                     // Socket connection handler.
-                    task::spawn(async move {
-                        let conf = conf.read().await;
-                        let mut proc = Processor::new(conn, &conf, fw);
-                        if let Err(e) = proc.run().await {
-                            eprintln!("Client error: {e}");
-                        }
-                    });
+                    if let Ok(_permit) = conn_semaphore.acquire().await {
+                        task::spawn(async move {
+                            let conf = conf.read().await;
+                            let mut proc = Processor::new(conn, &conf, fw);
+                            if let Err(e) = proc.run().await {
+                                eprintln!("Client error: {e}");
+                            }
+                        });
+                    }
                 }
                 Err(e) => {
                     let _ = exit_sock_tx.send(Err(e)).await;
@@ -103,7 +110,7 @@ async fn main() -> ah::Result<()> {
         }
     });
 
-    // Firewall task.
+    // Task: Firewall.
     let conf_clone = Arc::clone(&conf);
     let fw_clone = Arc::clone(&fw);
     task::spawn(async move {
@@ -119,7 +126,7 @@ async fn main() -> ah::Result<()> {
         }
     });
 
-    // Main task.
+    // Task: Main loop.
     let mut exitcode;
     loop {
         tokio::select! {
