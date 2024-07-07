@@ -146,6 +146,9 @@ fn get_resources(ini: &Ini) -> ah::Result<HashMap<u32, Resource>> {
                 return Err(err!("Invalid resource value. No colon."));
             };
             let chlen = ':'.len_utf8();
+            if idx < chlen {
+                return Err(err!("Invalid resource name."));
+            }
             let res_name = resource[..=(idx - chlen)].trim();
             let res_value = resource[idx + chlen..].trim();
             let res = match res_name {

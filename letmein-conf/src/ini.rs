@@ -110,15 +110,19 @@ impl Ini {
             // Are we inside of a section?
             if let Some(section) = &in_section {
                 if let Some(idx) = line.find('=') {
-                    // We have an option
                     let chlen = '='.len_utf8();
-                    let opt_name = line[..=(idx - chlen)].trim_end().to_string();
-                    let opt_value = line[idx + chlen..].to_string();
-                    sections
-                        .get_mut(section)
-                        .unwrap()
-                        .options_mut()
-                        .insert(opt_name, opt_value);
+                    if idx >= chlen {
+                        // We have an option
+                        let opt_name = line[..=(idx - chlen)].trim_end().to_string();
+                        let opt_value = line[idx + chlen..].to_string();
+                        sections
+                            .get_mut(section)
+                            .unwrap()
+                            .options_mut()
+                            .insert(opt_name, opt_value);
+                    } else {
+                        return Err(err!("Option has no name before equal sign '=': '{line}'"));
+                    }
                 } else {
                     return Err(err!("Option has no equal sign '=': '{line}'"));
                 }
