@@ -50,6 +50,7 @@ pub struct Server {
 
 impl Server {
     pub async fn new(conf: &ConfigRef<'_>, no_systemd: bool) -> ah::Result<Self> {
+        // Get socket from systemd?
         if !no_systemd {
             if let Some(listener) = tcp_from_systemd()? {
                 println!("Using socket from systemd.");
@@ -62,11 +63,15 @@ impl Server {
                 return Ok(Self { listener });
             }
         }
-        Ok(Self {
-            listener: TcpListener::bind(("::0", conf.port()))
-                .await
-                .context("Bind")?,
-        })
+
+        // Without systemd.
+
+        // TCP bind.
+        let listener = TcpListener::bind(("::0", conf.port()))
+            .await
+            .context("Bind")?;
+
+        Ok(Self { listener })
     }
 
     pub async fn accept(&self) -> ah::Result<Connection> {

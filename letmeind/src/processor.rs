@@ -6,27 +6,26 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{firewall::FirewallOpen, server::ConnectionOps, ConfigRef};
+use crate::{firewall_client::FirewallClient, server::ConnectionOps, ConfigRef};
 use anyhow::{self as ah, format_err as err};
 use letmein_conf::Resource;
 use letmein_proto::{Message, Operation, ResourceId, UserId};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::path::Path;
 
-pub struct Processor<'a, C, F> {
+pub struct Processor<'a, C> {
     conn: C,
     conf: &'a ConfigRef<'a>,
-    fw: Arc<Mutex<F>>,
+    rundir: &'a Path,
     user_id: Option<UserId>,
     resource_id: Option<ResourceId>,
 }
 
-impl<'a, C: ConnectionOps, F: FirewallOpen> Processor<'a, C, F> {
-    pub fn new(conn: C, conf: &'a ConfigRef<'a>, fw: Arc<Mutex<F>>) -> Self {
+impl<'a, C: ConnectionOps> Processor<'a, C> {
+    pub fn new(conn: C, conf: &'a ConfigRef<'a>, rundir: &'a Path) -> Self {
         Self {
             conn,
             conf,
-            fw,
+            rundir,
             user_id: None,
             resource_id: None,
         }
@@ -130,9 +129,20 @@ impl<'a, C: ConnectionOps, F: FirewallOpen> Processor<'a, C, F> {
         // Reconfigure the firewall.
         match resource {
             Resource::Port { port, users: _ } => {
-                let mut fw = self.fw.lock().await;
-                fw.open_port(self.conf, self.conn.addr().ip(), *port)
-                    .await?;
+                // Connect to letmeinfwd unix socket.
+                let mut fw = match FirewallClient::new(self.rundir).await {
+                    Err(e) => {
+                        let _ = self.send_go_away().await;
+                        return Err(err!("Failed to connect to letmeinfwd: {e}"));
+                    }
+                    Ok(fw) => fw,
+                };
+
+                // Send an open-port request to letmeinfwd.
+                if let Err(e) = fw.open_port(self.conn.addr().ip(), *port).await {
+                    let _ = self.send_go_away().await;
+                    return Err(err!("letmeinfwd firewall open: {e}"));
+                }
             }
         }
 

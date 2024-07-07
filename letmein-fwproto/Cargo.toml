@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 [package]
-name = "letmein-systemd"
-description = "Authenticated port knocking - Systemd support"
+name = "letmein-fwproto"
+description = "Authenticated port knocking - Firewall backend communication protocol"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
@@ -14,14 +14,8 @@ readme = "README.md"
 categories = { workspace = true }
 keywords = { workspace = true }
 
-[features]
-default = []
-tcp = []
-unix = []
-
 [dependencies]
 anyhow = { workspace = true }
-libc = { workspace = true }
-sd-notify = { workspace = true }
+tokio = { workspace = true, features = [ "net" ] }
 
 # vim: ts=4 sw=4 expandtab

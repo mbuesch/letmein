@@ -471,6 +471,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "letmein-fwproto"
+version = "2.0.0"
+dependencies = [
+ "anyhow",
+ "tokio",
+]
+
+[[package]]
 name = "letmein-proto"
 version = "2.0.0"
 dependencies = [
@@ -480,6 +488,16 @@ dependencies = [
  "sha3",
  "subtle",
  "tokio",
+]
+
+[[package]]
+name = "letmein-seccomp"
+version = "2.0.0"
+dependencies = [
+ "anyhow",
+ "autocfg",
+ "libc",
+ "seccompiler",
 ]
 
 [[package]]
@@ -498,10 +516,27 @@ dependencies = [
  "anyhow",
  "clap",
  "letmein-conf",
+ "letmein-fwproto",
  "letmein-proto",
+ "letmein-seccomp",
  "letmein-systemd",
+ "libc",
+ "tokio",
+]
+
+[[package]]
+name = "letmeinfwd"
+version = "2.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "letmein-conf",
+ "letmein-fwproto",
+ "letmein-systemd",
+ "libc",
  "nftables",
  "tokio",
+ "user_lookup",
 ]
 
 [[package]]
@@ -746,6 +781,15 @@ name = "sd-notify"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4646d6f919800cd25c50edb49438a1381e2cd4833c027e75e8897981c50b8b5e"
+
+[[package]]
+name = "seccompiler"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "345a3e4dddf721a478089d4697b83c6c0a8f5bf16086f6c13397e4534eb6e2e5"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "serde"
@@ -1005,6 +1049,12 @@ dependencies = [
  "idna 0.5.0",
  "percent-encoding",
 ]
+
+[[package]]
+name = "user_lookup"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce218b4b10d1acf525e5798d1014bc9922f0d11c0267ddc4be4c14775124e209"
 
 [[package]]
 name = "utf8parse"

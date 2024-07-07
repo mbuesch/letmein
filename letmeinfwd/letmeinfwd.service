@@ -1,26 +1,26 @@
 [Unit]
-Description=letmeind daemon
-Requires=letmeinfwd.service
-After=letmeinfwd.service
-PartOf=letmeind.socket
+Description=letmeinfwd daemon
+Requires=letmeinfwd.socket nftables.service
+PartOf=letmeinfwd.socket
 StartLimitIntervalSec=0
 
 [Service]
 Type=notify
 NotifyAccess=main
-ExecStart=/opt/letmein/bin/letmeind
+ExecStart=/opt/letmein/bin/letmeinfwd
 ExecReload=/bin/kill -HUP $MAINPID
-RuntimeDirectory=letmeind
+RuntimeDirectory=letmeinfwd
 RuntimeDirectoryMode=0750
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
 RestartSec=10
-User=letmeind
+User=root
 Group=letmeind
 Nice=0
 #Environment=RUST_BACKTRACE=1
 
 [Install]
-# Don't do socket-activation. Always start the service.
+# We can't do socket-activation.
+# This service opens the letmeind communication port.
 WantedBy=multi-user.target

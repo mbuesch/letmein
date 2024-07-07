@@ -60,6 +60,50 @@ impl Resource {
     }
 }
 
+/// Seccomp setting.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub enum Seccomp {
+    /// Seccomp is disabled (default).
+    #[default]
+    Off,
+
+    /// Seccomp is enabled with logging only.
+    ///
+    /// The event will be logged, if a syscall is called that is not allowed.
+    /// See the Linux kernel logs for seccomp audit messages.
+    Log,
+
+    /// Seccomp is enabled with killing (recommended).
+    ///
+    /// The process will be killed, if a syscall is called that is not allowed.
+    Kill,
+}
+
+impl std::fmt::Display for Seccomp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Off => write!(f, "Off"),
+            Self::Log => write!(f, "Logging only"),
+            Self::Kill => write!(f, "Process killing"),
+        }
+    }
+}
+
+impl std::str::FromStr for Seccomp {
+    type Err = ah::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().trim() {
+            "off" => Ok(Self::Off),
+            "log" => Ok(Self::Log),
+            "kill" => Ok(Self::Kill),
+            other => Err(err!(
+                "Config option 'seccomp = {other}' is not valid. Valid values are: off, log, kill."
+            )),
+        }
+    }
+}
+
 fn parse_bool(s: &str) -> ah::Result<bool> {
     let s = s.to_lowercase();
     let s = s.trim();
@@ -178,6 +222,13 @@ fn get_port(ini: &Ini) -> ah::Result<u16> {
     Ok(PORT)
 }
 
+fn get_seccomp(ini: &Ini) -> ah::Result<Seccomp> {
+    if let Some(seccomp) = ini.get("GENERAL", "seccomp") {
+        return seccomp.parse();
+    }
+    Ok(Default::default())
+}
+
 fn get_keys(ini: &Ini) -> ah::Result<HashMap<UserId, Key>> {
     let mut keys = HashMap::new();
     if let Some(options) = ini.options_iter("KEYS") {
@@ -280,6 +331,7 @@ pub struct Config {
     variant: ConfigVariant,
     debug: bool,
     port: u16,
+    seccomp: Seccomp,
     keys: HashMap<UserId, Key>,
     resources: HashMap<ResourceId, Resource>,
     default_user: UserId,
@@ -320,6 +372,7 @@ impl Config {
 
         let debug = get_debug(ini)?;
         let port = get_port(ini)?;
+        let seccomp = get_seccomp(ini)?;
         let keys = get_keys(ini)?;
         let resources = get_resources(ini)?;
         if self.variant == ConfigVariant::Client {
@@ -334,6 +387,7 @@ impl Config {
 
         self.debug = debug;
         self.port = port;
+        self.seccomp = seccomp;
         self.keys = keys;
         self.resources = resources;
         self.default_user = default_user;
@@ -352,6 +406,11 @@ impl Config {
     /// Get the `port` option from `[GENERAL]` section.
     pub fn port(&self) -> u16 {
         self.port
+    }
+
+    /// Get the `seccomp` option from `[GENERAL]` section.
+    pub fn seccomp(&self) -> Seccomp {
+        self.seccomp
     }
 
     /// Get a key value by key identifier from the `[KEYS]` section.

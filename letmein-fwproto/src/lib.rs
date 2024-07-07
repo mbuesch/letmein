@@ -1,0 +1,342 @@
+// -*- coding: utf-8 -*-
+//
+// Copyright (C) 2024 Michael Büsch <m@bues.ch>
+//
+// Licensed under the Apache License version 2.0
+// or the MIT license, at your option.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+//! This crate implements the firewall socket protocol
+//! for communication between the `letmeind` and `letmeinfwd` daemons.
+//!
+//! Serializing messages to a raw byte stream and
+//! deserializing raw byte stream to a message is implemented here.
+
+#![forbid(unsafe_code)]
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+std::compile_error!("letmeind server and letmein-fwproto do not support non-Linux platforms.");
+
+use anyhow::{self as ah, format_err as err, Context as _};
+use std::net::{IpAddr, Ipv4Addr};
+use tokio::{io::ErrorKind, net::UnixStream};
+
+/// Firewall daemon Unix socket file name.
+pub const SOCK_FILE: &str = "letmeinfwd.sock";
+
+/// The operation to perform on the firewall.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u16)]
+pub enum FirewallOperation {
+    /// Open an IPv6 port.
+    OpenV6,
+    /// Open an IPv4 port.
+    OpenV4,
+    /// Acknowledge message.
+    Ack,
+    /// Not-Acknowledge message.
+    Nack,
+}
+
+impl TryFrom<u16> for FirewallOperation {
+    type Error = ah::Error;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        const OPERATION_OPENV6: u16 = FirewallOperation::OpenV6 as u16;
+        const OPERATION_OPENV4: u16 = FirewallOperation::OpenV4 as u16;
+        const OPERATION_ACK: u16 = FirewallOperation::Ack as u16;
+        const OPERATION_NACK: u16 = FirewallOperation::Nack as u16;
+        match value {
+            OPERATION_OPENV6 => Ok(Self::OpenV6),
+            OPERATION_OPENV4 => Ok(Self::OpenV4),
+            OPERATION_ACK => Ok(Self::Ack),
+            OPERATION_NACK => Ok(Self::Nack),
+            _ => Err(err!("Invalid FirewallMessage/Operation value")),
+        }
+    }
+}
+
+/// Size of the `addr` field in the message.
+const ADDR_SIZE: usize = 16;
+
+/// Size of the firewall control message.
+const FWMSG_SIZE: usize = 2 + 2 + ADDR_SIZE;
+
+/// Byte offset of the `operation` field in the firewall control message.
+const FWMSG_OFFS_OPERATION: usize = 0;
+
+/// Byte offset of the `port` field in the firewall control message.
+const FWMSG_OFFS_PORT: usize = 2;
+
+/// Byte offset of the `addr` field in the firewall control message.
+const FWMSG_OFFS_ADDR: usize = 4;
+
+/// A message to control the firewall.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct FirewallMessage {
+    operation: FirewallOperation,
+    port: u16,
+    addr: [u8; ADDR_SIZE],
+}
+
+/// Convert an `IpAddr` to the `operation` and `addr` fields of a firewall control message.
+fn addr_to_octets(addr: IpAddr) -> (FirewallOperation, [u8; ADDR_SIZE]) {
+    match addr {
+        IpAddr::V4(addr) => {
+            let o = addr.octets();
+            (
+                FirewallOperation::OpenV4,
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, o[0], o[1], o[2], o[3]],
+            )
+        }
+        IpAddr::V6(addr) => (FirewallOperation::OpenV6, addr.octets()),
+    }
+}
+
+/// Convert a firewall control message `operation` and `addr` fields to an `IpAddr`.
+fn octets_to_addr(operation: FirewallOperation, addr: &[u8; ADDR_SIZE]) -> Option<IpAddr> {
+    match operation {
+        FirewallOperation::OpenV4 => {
+            Some(Ipv4Addr::new(addr[12], addr[13], addr[14], addr[15]).into())
+        }
+        FirewallOperation::OpenV6 => Some((*addr).into()),
+        FirewallOperation::Ack | FirewallOperation::Nack => None,
+    }
+}
+
+impl FirewallMessage {
+    /// Construct a new message that requests installing a firewall-port-open rule.
+    pub fn new_open(addr: IpAddr, port: u16) -> Self {
+        let (operation, addr) = addr_to_octets(addr);
+        Self {
+            operation,
+            port,
+            addr,
+        }
+    }
+
+    /// Construct a new acknowledge message.
+    pub fn new_ack() -> Self {
+        Self {
+            operation: FirewallOperation::Ack,
+            port: 0,
+            addr: [0; ADDR_SIZE],
+        }
+    }
+
+    /// Construct a new not-acknowledge message.
+    pub fn new_nack() -> Self {
+        Self {
+            operation: FirewallOperation::Nack,
+            port: 0,
+            addr: [0; ADDR_SIZE],
+        }
+    }
+
+    /// Get the operation type from this message.
+    pub fn operation(&self) -> FirewallOperation {
+        self.operation
+    }
+
+    /// Get the port number from this message.
+    pub fn port(&self) -> Option<u16> {
+        match self.operation {
+            FirewallOperation::OpenV4 | FirewallOperation::OpenV6 => Some(self.port),
+            FirewallOperation::Ack | FirewallOperation::Nack => None,
+        }
+    }
+
+    /// Get the `IpAddr` from this message.
+    pub fn addr(&self) -> Option<IpAddr> {
+        octets_to_addr(self.operation, &self.addr)
+    }
+
+    /// Serialize this message into a byte stream.
+    pub fn msg_serialize(&self) -> ah::Result<[u8; FWMSG_SIZE]> {
+        // The serialization is simple enough to do manually.
+        // Therefore, we don't use the `serde` crate here.
+
+        #[inline]
+        fn serialize_u16(buf: &mut [u8], value: u16) {
+            buf[0..2].copy_from_slice(&value.to_be_bytes());
+        }
+
+        let mut buf = [0; FWMSG_SIZE];
+        serialize_u16(&mut buf[FWMSG_OFFS_OPERATION..], self.operation as u16);
+        serialize_u16(&mut buf[FWMSG_OFFS_PORT..], self.port);
+        buf[FWMSG_OFFS_ADDR..FWMSG_OFFS_ADDR + ADDR_SIZE].copy_from_slice(&self.addr);
+
+        Ok(buf)
+    }
+
+    /// Try to deserialize a byte stream into a message.
+    pub fn try_msg_deserialize(buf: &[u8]) -> ah::Result<Self> {
+        if buf.len() != FWMSG_SIZE {
+            return Err(err!("Deserialize: Raw message size mismatch."));
+        }
+
+        // The deserialization is simple enough to do manually.
+        // Therefore, we don't use the `serde` crate here.
+
+        #[inline]
+        fn deserialize_u16(buf: &[u8]) -> ah::Result<u16> {
+            Ok(u16::from_be_bytes(buf[0..2].try_into()?))
+        }
+
+        let operation = deserialize_u16(&buf[FWMSG_OFFS_OPERATION..])?;
+        let port = deserialize_u16(&buf[FWMSG_OFFS_PORT..])?;
+        let addr = &buf[FWMSG_OFFS_ADDR..FWMSG_OFFS_ADDR + ADDR_SIZE];
+
+        Ok(Self {
+            operation: operation.try_into()?,
+            port,
+            addr: addr.try_into()?,
+        })
+    }
+
+    /// Send this message over a [UnixStream].
+    pub async fn send(&self, stream: &mut UnixStream) -> ah::Result<()> {
+        let txbuf = self.msg_serialize()?;
+        let mut txcount = 0;
+        loop {
+            stream.writable().await.context("Socket polling (tx)")?;
+            match stream.try_write(&txbuf[txcount..]) {
+                Ok(n) => {
+                    txcount += n;
+                    assert!(txcount <= txbuf.len());
+                    if txcount == txbuf.len() {
+                        return Ok(());
+                    }
+                }
+                Err(e) if e.kind() == ErrorKind::WouldBlock => (),
+                Err(e) => {
+                    return Err(err!("Socket write: {e}"));
+                }
+            }
+        }
+    }
+
+    /// Try to receive a message from a [UnixStream].
+    pub async fn recv(stream: &mut UnixStream) -> ah::Result<Option<Self>> {
+        let mut rxbuf = [0; FWMSG_SIZE];
+        let mut rxcount = 0;
+        loop {
+            stream.readable().await.context("Socket polling (rx)")?;
+            match stream.try_read(&mut rxbuf[rxcount..]) {
+                Ok(n) => {
+                    if n == 0 {
+                        return Ok(None);
+                    }
+                    rxcount += n;
+                    assert!(rxcount <= FWMSG_SIZE);
+                    if rxcount == FWMSG_SIZE {
+                        return Ok(Some(Self::try_msg_deserialize(&rxbuf)?));
+                    }
+                }
+                Err(e) if e.kind() == ErrorKind::WouldBlock => (),
+                Err(e) => {
+                    return Err(err!("Socket read: {e}"));
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn check_ser_de(msg: &FirewallMessage) {
+        // Serialize a message and then deserialize the byte stream
+        // and check if the resulting message is the same.
+        let bytes = msg.msg_serialize().unwrap();
+        let msg_de = FirewallMessage::try_msg_deserialize(&bytes).unwrap();
+        assert_eq!(*msg, msg_de);
+    }
+
+    #[test]
+    fn test_msg_open_v6() {
+        let msg = FirewallMessage::new_open("::1".parse().unwrap(), 0x9876);
+        assert_eq!(msg.operation(), FirewallOperation::OpenV6);
+        assert_eq!(msg.port(), Some(0x9876));
+        assert_eq!(msg.addr(), Some("::1".parse().unwrap()));
+        check_ser_de(&msg);
+
+        let msg = FirewallMessage::new_open(
+            "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
+            0x9876,
+        );
+        let bytes = msg.msg_serialize().unwrap();
+        assert_eq!(
+            bytes,
+            [
+                0x00, 0x00, // operation
+                0x98, 0x76, // port
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
+                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
+            ]
+        );
+    }
+
+    #[test]
+    fn test_msg_open_v4() {
+        let msg = FirewallMessage::new_open("1.2.3.4".parse().unwrap(), 0x9876);
+        assert_eq!(msg.operation(), FirewallOperation::OpenV4);
+        assert_eq!(msg.port(), Some(0x9876));
+        assert_eq!(msg.addr(), Some("1.2.3.4".parse().unwrap()));
+        check_ser_de(&msg);
+
+        let bytes = msg.msg_serialize().unwrap();
+        assert_eq!(
+            bytes,
+            [
+                0x00, 0x01, // operation
+                0x98, 0x76, // port
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
+                0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, // addr
+            ]
+        );
+    }
+
+    #[test]
+    fn test_msg_ack() {
+        let msg = FirewallMessage::new_ack();
+        assert_eq!(msg.operation(), FirewallOperation::Ack);
+        assert_eq!(msg.port(), None);
+        assert_eq!(msg.addr(), None);
+        check_ser_de(&msg);
+
+        let bytes = msg.msg_serialize().unwrap();
+        assert_eq!(
+            bytes,
+            [
+                0x00, 0x02, // operation
+                0x00, 0x00, // port
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
+            ]
+        );
+    }
+
+    #[test]
+    fn test_msg_nack() {
+        let msg = FirewallMessage::new_nack();
+        assert_eq!(msg.operation(), FirewallOperation::Nack);
+        assert_eq!(msg.port(), None);
+        assert_eq!(msg.addr(), None);
+        check_ser_de(&msg);
+
+        let bytes = msg.msg_serialize().unwrap();
+        assert_eq!(
+            bytes,
+            [
+                0x00, 0x03, // operation
+                0x00, 0x00, // port
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
+            ]
+        );
+    }
+}
+
+// vim: ts=4 sw=4 expandtab

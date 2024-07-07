@@ -138,19 +138,6 @@ After installing all build prerequisites, run the build script:
 
 ## Installing letmein
 
-### Install server
-
-After building, run the `install-server.sh` to install the letmeind server to `/opt/letmein/`:
-
-```sh
-./install-server.sh
-```
-
-Installing the server will also install the service and socket into systemd and start the letmeind server.
-
-The server is used to receive knock packets from the client.
-Upon successful knock authentication, the server will open the knocked port in its `nftables` firewall.
-
 ### Install client
 
 Then run the `install-client.sh` to install the letmein client to `/opt/letmein/`:
@@ -161,19 +148,35 @@ Then run the `install-client.sh` to install the letmein client to `/opt/letmein/
 
 The client is used to send a knock packet to the server.
 
-## Security notice: User identifiers and resource identifiers
+### Install server
 
-Please be aware that the user identifiers and resource identifiers from the configuration files are transmitted over the network without encryption in clear text.
+#### Prepare user and group for the server
 
-Make sure the user identifiers and resource identifiers do **not** include any private information.
+The public network facing part of the letmein server runs with reduced privileges to reduce the attack surface.
 
-These identifiers are merely meant to be an abstract identification for managing different `letmein` keys, installations and setups.
+For this to work, the user `letmeind` and the group `letmeind` have to be present in `/etc/passwd` and `/etc/group`.
+It is recommended for this user to not have a shell and home assigned and therefore not be a login-user.
+
+You can use the following helper script to create the user and group in your system:
+
+```sh
+./create-user.sh
+```
+
+#### Install the server and systemd units
+
+After building and creating the `letmeind` system user, run the `install-server.sh` to install the letmeind server to `/opt/letmein/`:
+
+```sh
+./install-server.sh
+```
+
+Installing the server will also install the service and socket into systemd and start the letmeind server.
+
+The server is used to receive knock packets from the client.
+Upon successful knock authentication, the server will open the knocked port in its `nftables` firewall.
 
 ## Platform support
-
-### Server
-
-The server application `letmeind` is Linux-only, because it only supports `nftables` as firewall backend.
 
 ### Client
 
@@ -184,6 +187,18 @@ Tested platforms are:
 - Android, under [Termux](https://termux.dev/)
 - Windows
 - MacOS (build tested only)
+
+### Server
+
+The server application `letmeind` is Linux-only, because it only supports `nftables` as firewall backend.
+
+## Security notice: User identifiers and resource identifiers
+
+Please be aware that the user identifiers and resource identifiers from the configuration files are transmitted over the network without encryption in clear text.
+
+Make sure the user identifiers and resource identifiers do **not** include any private information.
+
+These identifiers are merely meant to be an abstract identification for managing different `letmein` keys, installations and setups.
 
 ## Internals and design goals
 
