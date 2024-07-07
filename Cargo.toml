@@ -4,9 +4,12 @@
 members = [
     "letmein",
     "letmein-conf",
+    "letmein-fwproto",
     "letmein-proto",
+    "letmein-seccomp",
     "letmein-systemd",
     "letmeind",
+    "letmeinfwd",
 ]
 resolver = "2"
 
@@ -24,6 +27,7 @@ keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
 
 [workspace.dependencies]
 anyhow = "1"
+autocfg = "1"
 clap = "4"
 getrandom = "0.2"
 hickory-proto = "0.24"
@@ -32,12 +36,16 @@ hmac = "0.12"
 libc = "0.2"
 nftables = "0.4"
 sd-notify = "0.4"
+seccompiler = "0.4"
 sha3 = "0.10"
 subtle = "2"
 tokio = "1"
+user_lookup = { version = "0.3", default-features = false }
 
 letmein-conf = { version = "2", path = "./letmein-conf" }
+letmein-fwproto = { version = "2", path = "./letmein-fwproto" }
 letmein-proto = { version = "2", path = "./letmein-proto" }
+letmein-seccomp = { version = "2", path = "./letmein-seccomp" }
 letmein-systemd = { version = "2", path = "./letmein-systemd" }
 
 [profile.release]

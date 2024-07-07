@@ -1,0 +1,13 @@
+[Unit]
+Description=letmeinfwd daemon socket
+PartOf=letmeinfwd.service
+
+[Socket]
+ListenStream=/run/letmeinfwd/letmeinfwd.sock
+Accept=no
+SocketUser=root
+SocketGroup=letmeind
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

@@ -1,28 +1,27 @@
 # -*- coding: utf-8 -*-
 
 [package]
-name = "letmeind"
-description = "Authenticated port knocking - Server"
+name = "letmeinfwd"
+description = "Authenticated port knocking - Firewall backend daemon"
 version = { workspace = true }
 edition = { workspace = true }
-rust-version = { workspace = true }
 license = { workspace = true }
 authors = { workspace = true }
 homepage = { workspace = true }
 repository = { workspace = true }
-readme = { workspace = true }
+readme = "README.md"
 categories = { workspace = true }
 keywords = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-clap = { workspace = true, features = [ "derive" ] }
+clap = { workspace = true, features = ["derive"] }
 letmein-conf = { workspace = true }
 letmein-fwproto = { workspace = true }
-letmein-proto = { workspace = true }
-letmein-seccomp = { workspace = true }
-letmein-systemd = { workspace = true, features = [ "tcp" ] }
+letmein-systemd = { workspace = true, features = [ "unix" ] }
 libc = { workspace = true }
-tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync" ] }
+nftables = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync", "time" ] }
+user_lookup = { workspace = true, features = [ "sync" ] }
 
 # vim: ts=4 sw=4 expandtab

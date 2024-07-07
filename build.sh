@@ -53,8 +53,10 @@ cargo auditable build --release || die "Cargo build (release) failed."
 cargo audit bin --deny warnings \
     target/release/letmein \
     target/release/letmeind \
+    target/release/letmeinfwd \
     || die "Cargo audit failed."
 check_dynlibs target/release/letmein
 check_dynlibs target/release/letmeind
+check_dynlibs target/release/letmeinfwd
 
 # vim: ts=4 sw=4 expandtab

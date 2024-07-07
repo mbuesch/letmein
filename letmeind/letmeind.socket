@@ -1,7 +1,5 @@
 [Unit]
 Description=letmeind daemon socket
-Requires=letmeind.service nftables.service
-After=nftables.service
 PartOf=letmeind.service
 
 [Socket]

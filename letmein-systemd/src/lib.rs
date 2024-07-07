@@ -13,18 +13,23 @@ std::compile_error!("letmeind server and letmein-systemd do not support non-Linu
 
 use anyhow as ah;
 
-#[cfg(feature = "tcp")]
+#[cfg(any(feature = "tcp", feature = "unix"))]
 use anyhow::{format_err as err, Context as _};
 
-#[cfg(feature = "tcp")]
+#[cfg(any(feature = "tcp", feature = "unix"))]
 use std::{
     mem::size_of_val,
-    net::TcpListener,
     os::fd::{FromRawFd as _, RawFd},
 };
 
-/// Check if the passed raw `fd` is a socket.
 #[cfg(feature = "tcp")]
+use std::net::TcpListener;
+
+#[cfg(feature = "unix")]
+use std::os::unix::net::UnixListener;
+
+/// Check if the passed raw `fd` is a socket.
+#[cfg(any(feature = "tcp", feature = "unix"))]
 fn is_socket(fd: RawFd) -> bool {
     let mut stat: libc::stat64 = unsafe { std::mem::zeroed() };
     let ret = unsafe { libc::fstat64(fd, &mut stat) };
@@ -40,7 +45,7 @@ fn is_socket(fd: RawFd) -> bool {
 /// Get the socket type of the passed socket `fd`.
 ///
 /// SAFETY: The passed `fd` must be a socket `fd`.
-#[cfg(feature = "tcp")]
+#[cfg(any(feature = "tcp", feature = "unix"))]
 unsafe fn get_socket_type(fd: RawFd) -> Option<libc::c_int> {
     let mut sotype: libc::c_int = 0;
     let mut len: libc::socklen_t = size_of_val(&sotype) as _;
@@ -63,7 +68,7 @@ unsafe fn get_socket_type(fd: RawFd) -> Option<libc::c_int> {
 /// Get the socket family of the passed socket `fd`.
 ///
 /// SAFETY: The passed `fd` must be a socket `fd`.
-#[cfg(feature = "tcp")]
+#[cfg(any(feature = "tcp", feature = "unix"))]
 unsafe fn get_socket_family(fd: RawFd) -> Option<libc::c_int> {
     let mut saddr: libc::sockaddr = unsafe { std::mem::zeroed() };
     let mut len: libc::socklen_t = size_of_val(&saddr) as _;
@@ -86,6 +91,16 @@ fn is_tcp_socket(fd: RawFd) -> bool {
     }
 }
 
+#[cfg(feature = "unix")]
+fn is_unix_socket(fd: RawFd) -> bool {
+    // SAFETY: Check if `fd` is a socket before using the socket functions.
+    unsafe {
+        is_socket(fd)
+            && get_socket_type(fd) == Some(libc::SOCK_STREAM)
+            && get_socket_family(fd) == Some(libc::AF_UNIX)
+    }
+}
+
 /// Create a new [TcpListener] with the socket provided by systemd.
 ///
 /// All environment variables related to this operation will be cleared.
@@ -101,6 +116,26 @@ pub fn tcp_from_systemd() -> ah::Result<Option<TcpListener>> {
         }
         return Err(err!(
             "Booted with systemd, but no TCP listen_fds received from systemd."
+        ));
+    }
+    Ok(None)
+}
+
+/// Create a new [UnixListener] with the socket provided by systemd.
+///
+/// All environment variables related to this operation will be cleared.
+#[cfg(feature = "unix")]
+pub fn unix_from_systemd() -> ah::Result<Option<UnixListener>> {
+    if sd_notify::booted().unwrap_or(false) {
+        for fd in sd_notify::listen_fds().context("Systemd listen_fds")? {
+            if is_unix_socket(fd) {
+                // SAFETY:
+                // The fd from systemd is good and lives for the lifetime of the program.
+                return Ok(Some(unsafe { UnixListener::from_raw_fd(fd) }));
+            }
+        }
+        return Err(err!(
+            "Booted with systemd, but no Unix listen_fds received from systemd."
         ));
     }
     Ok(None)
