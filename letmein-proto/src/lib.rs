@@ -348,7 +348,8 @@ impl Message {
             match stream.try_write(&txbuf[txcount..]) {
                 Ok(n) => {
                     txcount += n;
-                    if txcount >= txbuf.len() {
+                    assert!(txcount <= txbuf.len());
+                    if txcount == txbuf.len() {
                         if DEBUG {
                             println!("TX: {self:?} {txbuf:?}");
                         }
