@@ -15,10 +15,10 @@ keywords = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-clap = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = [ "derive" ] }
 letmein-conf = { workspace = true }
 letmein-proto = { workspace = true }
-letmein-systemd = { workspace = true }
+letmein-systemd = { workspace = true, features = [ "tcp" ] }
 nftables = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync", "time" ] }
 

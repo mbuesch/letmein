@@ -13,8 +13,13 @@ readme = "README.md"
 categories = { workspace = true }
 keywords = { workspace = true }
 
+[features]
+default = []
+tcp = []
+
 [dependencies]
 anyhow = { workspace = true }
+libc = { workspace = true }
 sd-notify = { workspace = true }
 
 # vim: ts=4 sw=4 expandtab

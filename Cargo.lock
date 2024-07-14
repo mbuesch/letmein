@@ -487,6 +487,7 @@ name = "letmein-systemd"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "libc",
  "sd-notify",
 ]
 
