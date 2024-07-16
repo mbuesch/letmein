@@ -12,7 +12,7 @@ use crate::{
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::Config;
-use letmein_proto::{Key, Message, Operation};
+use letmein_proto::{Key, Message, Operation, ResourceId, UserId};
 use std::sync::Arc;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -39,8 +39,8 @@ struct KnockSeq<'a> {
     pub verbose: bool,
     pub addr: &'a str,
     pub server_port: u16,
-    pub user: u32,
-    pub resource: u32,
+    pub user: UserId,
+    pub resource: ResourceId,
     pub key: &'a Key,
 }
 
@@ -49,7 +49,7 @@ impl<'a> KnockSeq<'a> {
         if msg.user() != self.user {
             eprintln!(
                 "Warning: The server replied with a different user identifier. \
-                 Expected {:08X}, but received {:08X}.",
+                 Expected {}, but received {}.",
                 self.user,
                 msg.user(),
             );
@@ -57,7 +57,7 @@ impl<'a> KnockSeq<'a> {
         if msg.resource() != self.resource {
             eprintln!(
                 "Warning: The server replied with a different resource identifier. \
-                 Expected {:08X}, but received {:08X}.",
+                 Expected {}, but received {}.",
                 self.resource,
                 msg.resource(),
             );
@@ -116,11 +116,11 @@ pub async fn run_knock(
     addr_mode: AddrMode,
     server_port: Option<u16>,
     knock_port: u16,
-    user: Option<u32>,
+    user: Option<UserId>,
 ) -> ah::Result<()> {
     let user = user.unwrap_or_else(|| conf.default_user());
     let Some(key) = conf.key(user) else {
-        return Err(err!("No key found in letmein.conf for user {user:08X}"));
+        return Err(err!("No key found in letmein.conf for user {user}"));
     };
     let Some(resource) = conf.resource_id_by_port(knock_port) else {
         return Err(err!(

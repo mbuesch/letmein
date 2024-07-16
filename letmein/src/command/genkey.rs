@@ -8,15 +8,15 @@
 
 use anyhow as ah;
 use letmein_conf::Config;
-use letmein_proto::{secure_random, Key};
+use letmein_proto::{secure_random, Key, UserId};
 use std::sync::Arc;
 
-pub async fn run_genkey(conf: Arc<Config>, user: Option<u32>) -> ah::Result<()> {
+pub async fn run_genkey(conf: Arc<Config>, user: Option<UserId>) -> ah::Result<()> {
     let user = user.unwrap_or_else(|| conf.default_user());
     let key: Key = secure_random();
     let key: Vec<String> = key.iter().map(|b| format!("{b:02X}")).collect();
     let key: String = key.join("");
-    println!("{user:08X} = {key}");
+    println!("{user} = {key}");
     Ok(())
 }
 

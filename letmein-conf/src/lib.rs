@@ -18,7 +18,7 @@ mod ini;
 
 use crate::ini::Ini;
 use anyhow::{self as ah, format_err as err, Context as _};
-use letmein_proto::{Key, PORT};
+use letmein_proto::{Key, ResourceId, UserId, PORT};
 use std::{collections::HashMap, path::Path, time::Duration};
 
 /// The default install prefix.
@@ -119,7 +119,7 @@ fn get_port(ini: &Ini) -> ah::Result<u16> {
     Ok(PORT)
 }
 
-fn get_keys(ini: &Ini) -> ah::Result<HashMap<u32, Key>> {
+fn get_keys(ini: &Ini) -> ah::Result<HashMap<UserId, Key>> {
     let mut keys = HashMap::new();
     if let Some(options) = ini.options_iter("KEYS") {
         for (id, key) in options {
@@ -131,13 +131,13 @@ fn get_keys(ini: &Ini) -> ah::Result<HashMap<u32, Key>> {
             if key == [0xFF; std::mem::size_of::<Key>()] {
                 return Err(err!("Invalid key {id:08X}: Key is all ones (FF)"));
             }
-            keys.insert(id, key);
+            keys.insert(id.into(), key);
         }
     }
     Ok(keys)
 }
 
-fn get_resources(ini: &Ini) -> ah::Result<HashMap<u32, Resource>> {
+fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
     let mut resources = HashMap::new();
     if let Some(options) = ini.options_iter("RESOURCES") {
         for (id, resource) in options {
@@ -157,17 +157,17 @@ fn get_resources(ini: &Ini) -> ah::Result<HashMap<u32, Resource>> {
                     return Err(err!("Unknown resource name: {n}"));
                 }
             };
-            resources.insert(id, res);
+            resources.insert(id.into(), res);
         }
     }
     Ok(resources)
 }
 
-fn get_default_user(ini: &Ini) -> ah::Result<u32> {
+fn get_default_user(ini: &Ini) -> ah::Result<UserId> {
     if let Some(default_user) = ini.get("CLIENT", "default-user") {
-        return parse_hex_u32(default_user);
+        return Ok(parse_hex_u32(default_user)?.into());
     }
-    Ok(0)
+    Ok(Default::default())
 }
 
 fn get_nft_family(ini: &Ini) -> ah::Result<String> {
@@ -225,9 +225,9 @@ pub struct Config {
     variant: ConfigVariant,
     debug: bool,
     port: u16,
-    keys: HashMap<u32, Key>,
-    resources: HashMap<u32, Resource>,
-    default_user: u32,
+    keys: HashMap<UserId, Key>,
+    resources: HashMap<ResourceId, Resource>,
+    default_user: UserId,
     nft_family: String,
     nft_table: String,
     nft_chain_input: String,
@@ -300,17 +300,17 @@ impl Config {
     }
 
     /// Get a key value by key identifier from the `[KEYS]` section.
-    pub fn key(&self, id: u32) -> Option<&Key> {
+    pub fn key(&self, id: UserId) -> Option<&Key> {
         self.keys.get(&id)
     }
 
     /// Get a resource value by resource identifier from the `[RESOURCES]` section.
-    pub fn resource(&self, id: u32) -> Option<&Resource> {
+    pub fn resource(&self, id: ResourceId) -> Option<&Resource> {
         self.resources.get(&id)
     }
 
     /// Lookup a resource id by a port number in the `[RESOURCES]` section.
-    pub fn resource_id_by_port(&self, port: u16) -> Option<u32> {
+    pub fn resource_id_by_port(&self, port: u16) -> Option<ResourceId> {
         for (k, v) in &self.resources {
             match v {
                 Resource::Port(p) if *p == port => {
@@ -323,7 +323,7 @@ impl Config {
     }
 
     /// Get the `default-user` option from `[CLIENT]` section.
-    pub fn default_user(&self) -> u32 {
+    pub fn default_user(&self) -> UserId {
         self.default_user
     }
 
@@ -368,7 +368,7 @@ mod tests {
         .unwrap();
         let keys = get_keys(&ini).unwrap();
         assert_eq!(
-            keys.get(&0xABCD1234).unwrap(),
+            keys.get(&0xABCD1234.into()).unwrap(),
             &[
                 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99, 0x88, 0x77, 0x66,
                 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22,
@@ -383,7 +383,10 @@ mod tests {
         ini.parse_str("[RESOURCES]\n9876ABCD = port : 4096\n")
             .unwrap();
         let resources = get_resources(&ini).unwrap();
-        assert_eq!(resources.get(&0x9876ABCD).unwrap(), &Resource::Port(4096));
+        assert_eq!(
+            resources.get(&0x9876ABCD.into()).unwrap(),
+            &Resource::Port(4096)
+        );
     }
 
     #[test]
@@ -391,7 +394,7 @@ mod tests {
         let mut ini = Ini::new();
         ini.parse_str("[CLIENT]\ndefault-user = 123\n").unwrap();
         let default_user = get_default_user(&ini).unwrap();
-        assert_eq!(default_user, 0x123);
+        assert_eq!(default_user, 0x123.into());
     }
 
     #[test]

@@ -53,6 +53,54 @@ pub type Key = [u8; KEY_SIZE];
 /// Invalid all-zero authentication token.
 const ZERO_AUTH: Auth = [0; AUTH_SIZE];
 
+/// Identification number of a resource.
+///
+/// Used in the wire protocol and in the configuration file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ResourceId(u32);
+
+impl From<ResourceId> for u32 {
+    fn from(id: ResourceId) -> u32 {
+        id.0
+    }
+}
+
+impl From<u32> for ResourceId {
+    fn from(id: u32) -> ResourceId {
+        ResourceId(id)
+    }
+}
+
+impl std::fmt::Display for ResourceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:08X}", self.0)
+    }
+}
+
+/// Identification number of a user (and a key).
+///
+/// Used in the wire protocol and in the configuration file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub struct UserId(u32);
+
+impl From<UserId> for u32 {
+    fn from(id: UserId) -> u32 {
+        id.0
+    }
+}
+
+impl From<u32> for UserId {
+    fn from(id: u32) -> UserId {
+        UserId(id)
+    }
+}
+
+impl std::fmt::Display for UserId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:08X}", self.0)
+    }
+}
+
 /// Generate a cryptographically secure random token.
 ///
 /// This function can only generate tokens longer than 7 bytes.
@@ -181,15 +229,15 @@ fn deserialize_u32(buf: &[u8]) -> ah::Result<u32> {
 pub struct Message {
     magic: u32,
     operation: Operation,
-    user: u32,
-    resource: u32,
+    user: UserId,
+    resource: ResourceId,
     salt: Salt,
     auth: Auth,
 }
 
 impl Message {
     /// Create a new message instance.
-    pub fn new(operation: Operation, user: u32, resource: u32) -> Self {
+    pub fn new(operation: Operation, user: UserId, resource: ResourceId) -> Self {
         Self {
             magic: MAGIC,
             operation,
@@ -206,12 +254,12 @@ impl Message {
     }
 
     /// Get the user identification of this message.
-    pub fn user(&self) -> u32 {
+    pub fn user(&self) -> UserId {
         self.user
     }
 
     /// Get the resource identification of this message.
-    pub fn resource(&self) -> u32 {
+    pub fn resource(&self) -> ResourceId {
         self.resource
     }
 
@@ -221,11 +269,14 @@ impl Message {
         assert_eq!(shared_key.len(), KEY_SIZE);
         assert_eq!(challenge.len(), AUTH_SIZE);
 
+        let user: u32 = self.user.into();
+        let resource: u32 = self.resource.into();
+
         let mut mac = Hmac::<Sha3_256>::new_from_slice(shared_key)
             .expect("HMAC<SHA3-256> initialization failed");
         mac.update(&(self.operation as u32).to_be_bytes());
-        mac.update(&self.user.to_be_bytes());
-        mac.update(&self.resource.to_be_bytes());
+        mac.update(&user.to_be_bytes());
+        mac.update(&resource.to_be_bytes());
         mac.update(&self.salt);
         mac.update(challenge);
         let mac_bytes = mac.finalize().into_bytes();
@@ -297,8 +348,8 @@ impl Message {
         let mut buf = [0; MSG_SIZE];
         serialize_u32(&mut buf[MSG_OFFS_MAGIC..], self.magic);
         serialize_u32(&mut buf[MSG_OFFS_OPERATION..], self.operation as u32);
-        serialize_u32(&mut buf[MSG_OFFS_USER..], self.user);
-        serialize_u32(&mut buf[MSG_OFFS_RESOURCE..], self.resource);
+        serialize_u32(&mut buf[MSG_OFFS_USER..], self.user.into());
+        serialize_u32(&mut buf[MSG_OFFS_RESOURCE..], self.resource.into());
         buf[MSG_OFFS_SALT..MSG_OFFS_SALT + SALT_SIZE].copy_from_slice(&self.salt);
         buf[MSG_OFFS_AUTH..MSG_OFFS_AUTH + AUTH_SIZE].copy_from_slice(&self.auth);
 
@@ -322,8 +373,8 @@ impl Message {
                 let msg = Self {
                     magic,
                     operation: operation.try_into()?,
-                    user,
-                    resource,
+                    user: user.into(),
+                    resource: resource.into(),
                     salt: salt.try_into()?,
                     auth: auth.try_into()?,
                 };
@@ -429,13 +480,13 @@ mod tests {
         let key = [0x9E; 32];
 
         // Create a knock message and check the authentication.
-        let mut msg = Message::new(Operation::Knock, 0xA423DDA7, 0xBC5D8077);
+        let mut msg = Message::new(Operation::Knock, 0xA423DDA7.into(), 0xBC5D8077.into());
         assert_ne!(msg.salt, [0; 8]);
         msg.salt = [0x4A; 8]; // override random salt
         msg.generate_auth_no_challenge(&key);
         assert_eq!(msg.operation(), Operation::Knock);
-        assert_eq!(msg.user(), 0xA423DDA7);
-        assert_eq!(msg.resource(), 0xBC5D8077);
+        assert_eq!(msg.user(), 0xA423DDA7.into());
+        assert_eq!(msg.resource(), 0xBC5D8077.into());
         assert_eq!(
             msg.auth,
             [
@@ -474,12 +525,12 @@ mod tests {
 
         // A modified `user` field causes an authentication failure.
         let mut msg_clone = msg.clone();
-        msg_clone.user += 1;
+        msg_clone.user.0 += 1;
         assert!(!msg_clone.check_auth_ok_no_challenge(&key));
 
         // A modified `resource` field causes an authentication failure.
         let mut msg_clone = msg.clone();
-        msg_clone.resource += 1;
+        msg_clone.resource.0 += 1;
         assert!(!msg_clone.check_auth_ok_no_challenge(&key));
 
         // A modified `salt` field causes an authentication failure.
@@ -498,13 +549,14 @@ mod tests {
         let key = [0x6B; 32];
 
         // Create a challenge.
-        let mut challenge = Message::new(Operation::Challenge, 0x280D04F3, 0xE2EE7397);
+        let mut challenge =
+            Message::new(Operation::Challenge, 0x280D04F3.into(), 0xE2EE7397.into());
         assert_ne!(challenge.salt, [0; 8]);
         challenge.salt = [0x91; 8]; // override random salt
         challenge.generate_challenge();
         assert_eq!(challenge.operation(), Operation::Challenge);
-        assert_eq!(challenge.user(), 0x280D04F3);
-        assert_eq!(challenge.resource(), 0xE2EE7397);
+        assert_eq!(challenge.user(), 0x280D04F3.into());
+        assert_eq!(challenge.resource(), 0xE2EE7397.into());
         assert_ne!(challenge.auth, [0; 32]);
         challenge.auth = [0xB8; 32]; // override random challenge
         check_ser_de(&challenge);
@@ -516,8 +568,8 @@ mod tests {
         response.salt = [0x62; 8]; // override salt
         response.generate_auth(&key, challenge.clone());
         assert_eq!(response.operation(), Operation::Response);
-        assert_eq!(response.user(), 0x280D04F3);
-        assert_eq!(response.resource(), 0xE2EE7397);
+        assert_eq!(response.user(), 0x280D04F3.into());
+        assert_eq!(response.resource(), 0xE2EE7397.into());
         assert_eq!(
             response.auth,
             [
@@ -535,12 +587,12 @@ mod tests {
 
         // A modified `user` field causes an authentication failure.
         let mut msg_clone = response.clone();
-        msg_clone.user += 1;
+        msg_clone.user.0 += 1;
         assert!(!msg_clone.check_auth_ok(&key, challenge.clone()));
 
         // A modified `resource` field causes an authentication failure.
         let mut msg_clone = response.clone();
-        msg_clone.resource += 1;
+        msg_clone.resource.0 += 1;
         assert!(!msg_clone.check_auth_ok(&key, challenge.clone()));
 
         // A modified `salt` field causes an authentication failure.
@@ -556,31 +608,31 @@ mod tests {
 
     #[test]
     fn test_msg_comein() {
-        let mut msg = Message::new(Operation::ComeIn, 0xF90201B2, 0xB3E46B6C);
+        let mut msg = Message::new(Operation::ComeIn, 0xF90201B2.into(), 0xB3E46B6C.into());
         assert_ne!(msg.salt, [0; 8]);
         msg.salt = [0xEB; 8]; // override random salt
         assert_eq!(msg.operation(), Operation::ComeIn);
-        assert_eq!(msg.user(), 0xF90201B2);
-        assert_eq!(msg.resource(), 0xB3E46B6C);
+        assert_eq!(msg.user(), 0xF90201B2.into());
+        assert_eq!(msg.resource(), 0xB3E46B6C.into());
         assert_eq!(msg.auth, [0; 32]);
         check_ser_de(&msg);
     }
 
     #[test]
     fn test_msg_goaway() {
-        let mut msg = Message::new(Operation::GoAway, 0x0F52E045, 0x9AF4EFA0);
+        let mut msg = Message::new(Operation::GoAway, 0x0F52E045.into(), 0x9AF4EFA0.into());
         assert_ne!(msg.salt, [0; 8]);
         msg.salt = [0x8C; 8]; // override random salt
         assert_eq!(msg.operation(), Operation::GoAway);
-        assert_eq!(msg.user(), 0x0F52E045);
-        assert_eq!(msg.resource(), 0x9AF4EFA0);
+        assert_eq!(msg.user(), 0x0F52E045.into());
+        assert_eq!(msg.resource(), 0x9AF4EFA0.into());
         assert_eq!(msg.auth, [0; 32]);
         check_ser_de(&msg);
     }
 
     #[test]
     fn test_msg_raw() {
-        let mut msg = Message::new(Operation::ComeIn, 0xF90201B2, 0xB3E46B6C);
+        let mut msg = Message::new(Operation::ComeIn, 0xF90201B2.into(), 0xB3E46B6C.into());
         msg.salt = [0x9A; 8]; // override random salt
         let bytes = msg.msg_serialize().unwrap();
         assert_eq!(
@@ -648,6 +700,28 @@ mod tests {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // auth
         ];
         Message::try_msg_deserialize(&bytes).unwrap();
+    }
+
+    #[test]
+    fn test_userid() {
+        let a: UserId = 0x12345678.into();
+        assert_eq!(a.0, 0x12345678);
+        assert_eq!(a, UserId(0x12345678));
+        let b: u32 = a.into();
+        assert_eq!(b, 0x12345678);
+        assert_eq!(format!("{}", a), "12345678");
+        let c: UserId = Default::default();
+        assert_eq!(c.0, 0);
+    }
+
+    #[test]
+    fn test_resourceid() {
+        let a: ResourceId = 0x12345678.into();
+        assert_eq!(a.0, 0x12345678);
+        assert_eq!(a, ResourceId(0x12345678));
+        let b: u32 = a.into();
+        assert_eq!(b, 0x12345678);
+        assert_eq!(format!("{}", a), "12345678");
     }
 }
 

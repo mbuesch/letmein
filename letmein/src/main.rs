@@ -150,11 +150,11 @@ async fn main() -> ah::Result<()> {
                 (ipv4, ipv6).into(),
                 server_port,
                 port,
-                user,
+                user.map(|user| user.into()),
             )
             .await?;
         }
-        Command::GenKey { user } => run_genkey(conf, user).await?,
+        Command::GenKey { user } => run_genkey(conf, user.map(|user| user.into())).await?,
     }
 
     Ok(())

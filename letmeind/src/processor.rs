@@ -9,7 +9,7 @@
 use crate::{firewall::FirewallOpen, server::ConnectionOps, ConfigRef};
 use anyhow::{self as ah, format_err as err};
 use letmein_conf::Resource;
-use letmein_proto::{Message, Operation};
+use letmein_proto::{Message, Operation, ResourceId, UserId};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -17,8 +17,8 @@ pub struct Processor<'a, C, F> {
     conn: C,
     conf: &'a ConfigRef<'a>,
     fw: Arc<Mutex<F>>,
-    user_id: Option<u32>,
-    resource_id: Option<u32>,
+    user_id: Option<UserId>,
+    resource_id: Option<ResourceId>,
 }
 
 impl<'a, C: ConnectionOps, F: FirewallOpen> Processor<'a, C, F> {
@@ -67,8 +67,8 @@ impl<'a, C: ConnectionOps, F: FirewallOpen> Processor<'a, C, F> {
     async fn send_go_away(&mut self) -> ah::Result<()> {
         self.send_msg(Message::new(
             Operation::GoAway,
-            self.user_id.unwrap_or(u32::MAX),
-            self.resource_id.unwrap_or(u32::MAX),
+            self.user_id.unwrap_or(u32::MAX.into()),
+            self.resource_id.unwrap_or(u32::MAX.into()),
         ))
         .await
     }
@@ -85,7 +85,7 @@ impl<'a, C: ConnectionOps, F: FirewallOpen> Processor<'a, C, F> {
         // Get the shared key.
         let Some(key) = self.conf.key(user_id) else {
             let _ = self.send_go_away().await;
-            return Err(err!("Unknown user: {user_id:X}"));
+            return Err(err!("Unknown user: {user_id}"));
         };
 
         // Authenticate the received message.
@@ -98,7 +98,7 @@ impl<'a, C: ConnectionOps, F: FirewallOpen> Processor<'a, C, F> {
         // Get the requested resource from the configuration.
         let Some(resource) = self.conf.resource(resource_id) else {
             let _ = self.send_go_away().await;
-            return Err(err!("Unknown resource: {resource_id:X}"));
+            return Err(err!("Unknown resource: {resource_id}"));
         };
 
         // Generate and send a challenge.
