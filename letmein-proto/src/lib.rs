@@ -125,16 +125,6 @@ pub fn secure_random<const SZ: usize>() -> [u8; SZ] {
     buf
 }
 
-/// Result of a message deserialization.
-#[derive(Clone, Debug)]
-pub enum DeserializeResult<M> {
-    /// Deserialization was successful.
-    Ok(M),
-    /// The byte stream is too short.
-    /// The argument 0 is the number of missing bytes.
-    Pending(usize),
-}
-
 /// The operation the message shall perform.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u32)]
@@ -357,37 +347,33 @@ impl Message {
     }
 
     /// Try to deserialize a byte stream into a message.
-    pub fn try_msg_deserialize(buf: &[u8]) -> ah::Result<DeserializeResult<Message>> {
-        match buf.len() {
-            MSG_SIZE => {
-                // The deserialization is simple enough to do manually.
-                // Therefore, we don't use the `serde` crate here.
-
-                let magic = deserialize_u32(&buf[MSG_OFFS_MAGIC..])?;
-                let operation = deserialize_u32(&buf[MSG_OFFS_OPERATION..])?;
-                let user = deserialize_u32(&buf[MSG_OFFS_USER..])?;
-                let resource = deserialize_u32(&buf[MSG_OFFS_RESOURCE..])?;
-                let salt = &buf[MSG_OFFS_SALT..MSG_OFFS_SALT + SALT_SIZE];
-                let auth = &buf[MSG_OFFS_AUTH..MSG_OFFS_AUTH + AUTH_SIZE];
-
-                let msg = Self {
-                    magic,
-                    operation: operation.try_into()?,
-                    user: user.into(),
-                    resource: resource.into(),
-                    salt: salt.try_into()?,
-                    auth: auth.try_into()?,
-                };
-
-                if msg.magic != MAGIC {
-                    return Err(err!("Deserialize: Invalid magic code."));
-                }
-
-                Ok(DeserializeResult::Ok(msg))
-            }
-            len if len < MSG_SIZE => Ok(DeserializeResult::Pending(MSG_SIZE - len)),
-            _len => Err(err!("Deserialize: Raw message is too long.")),
+    pub fn try_msg_deserialize(buf: &[u8]) -> ah::Result<Self> {
+        if buf.len() != MSG_SIZE {
+            return Err(err!("Deserialize: Raw message size mismatch."));
         }
+
+        // The deserialization is simple enough to do manually.
+        // Therefore, we don't use the `serde` crate here.
+
+        let magic = deserialize_u32(&buf[MSG_OFFS_MAGIC..])?;
+        let operation = deserialize_u32(&buf[MSG_OFFS_OPERATION..])?;
+        let user = deserialize_u32(&buf[MSG_OFFS_USER..])?;
+        let resource = deserialize_u32(&buf[MSG_OFFS_RESOURCE..])?;
+        let salt = &buf[MSG_OFFS_SALT..MSG_OFFS_SALT + SALT_SIZE];
+        let auth = &buf[MSG_OFFS_AUTH..MSG_OFFS_AUTH + AUTH_SIZE];
+
+        if magic != MAGIC {
+            return Err(err!("Deserialize: Invalid magic code."));
+        }
+
+        Ok(Self {
+            magic,
+            operation: operation.try_into()?,
+            user: user.into(),
+            resource: resource.into(),
+            salt: salt.try_into()?,
+            auth: auth.try_into()?,
+        })
     }
 
     /// Send this message over a [TcpStream].
@@ -429,9 +415,7 @@ impl Message {
                     rxcount += n;
                     assert!(rxcount <= MSG_SIZE);
                     if rxcount == MSG_SIZE {
-                        let DeserializeResult::Ok(msg) = Self::try_msg_deserialize(&rxbuf)? else {
-                            return Err(err!("RX deserialization failed"));
-                        };
+                        let msg = Self::try_msg_deserialize(&rxbuf)?;
                         if DEBUG {
                             println!("RX: {msg:?} {rxbuf:?}");
                         }
@@ -468,9 +452,7 @@ mod tests {
         // Serialize a message and then deserialize the byte stream
         // and check if the resulting message is the same.
         let bytes = msg.msg_serialize().unwrap();
-        let DeserializeResult::Ok(msg_de) = Message::try_msg_deserialize(&bytes).unwrap() else {
-            panic!("try_msg_deserialize not Ok");
-        };
+        let msg_de = Message::try_msg_deserialize(&bytes).unwrap();
         assert_eq!(*msg, msg_de);
     }
 
