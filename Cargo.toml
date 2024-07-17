@@ -11,7 +11,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "1.1.0"
+version = "2.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = [ "Michael Büsch <m@bues.ch>" ]
@@ -35,9 +35,9 @@ sha3 = "0.10"
 subtle = "2"
 tokio = "1"
 
-letmein-conf = { version = "1", path = "./letmein-conf" }
-letmein-proto = { version = "1", path = "./letmein-proto" }
-letmein-systemd = { version = "1", path = "./letmein-systemd" }
+letmein-conf = { version = "2", path = "./letmein-conf" }
+letmein-proto = { version = "2", path = "./letmein-proto" }
+letmein-systemd = { version = "2", path = "./letmein-systemd" }
 
 [profile.release]
 opt-level = 3
