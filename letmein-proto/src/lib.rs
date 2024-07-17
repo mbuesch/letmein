@@ -59,47 +59,44 @@ const ZERO_AUTH: Auth = [0; AUTH_SIZE];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ResourceId(u32);
 
-impl From<ResourceId> for u32 {
-    fn from(id: ResourceId) -> u32 {
-        id.0
-    }
-}
-
-impl From<u32> for ResourceId {
-    fn from(id: u32) -> ResourceId {
-        ResourceId(id)
-    }
-}
-
-impl std::fmt::Display for ResourceId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:08X}", self.0)
-    }
-}
-
 /// Identification number of a user (and a key).
 ///
 /// Used in the wire protocol and in the configuration file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub struct UserId(u32);
 
-impl From<UserId> for u32 {
-    fn from(id: UserId) -> u32 {
-        id.0
-    }
+macro_rules! impl_id {
+    ($ty:ident) => {
+        impl From<$ty> for u32 {
+            fn from(id: $ty) -> u32 {
+                id.0
+            }
+        }
+
+        impl From<u32> for $ty {
+            fn from(id: u32) -> $ty {
+                $ty(id)
+            }
+        }
+
+        impl std::fmt::Display for $ty {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+                write!(f, "{:08X}", self.0)
+            }
+        }
+
+        impl std::str::FromStr for $ty {
+            type Err = ah::Error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(u32::from_str_radix(s.trim(), 16)?.into())
+            }
+        }
+    };
 }
 
-impl From<u32> for UserId {
-    fn from(id: u32) -> UserId {
-        UserId(id)
-    }
-}
-
-impl std::fmt::Display for UserId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:08X}", self.0)
-    }
-}
+impl_id!(ResourceId);
+impl_id!(UserId);
 
 /// Generate a cryptographically secure random token.
 ///
