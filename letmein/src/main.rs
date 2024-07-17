@@ -16,6 +16,7 @@ use crate::command::{genkey::run_genkey, knock::run_knock};
 use anyhow::{self as ah, Context as _};
 use clap::{Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant, CLIENT_CONF_PATH, INSTALL_PREFIX};
+use letmein_proto::UserId;
 use std::{path::PathBuf, sync::Arc};
 
 #[derive(Parser, Debug)]
@@ -42,8 +43,8 @@ impl Opts {
     }
 }
 
-fn parse_hex(s: &str) -> ah::Result<u32> {
-    Ok(u32::from_str_radix(s.trim(), 16)?)
+fn parse_user(s: &str) -> ah::Result<UserId> {
+    s.parse()
 }
 
 #[derive(Subcommand, Debug)]
@@ -67,8 +68,8 @@ enum Command {
         /// configuration file will be used instead.
         /// If the configuration is not available, user 00000000 will
         /// be used instead.
-        #[arg(short, long, value_parser = parse_hex)]
-        user: Option<u32>,
+        #[arg(short, long, value_parser = parse_user)]
+        user: Option<UserId>,
 
         /// letmein server port number.
         ///
@@ -120,8 +121,8 @@ enum Command {
         /// configuration file will be used instead.
         /// If the configuration is not available, user 00000000 will
         /// be used instead.
-        #[arg(long, short, value_parser = parse_hex)]
-        user: Option<u32>,
+        #[arg(long, short, value_parser = parse_user)]
+        user: Option<UserId>,
     },
 }
 
@@ -150,11 +151,11 @@ async fn main() -> ah::Result<()> {
                 (ipv4, ipv6).into(),
                 server_port,
                 port,
-                user.map(|user| user.into()),
+                user,
             )
             .await?;
         }
-        Command::GenKey { user } => run_genkey(conf, user.map(|user| user.into())).await?,
+        Command::GenKey { user } => run_genkey(conf, user).await?,
     }
 
     Ok(())
