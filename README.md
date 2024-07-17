@@ -261,8 +261,9 @@ The simple design is supposed to reduce the attack surface and as such improve s
 
 - **weakness**: All users that can successfully authenticate to letmein can start to attack the protected service.
   - **rationale**: Yes, this is pretty much impossible to prevent.
-  (It could be mitigated for different users that are allowed to access *different* ports. See [the issue on Github](https://github.com/mbuesch/letmein/issues/1))
   Letmein is supposed to prevent pre-authentication attacks.
+  But it is possible to restrict users to certain ports.
+  So that users can only authenticate with resources that they are explicitly allowed to in the server configuration.
 
 - **weakness**: The wire protocol does not have mechanisms for future changes and updates.
   - **rationale**: While this makes updating to a new protocol version harder, it improves security by simplification of the design.

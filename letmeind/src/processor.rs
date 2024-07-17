@@ -101,6 +101,18 @@ impl<'a, C: ConnectionOps, F: FirewallOpen> Processor<'a, C, F> {
             return Err(err!("Unknown resource: {resource_id}"));
         };
 
+        // Check if the authenticating user is allowed to access this resource.
+        match resource {
+            Resource::Port { .. } => {
+                if !resource.contains_user(user_id) {
+                    let _ = self.send_go_away().await;
+                    return Err(err!(
+                        "Resource {resource_id} not allowed for user {user_id}"
+                    ));
+                }
+            }
+        }
+
         // Generate and send a challenge.
         let mut challenge = Message::new(Operation::Challenge, user_id, resource_id);
         challenge.generate_challenge();
@@ -117,7 +129,7 @@ impl<'a, C: ConnectionOps, F: FirewallOpen> Processor<'a, C, F> {
 
         // Reconfigure the firewall.
         match resource {
-            Resource::Port(port) => {
+            Resource::Port { port, users: _ } => {
                 let mut fw = self.fw.lock().await;
                 fw.open_port(self.conf, self.conn.addr().ip(), *port)
                     .await?;

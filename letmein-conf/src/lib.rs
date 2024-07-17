@@ -43,7 +43,21 @@ const DEFAULT_NFT_TIMEOUT: u32 = 600;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Resource {
     /// Port resource.
-    Port(u16),
+    Port { port: u16, users: Vec<UserId> },
+}
+
+impl Resource {
+    pub fn contains_user(&self, id: UserId) -> bool {
+        match self {
+            Self::Port { port: _, users } => {
+                if users.is_empty() {
+                    // This resource is unrestricted.
+                    return true;
+                }
+                users.contains(&id)
+            }
+        }
+    }
 }
 
 fn parse_bool(s: &str) -> ah::Result<bool> {
@@ -74,11 +88,6 @@ fn parse_u32(s: &str) -> ah::Result<u32> {
     }
 }
 
-fn parse_hex_u32(s: &str) -> ah::Result<u32> {
-    let s = s.trim();
-    Ok(u32::from_str_radix(s, 16)?)
-}
-
 fn parse_hexdigit(s: &str) -> ah::Result<u8> {
     assert_eq!(s.len(), 1);
     Ok(u8::from_str_radix(s, 16)?)
@@ -105,6 +114,56 @@ fn parse_hex<const SIZE: usize>(s: &str) -> ah::Result<[u8; SIZE]> {
     Ok(ret)
 }
 
+/// Split a comma separated string into a vec:
+/// "a, b, c" -> vec!["a", " b", " c"]
+/// A conversion function is applied before inserting into the vec.
+fn split_commaitems<T, F>(value: &str, conv: F) -> ah::Result<Vec<T>>
+where
+    F: Fn(&str) -> ah::Result<T>,
+{
+    if value.trim().is_empty() {
+        return Ok(vec![]);
+    }
+    let mut ret = Vec::with_capacity(8);
+    for item in value.split(',') {
+        ret.push(conv(item)?);
+    }
+    Ok(ret)
+}
+
+/// Convert slash separated key:value pairs HashMap.
+/// "a: b / c: d" -> { "a": " b", "c": " d" }
+/// A conversion function is applied before inserting into the HashMap.
+fn split_subitems<FK, FV, TK, TV>(
+    value: &str,
+    conv_key: FK,
+    conv_value: FV,
+) -> ah::Result<HashMap<TK, TV>>
+where
+    FK: Fn(&str) -> ah::Result<TK>,
+    FV: Fn(&str) -> ah::Result<TV>,
+    TK: Eq + std::hash::Hash,
+    TV: Eq + std::hash::Hash,
+{
+    let mut ret = HashMap::with_capacity(8);
+    for item in value.split('/') {
+        let Some(idx) = item.find(':') else {
+            return Err(err!("Invalid item. No colon."));
+        };
+        let chlen = ':'.len_utf8();
+        if idx < chlen {
+            return Err(err!("Invalid item name."));
+        }
+        let name = item[..=(idx - chlen)].trim();
+        if name.is_empty() {
+            return Err(err!("Invalid item name."));
+        }
+        let value = &item[idx + chlen..];
+        ret.insert(conv_key(name)?, conv_value(value)?);
+    }
+    Ok(ret)
+}
+
 fn get_debug(ini: &Ini) -> ah::Result<bool> {
     if let Some(debug) = ini.get("GENERAL", "debug") {
         return parse_bool(debug);
@@ -123,41 +182,37 @@ fn get_keys(ini: &Ini) -> ah::Result<HashMap<UserId, Key>> {
     let mut keys = HashMap::new();
     if let Some(options) = ini.options_iter("KEYS") {
         for (id, key) in options {
-            let id = parse_hex_u32(id).context("KEYS")?;
+            let id = id.parse().context("KEYS")?;
             let key = parse_hex(key).context("KEYS")?;
             if key == [0; std::mem::size_of::<Key>()] {
-                return Err(err!("Invalid key {id:08X}: Key is all zeros (00)"));
+                return Err(err!("Invalid key {id}: Key is all zeros (00)"));
             }
             if key == [0xFF; std::mem::size_of::<Key>()] {
-                return Err(err!("Invalid key {id:08X}: Key is all ones (FF)"));
+                return Err(err!("Invalid key {id}: Key is all ones (FF)"));
             }
-            keys.insert(id.into(), key);
+            keys.insert(id, key);
         }
     }
     Ok(keys)
 }
 
 fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
+    let empty = "".to_string();
     let mut resources = HashMap::new();
     if let Some(options) = ini.options_iter("RESOURCES") {
         for (id, resource) in options {
-            let id = parse_hex_u32(id).context("RESOURCES")?;
-            let Some(idx) = resource.find(':') else {
-                return Err(err!("Invalid resource value. No colon."));
-            };
-            let chlen = ':'.len_utf8();
-            if idx < chlen {
-                return Err(err!("Invalid resource name."));
+            let id = id.parse().context("RESOURCES")?;
+            let items = split_subitems(resource, |k| Ok(k.to_string()), |v| Ok(v.to_string()))
+                .context("RESOURCES")?;
+            if let Some(port) = items.get("port") {
+                let port = parse_u16(port).context("[RESOURCES] port")?;
+                let users = items.get("users").unwrap_or(&empty);
+                let users = split_commaitems(users, |s| s.parse()).context("RESOURCES")?;
+                let res = Resource::Port { port, users };
+                resources.insert(id, res);
+            } else {
+                return Err(err!("Unknown resource type: {resource}"));
             }
-            let res_name = resource[..=(idx - chlen)].trim();
-            let res_value = resource[idx + chlen..].trim();
-            let res = match res_name {
-                "port" => Resource::Port(parse_u16(res_value)?),
-                n => {
-                    return Err(err!("Unknown resource name: {n}"));
-                }
-            };
-            resources.insert(id.into(), res);
         }
     }
     Ok(resources)
@@ -165,7 +220,7 @@ fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
 
 fn get_default_user(ini: &Ini) -> ah::Result<UserId> {
     if let Some(default_user) = ini.get("CLIENT", "default-user") {
-        return Ok(parse_hex_u32(default_user)?.into());
+        return default_user.parse();
     }
     Ok(Default::default())
 }
@@ -310,13 +365,20 @@ impl Config {
     }
 
     /// Lookup a resource id by a port number in the `[RESOURCES]` section.
-    pub fn resource_id_by_port(&self, port: u16) -> Option<ResourceId> {
+    pub fn resource_id_by_port(&self, port: u16, user_id: Option<UserId>) -> Option<ResourceId> {
         for (k, v) in &self.resources {
             match v {
-                Resource::Port(p) if *p == port => {
-                    return Some(*k);
+                Resource::Port { port: p, .. } => {
+                    if *p == port {
+                        if let Some(user_id) = user_id {
+                            if v.contains_user(user_id) {
+                                return Some(*k);
+                            }
+                        } else {
+                            return Some(*k);
+                        }
+                    }
                 }
-                _ => (),
             }
         }
         None
@@ -385,7 +447,10 @@ mod tests {
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
             resources.get(&0x9876ABCD.into()).unwrap(),
-            &Resource::Port(4096)
+            &Resource::Port {
+                port: 4096,
+                users: vec![]
+            }
         );
     }
 

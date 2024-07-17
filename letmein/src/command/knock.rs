@@ -122,7 +122,7 @@ pub async fn run_knock(
     let Some(key) = conf.key(user) else {
         return Err(err!("No key found in letmein.conf for user {user}"));
     };
-    let Some(resource) = conf.resource_id_by_port(knock_port) else {
+    let Some(resource) = conf.resource_id_by_port(knock_port, Some(user)) else {
         return Err(err!(
             "Port {knock_port} is not mapped to a resource in letmein.conf"
         ));
