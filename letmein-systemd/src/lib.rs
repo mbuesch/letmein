@@ -8,7 +8,10 @@
 
 //! This crate is an abstraction of the `systemd` interfaces needed by `letmein`.
 
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow as ah;
+
+#[cfg(feature = "tcp")]
+use anyhow::{format_err as err, Context as _};
 
 #[cfg(feature = "tcp")]
 use std::{
