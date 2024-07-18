@@ -41,7 +41,7 @@ letmein-proto = { version = "2", path = "./letmein-proto" }
 letmein-systemd = { version = "2", path = "./letmein-systemd" }
 
 [profile.release]
-opt-level = 3
+opt-level = "z"
 lto = "fat"
 panic = "abort"
 strip = "symbols"
