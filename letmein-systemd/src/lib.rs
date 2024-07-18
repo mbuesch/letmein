@@ -23,7 +23,9 @@ fn is_socket(fd: RawFd) -> bool {
     let mut stat: libc::stat64 = unsafe { std::mem::zeroed() };
     let ret = unsafe { libc::fstat64(fd, &mut stat) };
     if ret == 0 {
-        (stat.st_mode & libc::S_IFMT) == libc::S_IFSOCK
+        const S_IFMT: libc::mode_t = libc::S_IFMT as libc::mode_t;
+        const S_IFSOCK: libc::mode_t = libc::S_IFSOCK as libc::mode_t;
+        (stat.st_mode as libc::mode_t & S_IFMT) == S_IFSOCK
     } else {
         false
     }
