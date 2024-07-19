@@ -47,19 +47,22 @@ install_dirs()
         -d /opt/letmein/etc
 }
 
-install_letmein()
+install_conf()
 {
-    do_install \
-        -o root -g root -m 0755 \
-        "$target/letmein" \
-        /opt/letmein/bin/
-
     if ! [ -e /opt/letmein/etc/letmein.conf ]; then
         do_install \
             -o root -g root -m 0644 \
             "$basedir/letmein/letmein.conf" \
             /opt/letmein/etc/letmein.conf
     fi
+}
+
+install_letmein()
+{
+    do_install \
+        -o root -g root -m 0755 \
+        "$target/letmein" \
+        /opt/letmein/bin/
 }
 
 release="release"
@@ -81,6 +84,7 @@ target="$basedir/target/$release"
 
 entry_checks
 install_dirs
+install_conf
 install_letmein
 
 # vim: ts=4 sw=4 expandtab

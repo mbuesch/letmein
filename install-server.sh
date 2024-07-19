@@ -72,6 +72,16 @@ install_dirs()
         -d /opt/letmein/etc
 }
 
+install_conf()
+{
+    if ! [ -e /opt/letmein/etc/letmeind.conf ]; then
+        do_install \
+            -o root -g root -m 0640 \
+            "$basedir/letmeind/letmeind.conf" \
+            /opt/letmein/etc/letmeind.conf
+    fi
+}
+
 install_letmeind()
 {
     do_install \
@@ -88,13 +98,6 @@ install_letmeind()
         -o root -g root -m 0644 \
         "$basedir/letmeind/letmeind.socket" \
         /etc/systemd/system/
-
-    if ! [ -e /opt/letmein/etc/letmeind.conf ]; then
-        do_install \
-            -o root -g root -m 0640 \
-            "$basedir/letmeind/letmeind.conf" \
-            /opt/letmein/etc/letmeind.conf
-    fi
 
     do_systemctl enable letmeind.socket
 }
@@ -119,6 +122,7 @@ target="$basedir/target/$release"
 entry_checks
 stop_services
 install_dirs
+install_conf
 install_letmeind
 start_services
 
