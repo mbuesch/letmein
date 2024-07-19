@@ -215,9 +215,7 @@ However, nobody is infallible.
 
 I am interested to hear your opinion.
 
-If you find a security vulnerability, you deserve all the credit and feel free to have a good ROFLMAO over my broken design.
-I deserve all the blame and I have all the responsibility for fixing the problem.
-Therefore, I'd like to ask you to fully disclose the details of your valuable findings either in public in a Github issue or privately via mail to me.
+If you found a security vulnerability, see [the vulnerability reporting process](SECURITY.md) for how to proceed.
 
 ### Known weaknesses
 
