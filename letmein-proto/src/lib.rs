@@ -158,16 +158,15 @@ pub enum Operation {
     GoAway,
 }
 
-const OPERATION_KNOCK: u32 = Operation::Knock as u32;
-const OPERATION_CHALLENGE: u32 = Operation::Challenge as u32;
-const OPERATION_RESPONSE: u32 = Operation::Response as u32;
-const OPERATION_COMEIN: u32 = Operation::ComeIn as u32;
-const OPERATION_GOAWAY: u32 = Operation::GoAway as u32;
-
 impl TryFrom<u32> for Operation {
     type Error = ah::Error;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
+        const OPERATION_KNOCK: u32 = Operation::Knock as u32;
+        const OPERATION_CHALLENGE: u32 = Operation::Challenge as u32;
+        const OPERATION_RESPONSE: u32 = Operation::Response as u32;
+        const OPERATION_COMEIN: u32 = Operation::ComeIn as u32;
+        const OPERATION_GOAWAY: u32 = Operation::GoAway as u32;
         match value {
             OPERATION_KNOCK => Ok(Self::Knock),
             OPERATION_CHALLENGE => Ok(Self::Challenge),
@@ -200,16 +199,6 @@ const MSG_OFFS_SALT: usize = 16;
 
 /// Byte offset of the `auth` field.
 const MSG_OFFS_AUTH: usize = 24;
-
-#[inline]
-fn serialize_u32(buf: &mut [u8], value: u32) {
-    buf[0..4].copy_from_slice(&value.to_be_bytes());
-}
-
-#[inline]
-fn deserialize_u32(buf: &[u8]) -> ah::Result<u32> {
-    Ok(u32::from_be_bytes(buf[0..4].try_into()?))
-}
 
 /// The message data type.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -332,6 +321,11 @@ impl Message {
         // The serialization is simple enough to do manually.
         // Therefore, we don't use the `serde` crate here.
 
+        #[inline]
+        fn serialize_u32(buf: &mut [u8], value: u32) {
+            buf[0..4].copy_from_slice(&value.to_be_bytes());
+        }
+
         let mut buf = [0; MSG_SIZE];
         serialize_u32(&mut buf[MSG_OFFS_MAGIC..], self.magic);
         serialize_u32(&mut buf[MSG_OFFS_OPERATION..], self.operation as u32);
@@ -351,6 +345,11 @@ impl Message {
 
         // The deserialization is simple enough to do manually.
         // Therefore, we don't use the `serde` crate here.
+
+        #[inline]
+        fn deserialize_u32(buf: &[u8]) -> ah::Result<u32> {
+            Ok(u32::from_be_bytes(buf[0..4].try_into()?))
+        }
 
         let magic = deserialize_u32(&buf[MSG_OFFS_MAGIC..])?;
         let operation = deserialize_u32(&buf[MSG_OFFS_OPERATION..])?;
