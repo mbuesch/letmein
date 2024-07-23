@@ -8,6 +8,9 @@
 
 //! This crate is an abstraction of the `systemd` interfaces needed by `letmein`.
 
+#[cfg(not(target_os = "linux"))]
+std::compile_error!("letmeind server and letmein-systemd do not support non-Linux platforms.");
+
 use anyhow as ah;
 
 #[cfg(feature = "tcp")]

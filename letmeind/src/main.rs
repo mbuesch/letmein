@@ -8,6 +8,9 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(not(target_os = "linux"))]
+std::compile_error!("letmeind server and letmein-systemd do not support non-Linux platforms.");
+
 mod firewall;
 mod processor;
 mod server;
