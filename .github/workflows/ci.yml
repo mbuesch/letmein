@@ -8,26 +8,29 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  linux:
-    name: Build and test on Linux
-    runs-on: ubuntu-latest
+  server_and_client:
+    name: Build and test - Server and client
     strategy:
       matrix:
         toolchain:
           - 1.75.0
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: cargo build --verbose
       - run: cargo test --verbose
 
-  windows:
-    name: Build and test on Windows
-    runs-on: windows-latest
+  client_only:
+    name: Build and test - Client only
     strategy:
       matrix:
         toolchain:
           - 1.75.0
+        os:
+          - windows-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
