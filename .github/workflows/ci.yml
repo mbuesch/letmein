@@ -18,7 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add clippy
       - run: cargo build --verbose
+      - run: cargo clippy -- --deny warnings
+      - run: cargo clippy --tests -- --deny warnings
       - run: cargo test --verbose
 
   client_only:
@@ -34,7 +37,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add clippy
       - run: cargo build --verbose --package letmein
+      - run: cargo clippy --package letmein -- --deny warnings
+      - run: cargo clippy --tests --package letmein -- --deny warnings
       - run: cargo test --verbose --package letmein
       - run: cargo test --verbose --package letmein-conf
       - run: cargo test --verbose --package letmein-proto
