@@ -183,6 +183,7 @@ Tested platforms are:
 - Linux
 - Android, under [Termux](https://termux.dev/)
 - Windows
+- MacOS (build tested only)
 
 ## Internals and design goals
 
