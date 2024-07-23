@@ -1,4 +1,4 @@
-name: Cargo Build & Test
+name: Build and test
 
 on:
   push:
@@ -8,8 +8,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build_and_test:
-    name: Build and test
+  linux:
+    name: Build and test on Linux
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -20,5 +20,20 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: cargo build --verbose
       - run: cargo test --verbose
+
+  windows:
+    name: Build and test on Windows
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        toolchain:
+          - 1.75.0
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: cargo build --verbose --package letmein
+      - run: cargo test --verbose --package letmein
+      - run: cargo test --verbose --package letmein-conf
+      - run: cargo test --verbose --package letmein-proto
 
 # vim: ts=2 sw=2 expandtab
