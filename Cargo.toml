@@ -14,7 +14,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "2.0.0"
+version = "3.0.0"
 edition = "2021"
 rust-version = "1.75.0"
 license = "MIT OR Apache-2.0"
@@ -42,11 +42,11 @@ subtle = "2"
 tokio = "1"
 user_lookup = { version = "0.3", default-features = false }
 
-letmein-conf = { version = "2", path = "./letmein-conf" }
-letmein-fwproto = { version = "2", path = "./letmein-fwproto" }
-letmein-proto = { version = "2", path = "./letmein-proto" }
-letmein-seccomp = { version = "2", path = "./letmein-seccomp" }
-letmein-systemd = { version = "2", path = "./letmein-systemd" }
+letmein-conf = { version = "3", path = "./letmein-conf" }
+letmein-fwproto = { version = "3", path = "./letmein-fwproto" }
+letmein-proto = { version = "3", path = "./letmein-proto" }
+letmein-seccomp = { version = "3", path = "./letmein-seccomp" }
+letmein-systemd = { version = "3", path = "./letmein-systemd" }
 
 [profile.release]
 opt-level = "z"
