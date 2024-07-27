@@ -30,6 +30,18 @@ do_install()
     install "$@" || die "Failed install $*"
 }
 
+do_chown()
+{
+    info "chown $*"
+    chown "$@" || die "Failed to chown $*"
+}
+
+do_chmod()
+{
+    info "chmod $*"
+    chmod "$@" || die "Failed to chmod $*"
+}
+
 entry_checks()
 {
     [ -d "$target" ] || die "letmein is not built! Run ./build.sh"
@@ -49,7 +61,10 @@ install_dirs()
 
 install_conf()
 {
-    if ! [ -e /opt/letmein/etc/letmein.conf ]; then
+    if [ -e /opt/letmein/etc/letmein.conf ]; then
+        do_chown root:root /opt/letmein/etc/letmein.conf
+        do_chmod 0644 /opt/letmein/etc/letmein.conf
+    else
         do_install \
             -o root -g root -m 0644 \
             "$basedir/letmein/letmein.conf" \

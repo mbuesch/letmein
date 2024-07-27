@@ -42,6 +42,18 @@ try_systemctl()
     systemctl "$@" 2>/dev/null
 }
 
+do_chown()
+{
+    info "chown $*"
+    chown "$@" || die "Failed to chown $*"
+}
+
+do_chmod()
+{
+    info "chmod $*"
+    chmod "$@" || die "Failed to chmod $*"
+}
+
 entry_checks()
 {
     [ -d "$target" ] || die "letmein is not built! Run ./build.sh"
@@ -74,7 +86,10 @@ install_dirs()
 
 install_conf()
 {
-    if ! [ -e /opt/letmein/etc/letmeind.conf ]; then
+    if [ -e /opt/letmein/etc/letmeind.conf ]; then
+        do_chown root:root /opt/letmein/etc/letmeind.conf
+        do_chmod 0640 /opt/letmein/etc/letmeind.conf
+    else
         do_install \
             -o root -g root -m 0640 \
             "$basedir/letmeind/letmeind.conf" \
