@@ -13,14 +13,10 @@ repository = { workspace = true }
 readme = "README.md"
 categories = { workspace = true }
 keywords = { workspace = true }
-build = "build.rs"
 
 [dependencies]
 anyhow = { workspace = true }
 libc = { workspace = true }
 seccompiler = { workspace = true }
-
-[build-dependencies]
-autocfg = { workspace = true }
 
 # vim: ts=4 sw=4 expandtab

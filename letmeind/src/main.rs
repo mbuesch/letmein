@@ -20,8 +20,7 @@ use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant, Seccomp, INSTALL_PREFIX, SERVER_CONF_PATH};
 use letmein_seccomp::{
-    seccomp_compile, seccomp_install, seccomp_supported, Action as SeccompAction,
-    Allow as SeccompAllow,
+    seccomp_supported, Action as SeccompAction, Allow as SeccompAllow, Filter as SeccompFilter,
 };
 use std::{
     fs::{create_dir_all, metadata, OpenOptions},
@@ -88,25 +87,24 @@ fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
         Seccomp::Log | Seccomp::Kill => {
             if seccomp_supported() {
                 println!("Seccomp mode: {}", seccomp);
-                seccomp_install(
-                    seccomp_compile(
-                        &[
-                            SeccompAllow::Mmap,
-                            SeccompAllow::Mprotect,
-                            SeccompAllow::Read,
-                            SeccompAllow::Write,
-                            SeccompAllow::Recv,
-                            SeccompAllow::Send,
-                            SeccompAllow::TcpAccept,
-                            SeccompAllow::UnixConnect,
-                            SeccompAllow::Prctl,
-                            SeccompAllow::Signal,
-                            SeccompAllow::Futex,
-                        ],
-                        seccomp_to_action(seccomp),
-                    )
-                    .context("Compile seccomp filter")?,
+                SeccompFilter::compile(
+                    &[
+                        SeccompAllow::Mmap,
+                        SeccompAllow::Mprotect,
+                        SeccompAllow::Read,
+                        SeccompAllow::Write,
+                        SeccompAllow::Recv,
+                        SeccompAllow::Send,
+                        SeccompAllow::TcpAccept,
+                        SeccompAllow::UnixConnect,
+                        SeccompAllow::Prctl,
+                        SeccompAllow::Signal,
+                        SeccompAllow::Futex,
+                    ],
+                    seccomp_to_action(seccomp),
                 )
+                .context("Compile seccomp filter")?
+                .install()
                 .context("Install seccomp filter")?;
             } else {
                 println!(

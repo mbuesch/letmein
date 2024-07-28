@@ -27,7 +27,6 @@ keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
 
 [workspace.dependencies]
 anyhow = "1"
-autocfg = "1"
 clap = "4"
 getrandom = "0.2"
 hickory-proto = "0.24"
