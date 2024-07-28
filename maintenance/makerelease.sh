@@ -12,13 +12,11 @@ for path in $(echo "$PATH" | tr ':' ' '); do
 done
 [ -f "$MAKERELEASE_LIB" ] && . "$MAKERELEASE_LIB" || die "makerelease.lib not found."
 
-hook_post_checkout()
+hook_get_version()
 {
-	local checkout_dir="$1"
-	cp "$checkout_dir/README.md" "$checkout_dir/letmein/README.md"
-	cp "$checkout_dir/README.md" "$checkout_dir/letmeind/README.md"
+	version="$(cargo_local_pkg_version letmein)"
 }
 
-project=letmein-proto
-conf_package=letmein-proto
+project=letmein
+conf_upload_packages="letmein-proto letmein-fwproto letmein-conf letmein-systemd letmein-seccomp letmein letmeinfwd letmeind"
 makerelease "$@"
