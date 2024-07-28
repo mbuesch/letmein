@@ -90,6 +90,8 @@ impl Filter {
         let add_read_write_rules = |rules: &mut BTreeMap<_, _>| {
             rules.insert(sys!(SYS_epoll_create1), vec![]);
             rules.insert(sys!(SYS_epoll_ctl), vec![]);
+            rules.insert(sys!(SYS_epoll_pwait), vec![]);
+            #[cfg(all(any(target_arch = "x86_64", target_arch = "arm"), target_os = "linux"))]
             rules.insert(sys!(SYS_epoll_pwait2), vec![]);
             rules.insert(sys!(SYS_epoll_wait), vec![]);
             rules.insert(sys!(SYS_lseek), vec![]);
@@ -163,6 +165,10 @@ impl Filter {
                     rules.insert(sys!(SYS_futex), vec![]);
                     rules.insert(sys!(SYS_get_robust_list), vec![]);
                     rules.insert(sys!(SYS_set_robust_list), vec![]);
+                    #[cfg(all(
+                        any(target_arch = "x86", target_arch = "x86_64", target_arch = "arm"),
+                        target_os = "linux"
+                    ))]
                     rules.insert(sys!(SYS_futex_waitv), vec![]);
                     //rules.insert(sys!(SYS_futex_wake), vec![]);
                     //rules.insert(sys!(SYS_futex_wait), vec![]);
