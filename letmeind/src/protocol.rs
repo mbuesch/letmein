@@ -12,7 +12,7 @@ use letmein_conf::Resource;
 use letmein_proto::{Message, Operation, ResourceId, UserId};
 use std::path::Path;
 
-pub struct Processor<'a, C> {
+pub struct Protocol<'a, C> {
     conn: C,
     conf: &'a ConfigRef<'a>,
     rundir: &'a Path,
@@ -20,7 +20,7 @@ pub struct Processor<'a, C> {
     resource_id: Option<ResourceId>,
 }
 
-impl<'a, C: ConnectionOps> Processor<'a, C> {
+impl<'a, C: ConnectionOps> Protocol<'a, C> {
     pub fn new(conn: C, conf: &'a ConfigRef<'a>, rundir: &'a Path) -> Self {
         Self {
             conn,

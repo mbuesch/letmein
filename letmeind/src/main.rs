@@ -12,10 +12,10 @@
 std::compile_error!("letmeind server does not support non-Linux platforms.");
 
 mod firewall_client;
-mod processor;
+mod protocol;
 mod server;
 
-use crate::{processor::Processor, server::Server};
+use crate::{protocol::Protocol, server::Server};
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant, Seccomp, INSTALL_PREFIX, SERVER_CONF_PATH};
@@ -186,8 +186,8 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                     if let Ok(_permit) = conn_semaphore.acquire().await {
                         task::spawn(async move {
                             let conf = conf.read().await;
-                            let mut proc = Processor::new(conn, &conf, &opts.rundir);
-                            if let Err(e) = proc.run().await {
+                            let mut proto = Protocol::new(conn, &conf, &opts.rundir);
+                            if let Err(e) = proto.run().await {
                                 eprintln!("Client error: {e}");
                             }
                         });
