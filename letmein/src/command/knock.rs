@@ -15,6 +15,40 @@ use letmein_conf::Config;
 use letmein_proto::{Key, Message, Operation, ResourceId, UserId};
 use std::sync::Arc;
 
+fn run_command(cmd: &str) -> ah::Result<()> {
+    let parts: Vec<&str> = cmd.split_whitespace().collect();
+    if parts.is_empty() {
+        return Err(err!("Knock --and-run command is empty."));
+    }
+
+    fn expand_arg(arg: &&str) -> String {
+        if let Some(arg) = arg.strip_prefix('$') {
+            std::env::var(arg).unwrap_or_default()
+        } else {
+            arg.to_string()
+        }
+    }
+
+    let command = parts[0];
+    let args: Vec<String> = parts[1..].iter().map(expand_arg).collect();
+
+    let status = std::process::Command::new(command)
+        .args(&args)
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .status()
+        .context("Knock --and-run subprocess")?;
+
+    if status.success() {
+        Ok(())
+    } else if let Some(code) = status.code() {
+        Err(err!("Knock --and-run subprocess failed: {}", code))
+    } else {
+        Err(err!("Knock --and-run subprocess failed."))
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum AddrMode {
     #[default]
@@ -109,6 +143,7 @@ impl<'a> KnockSeq<'a> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_knock(
     conf: Arc<Config>,
     verbose: bool,
@@ -117,6 +152,7 @@ pub async fn run_knock(
     server_port: Option<u16>,
     knock_port: u16,
     user: Option<UserId>,
+    and_run: Option<String>,
 ) -> ah::Result<()> {
     let user = user.unwrap_or_else(|| conf.default_user());
     let Some(key) = conf.key(user) else {
@@ -178,6 +214,11 @@ pub async fn run_knock(
             seq.knock_sequence(ResMode::Ipv4).await?;
         }
     }
+
+    if let Some(and_run) = &and_run {
+        run_command(and_run)?;
+    }
+
     Ok(())
 }
 

@@ -111,6 +111,17 @@ enum Command {
         /// if any one fails.
         #[arg(short = '6', long)]
         ipv6: bool,
+
+        /// After successfully doing the port knocking, run a command.
+        ///
+        /// The command will receive the stdin from letmein
+        /// and stdout from the command will be put into stdout of letmein.
+        ///
+        /// The command is split by whitespace.
+        /// The first part of the split command is the program to be executed
+        /// and the remaining parts are the arguments.
+        #[arg(short = 'r', long, name = "COMMAND")]
+        and_run: Option<String>,
     },
 
     /// Generate a new shared secret key.
@@ -143,6 +154,7 @@ async fn main() -> ah::Result<()> {
             server_port,
             ipv4,
             ipv6,
+            and_run,
         } => {
             run_knock(
                 conf,
@@ -152,6 +164,7 @@ async fn main() -> ah::Result<()> {
                 server_port,
                 port,
                 user,
+                and_run,
             )
             .await?;
         }
