@@ -157,7 +157,6 @@ impl Filter {
                     rules.insert(sys!(SYS_prctl), vec![]);
                 }
                 Allow::Signal => {
-                    rules.insert(sys!(SYS_rt_sigaction), vec![]);
                     rules.insert(sys!(SYS_rt_sigreturn), vec![]);
                     rules.insert(sys!(SYS_rt_sigprocmask), vec![]);
                 }
