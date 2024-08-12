@@ -450,6 +450,7 @@ name = "letmein-seccomp"
 version = "3.0.0"
 dependencies = [
  "anyhow",
+ "letmein-seccomp",
  "libc",
  "seccompiler",
 ]

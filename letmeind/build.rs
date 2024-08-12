@@ -9,7 +9,7 @@
 #![forbid(unsafe_code)]
 
 use build_target::{target_arch, Arch};
-use letmein_seccomp::{seccomp_supported, Action, Allow, Filter};
+use letmein_seccomp::{Action, Allow, Filter};
 use std::{env, fs::OpenOptions, io::Write, path::Path};
 
 const SECCOMP_ALLOW_LIST: [Allow; 11] = [
@@ -27,13 +27,12 @@ const SECCOMP_ALLOW_LIST: [Allow; 11] = [
 ];
 
 fn seccomp_compile_action(arch: &Arch, action: Action) {
-    let filter = if seccomp_supported() {
-        Filter::compile_for_arch(&SECCOMP_ALLOW_LIST, action, arch.as_str())
-            .expect("Failed to compile seccomp filter")
-            .serialize()
-    } else {
-        vec![]
-    };
+    let filter =
+        if let Ok(filter) = Filter::compile_for_arch(&SECCOMP_ALLOW_LIST, action, arch.as_str()) {
+            filter.serialize()
+        } else {
+            vec![]
+        };
 
     let suffix = match action {
         Action::Kill => "kill",

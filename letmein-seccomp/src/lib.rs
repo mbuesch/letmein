@@ -12,11 +12,17 @@
 std::compile_error!("letmeind server and letmein-seccomp do not support non-Linux platforms.");
 
 use anyhow::{self as ah, Context as _};
-use seccompiler::{
-    apply_filter_all_threads, sock_filter, BpfProgram, SeccompAction, SeccompFilter, SeccompRule,
-};
+use seccompiler::BpfProgram;
+
+#[cfg(feature = "compile")]
+use seccompiler::{SeccompAction, SeccompFilter, SeccompRule};
+#[cfg(feature = "compile")]
 use std::{collections::BTreeMap, env::consts::ARCH};
 
+#[cfg(feature = "install")]
+use seccompiler::apply_filter_all_threads;
+
+#[cfg(feature = "compile")]
 macro_rules! sys {
     ($ident:ident) => {{
         #[allow(clippy::useless_conversion)]
@@ -24,6 +30,9 @@ macro_rules! sys {
         id
     }};
 }
+
+#[cfg(feature = "de")]
+use seccompiler::sock_filter;
 
 /// Returns `true` if seccomp is supported on this platform.
 pub fn seccomp_supported() -> bool {
@@ -61,6 +70,7 @@ pub struct Filter(BpfProgram);
 
 impl Filter {
     /// Simple serialization, without serde.
+    #[cfg(feature = "ser")]
     pub fn serialize(&self) -> Vec<u8> {
         let mut raw = Vec::with_capacity(self.0.len() * 8);
         for insn in &self.0 {
@@ -74,6 +84,7 @@ impl Filter {
     }
 
     /// Simple de-serialization, without serde.
+    #[cfg(feature = "de")]
     pub fn deserialize(raw: &[u8]) -> Self {
         assert!(raw.len() % 8 == 0);
         let mut bpf = Vec::with_capacity(raw.len() / 8);
@@ -88,10 +99,12 @@ impl Filter {
         Self(bpf)
     }
 
+    #[cfg(feature = "compile")]
     pub fn compile(allow: &[Allow], deny_action: Action) -> ah::Result<Self> {
         Self::compile_for_arch(allow, deny_action, ARCH)
     }
 
+    #[cfg(feature = "compile")]
     pub fn compile_for_arch(allow: &[Allow], deny_action: Action, arch: &str) -> ah::Result<Self> {
         let mut rules: BTreeMap<i64, Vec<SeccompRule>> = [
             (sys!(SYS_brk), vec![]),
@@ -220,6 +233,7 @@ impl Filter {
         Ok(Self(filter))
     }
 
+    #[cfg(feature = "install")]
     pub fn install(&self) -> ah::Result<()> {
         apply_filter_all_threads(&self.0).context("Apply seccomp filter")
     }
