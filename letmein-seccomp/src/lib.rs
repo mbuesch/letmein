@@ -245,11 +245,13 @@ mod test {
 
     #[test]
     fn test_filter_serialize() {
-        let filter = Filter::compile(&[Allow::Read], Action::Kill).unwrap();
-        let filter2 = Filter::deserialize(&filter.serialize());
-        assert_eq!(filter.0.len(), filter2.0.len());
-        for i in 0..filter.0.len() {
-            assert_eq!(filter.0[i], filter2.0[i]);
+        if seccomp_supported() {
+            let filter = Filter::compile(&[Allow::Read], Action::Kill).unwrap();
+            let filter2 = Filter::deserialize(&filter.serialize());
+            assert_eq!(filter.0.len(), filter2.0.len());
+            for i in 0..filter.0.len() {
+                assert_eq!(filter.0[i], filter2.0[i]);
+            }
         }
     }
 }
