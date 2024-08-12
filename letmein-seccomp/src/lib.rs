@@ -13,7 +13,7 @@ std::compile_error!("letmeind server and letmein-seccomp do not support non-Linu
 
 use anyhow::{self as ah, Context as _};
 use seccompiler::{
-    apply_filter_all_threads, BpfProgram, SeccompAction, SeccompFilter, SeccompRule,
+    apply_filter_all_threads, sock_filter, BpfProgram, SeccompAction, SeccompFilter, SeccompRule,
 };
 use std::{collections::BTreeMap, env::consts::ARCH};
 
@@ -32,7 +32,7 @@ pub fn seccomp_supported() -> bool {
 }
 
 /// Abstract allow-list features that map to one or more syscalls each.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Allow {
     Mmap,
     Mprotect,
@@ -48,7 +48,7 @@ pub enum Allow {
 }
 
 /// Action to be performed, if a syscall is executed that is not in the allow-list.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Action {
     /// Kill the process.
     Kill,
@@ -60,6 +60,34 @@ pub enum Action {
 pub struct Filter(BpfProgram);
 
 impl Filter {
+    /// Simple serialization, without serde.
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut raw = Vec::with_capacity(self.0.len() * 8);
+        for insn in &self.0 {
+            raw.extend_from_slice(&insn.code.to_le_bytes());
+            raw.push(insn.jt);
+            raw.push(insn.jf);
+            raw.extend_from_slice(&insn.k.to_le_bytes());
+        }
+        assert_eq!(raw.len(), self.0.len() * 8);
+        raw
+    }
+
+    /// Simple de-serialization, without serde.
+    pub fn deserialize(raw: &[u8]) -> Self {
+        assert!(raw.len() % 8 == 0);
+        let mut bpf = Vec::with_capacity(raw.len() / 8);
+        for i in (0..raw.len()).step_by(8) {
+            let code = u16::from_le_bytes(raw[i..i + 2].try_into().unwrap());
+            let jt = raw[i + 2];
+            let jf = raw[i + 3];
+            let k = u32::from_le_bytes(raw[i + 4..i + 8].try_into().unwrap());
+            bpf.push(sock_filter { code, jt, jf, k });
+        }
+        assert_eq!(bpf.len(), raw.len() / 8);
+        Self(bpf)
+    }
+
     pub fn compile(allow: &[Allow], deny_action: Action) -> ah::Result<Self> {
         Self::compile_for_arch(allow, deny_action, ARCH)
     }
@@ -194,6 +222,21 @@ impl Filter {
 
     pub fn install(&self) -> ah::Result<()> {
         apply_filter_all_threads(&self.0).context("Apply seccomp filter")
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_filter_serialize() {
+        let filter = Filter::compile(&[Allow::Read], Action::Kill).unwrap();
+        let filter2 = Filter::deserialize(&filter.serialize());
+        assert_eq!(filter.0.len(), filter2.0.len());
+        for i in 0..filter.0.len() {
+            assert_eq!(filter.0[i], filter2.0[i]);
+        }
     }
 }
 

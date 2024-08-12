@@ -19,9 +19,7 @@ use crate::{protocol::Protocol, server::Server};
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant, Seccomp, INSTALL_PREFIX, SERVER_CONF_PATH};
-use letmein_seccomp::{
-    seccomp_supported, Action as SeccompAction, Allow as SeccompAllow, Filter as SeccompFilter,
-};
+use letmein_seccomp::{seccomp_supported, Filter as SeccompFilter};
 use std::{
     fs::{create_dir_all, metadata, OpenOptions},
     io::Write as _,
@@ -75,46 +73,32 @@ fn make_pidfile(rundir: &Path) -> ah::Result<()> {
         .context("Write to PID-file")
 }
 
-fn seccomp_to_action(seccomp: Seccomp) -> SeccompAction {
-    match seccomp {
-        Seccomp::Off | Seccomp::Log => SeccompAction::Log,
-        Seccomp::Kill => SeccompAction::Kill,
-    }
-}
+const SECCOMP_FILTER_KILL: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/seccomp_filter_kill.bpf"));
+const SECCOMP_FILTER_LOG: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/seccomp_filter_log.bpf"));
 
 fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
-    match seccomp {
-        Seccomp::Log | Seccomp::Kill => {
-            if seccomp_supported() {
-                println!("Seccomp mode: {}", seccomp);
-                SeccompFilter::compile(
-                    &[
-                        SeccompAllow::Mmap,
-                        SeccompAllow::Mprotect,
-                        SeccompAllow::Read,
-                        SeccompAllow::Write,
-                        SeccompAllow::Recv,
-                        SeccompAllow::Send,
-                        SeccompAllow::TcpAccept,
-                        SeccompAllow::UnixConnect,
-                        SeccompAllow::Prctl,
-                        SeccompAllow::Signal,
-                        SeccompAllow::Futex,
-                    ],
-                    seccomp_to_action(seccomp),
-                )
-                .context("Compile seccomp filter")?
-                .install()
-                .context("Install seccomp filter")?;
-            } else {
-                println!(
-                    "WARNING: Not using seccomp. \
-                    Letmein does not support seccomp on this architecture, yet."
-                );
-            }
-        }
-        Seccomp::Off => (),
+    // See build.rs for the filter definition.
+    let filter_bytes = match seccomp {
+        Seccomp::Log => SECCOMP_FILTER_LOG,
+        Seccomp::Kill => SECCOMP_FILTER_KILL,
+        Seccomp::Off => return Ok(()),
+    };
+
+    // Install seccomp filter.
+    if seccomp_supported() {
+        println!("Seccomp mode: {}", seccomp);
+        SeccompFilter::deserialize(filter_bytes)
+            .install()
+            .context("Install seccomp filter")?;
+    } else {
+        println!(
+            "WARNING: Not using seccomp. \
+            Letmein does not support seccomp on this architecture, yet."
+        );
     }
+
     Ok(())
 }
 

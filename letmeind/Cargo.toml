@@ -25,4 +25,8 @@ letmein-systemd = { workspace = true, features = [ "tcp" ] }
 libc = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync" ] }
 
+[build-dependencies]
+build-target = { workspace = true }
+letmein-seccomp = { workspace = true }
+
 # vim: ts=4 sw=4 expandtab
