@@ -46,7 +46,7 @@ fn seccomp_compile_action(arch: &Arch, action: Action) {
         .create(true)
         .truncate(true)
         .write(true)
-        .open(Path::new(&out_dir).join(&filter_file))
+        .open(Path::new(&out_dir).join(filter_file))
         .expect("Failed to open filter.bpf")
         .write_all(&filter)
         .expect("Failed to write filter.bpf");
