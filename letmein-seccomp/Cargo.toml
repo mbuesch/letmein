@@ -27,6 +27,6 @@ libc = { workspace = true }
 seccompiler = { workspace = true }
 
 [dev-dependencies]
-letmein-seccomp = { workspace = true, features = [ "compile", "ser", "de" ] }
+letmein-seccomp = { path = ".", features = [ "compile", "ser", "de" ] }
 
 # vim: ts=4 sw=4 expandtab
