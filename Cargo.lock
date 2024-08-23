@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "letmein"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -422,7 +422,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-conf"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "letmein-proto",
@@ -430,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-fwproto"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "tokio",
@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-proto"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "getrandom",
@@ -450,7 +450,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-seccomp"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "letmein-seccomp",
@@ -460,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-systemd"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "letmeind"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "build-target",
@@ -485,7 +485,7 @@ dependencies = [
 
 [[package]]
 name = "letmeinfwd"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -775,9 +775,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.125"
+version = "1.0.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83c8e735a073ccf5be70aa8066aa984eaf2fa000db6c8d0100ae605b366d31ed"
+checksum = "b3b863381a05ffefbc82571a2d893edf47b27fb0ebedbf582c39640e51abebef"
 dependencies = [
  "itoa",
  "memchr",
