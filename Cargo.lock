@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "letmein"
-version = "3.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -422,7 +422,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-conf"
-version = "3.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "letmein-proto",
@@ -430,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-fwproto"
-version = "3.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "tokio",
@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-proto"
-version = "3.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "getrandom",
@@ -450,7 +450,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-seccomp"
-version = "3.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "letmein-seccomp",
@@ -460,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-systemd"
-version = "3.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "letmeind"
-version = "3.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "build-target",
@@ -485,7 +485,7 @@ dependencies = [
 
 [[package]]
 name = "letmeinfwd"
-version = "3.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "clap",
