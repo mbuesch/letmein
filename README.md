@@ -176,6 +176,13 @@ Installing the server will also install the service and socket into systemd and 
 The server is used to receive knock packets from the client.
 Upon successful knock authentication, the server will open the knocked port in its `nftables` firewall.
 
+## Arch Linux: Installing from AUR
+
+If you use [Arch Linux](https://archlinux.org/), then you can install the client and the server from [AUR](https://aur.archlinux.org/packages/letmein).
+The AUR package will install the configuration to `/etc` and the binaries to `/usr/bin`.
+
+(The AUR package is maintained by a third party maintainer. Thanks!)
+
 ## Platform support
 
 ### Client
