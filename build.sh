@@ -47,6 +47,7 @@ check_dynlibs()
 [ -f "$basedir/Cargo.toml" ] || die "basedir sanity check failed"
 
 cd "$basedir" || die "cd basedir failed."
+export LETMEIN_CONF_PREFIX="/opt/letmein"
 cargo build || die "Cargo build (debug) failed."
 cargo test || die "Cargo test failed."
 cargo auditable build --release || die "Cargo build (release) failed."

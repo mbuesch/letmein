@@ -19,23 +19,21 @@ mod ini;
 use crate::ini::Ini;
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_proto::{Key, ResourceId, UserId, PORT};
-use std::{collections::HashMap, path::Path, time::Duration};
-
-/// The default install prefix.
-#[cfg(not(target_os = "windows"))]
-pub const INSTALL_PREFIX: &str = "/opt/letmein";
-#[cfg(target_os = "windows")]
-pub const INSTALL_PREFIX: &str = "";
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 /// The default server configuration path, relative to the install prefix.
 #[cfg(not(target_os = "windows"))]
-pub const SERVER_CONF_PATH: &str = "/etc/letmeind.conf";
+const SERVER_CONF_PATH: &str = "etc/letmeind.conf";
 
 /// The default client configuration path, relative to the install prefix.
 #[cfg(not(target_os = "windows"))]
-pub const CLIENT_CONF_PATH: &str = "/etc/letmein.conf";
+const CLIENT_CONF_PATH: &str = "etc/letmein.conf";
 #[cfg(target_os = "windows")]
-pub const CLIENT_CONF_PATH: &str = "letmein.conf";
+const CLIENT_CONF_PATH: &str = "letmein.conf";
 
 const DEFAULT_NFT_TIMEOUT: u32 = 600;
 
@@ -329,6 +327,7 @@ pub enum ConfigVariant {
 #[derive(Clone, Default, Debug)]
 pub struct Config {
     variant: ConfigVariant,
+    path: Option<PathBuf>,
     debug: bool,
     port: u16,
     seccomp: Seccomp,
@@ -352,6 +351,39 @@ impl Config {
         }
     }
 
+    /// Get the default configuration file path.
+    pub fn get_default_path(variant: ConfigVariant) -> PathBuf {
+        // The build-time environment variable LETMEIN_CONF_PREFIX can be
+        // used to give an additional prefix.
+        let prefix = match option_env!("LETMEIN_CONF_PREFIX") {
+            Some(env_prefix) => env_prefix,
+            None => {
+                #[cfg(not(target_os = "windows"))]
+                let prefix = "/";
+                #[cfg(target_os = "windows")]
+                let prefix = "";
+                prefix
+            }
+        };
+
+        let mut path = PathBuf::new();
+        path.push(prefix);
+        match variant {
+            ConfigVariant::Client => {
+                path.push(CLIENT_CONF_PATH);
+            }
+            ConfigVariant::Server => {
+                path.push(SERVER_CONF_PATH);
+            }
+        }
+        path
+    }
+
+    /// Get the actual path the configuration was read from.
+    pub fn get_path(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
     /// (Re-)load a configuration from a file.
     pub fn load(&mut self, path: &Path) -> ah::Result<()> {
         if let Ok(ini) = Ini::new_from_file(path) {
@@ -359,6 +391,7 @@ impl Config {
         } else if self.variant == ConfigVariant::Server {
             return Err(err!("Failed to load configuration {path:?}"));
         }
+        self.path = Some(path.to_path_buf());
         Ok(())
     }
 

@@ -18,7 +18,7 @@ mod server;
 use crate::{protocol::Protocol, server::Server};
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
-use letmein_conf::{Config, ConfigVariant, Seccomp, INSTALL_PREFIX, SERVER_CONF_PATH};
+use letmein_conf::{Config, ConfigVariant, Seccomp};
 use letmein_seccomp::{seccomp_supported, Filter as SeccompFilter};
 use std::{
     fs::{create_dir_all, metadata, OpenOptions},
@@ -130,7 +130,7 @@ impl Opts {
         if let Some(config) = &self.config {
             config.clone()
         } else {
-            format!("{INSTALL_PREFIX}{SERVER_CONF_PATH}").into()
+            Config::get_default_path(ConfigVariant::Server)
         }
     }
 }

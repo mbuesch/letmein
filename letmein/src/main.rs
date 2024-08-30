@@ -15,7 +15,7 @@ mod resolver;
 use crate::command::{genkey::run_genkey, knock::run_knock};
 use anyhow::{self as ah, Context as _};
 use clap::{Parser, Subcommand};
-use letmein_conf::{Config, ConfigVariant, CLIENT_CONF_PATH, INSTALL_PREFIX};
+use letmein_conf::{Config, ConfigVariant};
 use letmein_proto::UserId;
 use std::{path::PathBuf, sync::Arc};
 
@@ -38,7 +38,7 @@ impl Opts {
         if let Some(config) = &self.config {
             config.clone()
         } else {
-            format!("{INSTALL_PREFIX}{CLIENT_CONF_PATH}").into()
+            Config::get_default_path(ConfigVariant::Client)
         }
     }
 }

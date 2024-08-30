@@ -13,7 +13,7 @@ use crate::{
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::Config;
 use letmein_proto::{Key, Message, Operation, ResourceId, UserId};
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum AddrMode {
@@ -118,13 +118,14 @@ pub async fn run_knock(
     knock_port: u16,
     user: Option<UserId>,
 ) -> ah::Result<()> {
+    let confpath = conf.get_path().unwrap_or(Path::new(""));
     let user = user.unwrap_or_else(|| conf.default_user());
     let Some(key) = conf.key(user) else {
-        return Err(err!("No key found in letmein.conf for user {user}"));
+        return Err(err!("No key found in {confpath:?} for user {user}"));
     };
     let Some(resource) = conf.resource_id_by_port(knock_port, Some(user)) else {
         return Err(err!(
-            "Port {knock_port} is not mapped to a resource in letmein.conf"
+            "Port {knock_port} is not mapped to a resource in {confpath:?}"
         ));
     };
     let server_port = server_port.unwrap_or_else(|| conf.port());
