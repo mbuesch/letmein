@@ -28,6 +28,8 @@ use std::{
 /// The default server configuration path, relative to the install prefix.
 #[cfg(not(target_os = "windows"))]
 const SERVER_CONF_PATH: &str = "etc/letmeind.conf";
+#[cfg(target_os = "windows")]
+const SERVER_CONF_PATH: &str = "letmeind.conf";
 
 /// The default client configuration path, relative to the install prefix.
 #[cfg(not(target_os = "windows"))]
