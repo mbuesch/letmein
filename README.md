@@ -176,9 +176,18 @@ Installing the server will also install the service and socket into systemd and 
 The server is used to receive knock packets from the client.
 Upon successful knock authentication, the server will open the knocked port in its `nftables` firewall.
 
-## Crates.io: Installing with `cargo install` from crates.io
+## Installing with `cargo install` from crates.io
 
-TODO
+Alternatively, you can install letmein, letmeind and letmeinfwd with `cargo install` from [crates.io](https://crates.io/).
+
+Note that there are a few important differences when using `cargo install` instead of the `install*.sh` scripts from above:
+
+- letmein will look for configuration files in `/etc` instead of `/opt/letmein/etc`.
+- The system user and group `letmeind` will not be installed in the operating system. The user and group are required for server operation.
+- The systemd sockets and services will not be installed in the operating system.
+
+You may use `cargo install` to install the `letmein` client application.
+But it is *not* recommended to use `cargo install` to install the `letmeind` and `letmeinfwd` server daemons.
 
 ## Arch Linux: Installing from AUR
 
