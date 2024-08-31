@@ -56,6 +56,12 @@ impl TryFrom<u16> for FirewallOperation {
     }
 }
 
+impl From<FirewallOperation> for u16 {
+    fn from(operation: FirewallOperation) -> u16 {
+        operation as _
+    }
+}
+
 /// Size of the `addr` field in the message.
 const ADDR_SIZE: usize = 16;
 
@@ -162,7 +168,7 @@ impl FirewallMessage {
         }
 
         let mut buf = [0; FWMSG_SIZE];
-        serialize_u16(&mut buf[FWMSG_OFFS_OPERATION..], self.operation as u16);
+        serialize_u16(&mut buf[FWMSG_OFFS_OPERATION..], self.operation.into());
         serialize_u16(&mut buf[FWMSG_OFFS_PORT..], self.port);
         buf[FWMSG_OFFS_ADDR..FWMSG_OFFS_ADDR + ADDR_SIZE].copy_from_slice(&self.addr);
 
