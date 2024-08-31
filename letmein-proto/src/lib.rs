@@ -42,7 +42,7 @@ const AUTH_SIZE: usize = 32;
 const KEY_SIZE: usize = 32;
 
 /// Type of the message salt.
-pub type Salt = [u8; SALT_SIZE];
+type Salt = [u8; SALT_SIZE];
 
 /// Type of the authentication token.
 pub type Auth = [u8; AUTH_SIZE];
