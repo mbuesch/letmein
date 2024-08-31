@@ -207,7 +207,7 @@ const MSG_OFFS_SALT: usize = 16;
 const MSG_OFFS_AUTH: usize = 24;
 
 /// The message data type.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Message {
     magic: u32,
     operation: Operation,
@@ -464,11 +464,16 @@ mod tests {
     fn test_msg_knock() {
         let key = [0x9E; 32];
 
+        let make_knock = || -> Message {
+            let mut msg = Message::new(Operation::Knock, 0xA423DDA7.into(), 0xBC5D8077.into());
+            assert_ne!(msg.salt, [0; 8]);
+            msg.salt = [0x4A; 8]; // override random salt
+            msg.generate_auth_no_challenge(&key);
+            msg
+        };
+
         // Create a knock message and check the authentication.
-        let mut msg = Message::new(Operation::Knock, 0xA423DDA7.into(), 0xBC5D8077.into());
-        assert_ne!(msg.salt, [0; 8]);
-        msg.salt = [0x4A; 8]; // override random salt
-        msg.generate_auth_no_challenge(&key);
+        let msg = make_knock();
         assert_eq!(msg.operation(), Operation::Knock);
         assert_eq!(msg.user(), 0xA423DDA7.into());
         assert_eq!(msg.resource(), 0xBC5D8077.into());
@@ -504,54 +509,66 @@ mod tests {
         check_ser_de(&msg);
 
         // A modified `operation` field causes an authentication failure.
-        let mut msg_clone = msg.clone();
-        msg_clone.operation = Operation::Response;
-        assert!(!msg_clone.check_auth_ok_no_challenge(&key));
+        let mut msg = make_knock();
+        msg.operation = Operation::Response;
+        assert!(!msg.check_auth_ok_no_challenge(&key));
 
         // A modified `user` field causes an authentication failure.
-        let mut msg_clone = msg.clone();
-        msg_clone.user.0 += 1;
-        assert!(!msg_clone.check_auth_ok_no_challenge(&key));
+        let mut msg = make_knock();
+        msg.user.0 += 1;
+        assert!(!msg.check_auth_ok_no_challenge(&key));
 
         // A modified `resource` field causes an authentication failure.
-        let mut msg_clone = msg.clone();
-        msg_clone.resource.0 += 1;
-        assert!(!msg_clone.check_auth_ok_no_challenge(&key));
+        let mut msg = make_knock();
+        msg.resource.0 += 1;
+        assert!(!msg.check_auth_ok_no_challenge(&key));
 
         // A modified `salt` field causes an authentication failure.
-        let mut msg_clone = msg.clone();
-        msg_clone.salt[4] = 0;
-        assert!(!msg_clone.check_auth_ok_no_challenge(&key));
+        let mut msg = make_knock();
+        msg.salt[4] = 0;
+        assert!(!msg.check_auth_ok_no_challenge(&key));
 
         // A modified `auth` field causes an authentication failure.
-        let mut msg_clone = msg.clone();
-        msg_clone.auth[20] = 0;
-        assert!(!msg_clone.check_auth_ok_no_challenge(&key));
+        let mut msg = make_knock();
+        msg.auth[20] = 0;
+        assert!(!msg.check_auth_ok_no_challenge(&key));
     }
 
     #[test]
     fn test_msg_challenge_response() {
         let key = [0x6B; 32];
 
+        let make_challenge = || -> Message {
+            let mut challenge =
+                Message::new(Operation::Challenge, 0x280D04F3.into(), 0xE2EE7397.into());
+            assert_ne!(challenge.salt, [0; 8]);
+            challenge.salt = [0x91; 8]; // override random salt
+            challenge.generate_challenge();
+            assert_ne!(challenge.auth, [0; 32]);
+            challenge.auth = [0xB8; 32]; // override random challenge
+            challenge
+        };
+
+        let make_response = || -> Message {
+            let challenge = make_challenge();
+            let mut response =
+                Message::new(Operation::Response, challenge.user(), challenge.resource());
+            assert_ne!(response.salt, [0; 8]);
+            response.salt = [0x62; 8]; // override random salt
+            response.generate_auth(&key, challenge);
+            response
+        };
+
         // Create a challenge.
-        let mut challenge =
-            Message::new(Operation::Challenge, 0x280D04F3.into(), 0xE2EE7397.into());
-        assert_ne!(challenge.salt, [0; 8]);
-        challenge.salt = [0x91; 8]; // override random salt
-        challenge.generate_challenge();
+        let challenge = make_challenge();
         assert_eq!(challenge.operation(), Operation::Challenge);
         assert_eq!(challenge.user(), 0x280D04F3.into());
         assert_eq!(challenge.resource(), 0xE2EE7397.into());
-        assert_ne!(challenge.auth, [0; 32]);
-        challenge.auth = [0xB8; 32]; // override random challenge
         check_ser_de(&challenge);
 
         // Create a response and authenticate it against the challenge.
-        let mut response =
-            Message::new(Operation::Response, challenge.user(), challenge.resource());
-        assert_ne!(response.salt, [0; 8]);
-        response.salt = [0x62; 8]; // override salt
-        response.generate_auth(&key, challenge.clone());
+        let challenge = make_challenge();
+        let response = make_response();
         assert_eq!(response.operation(), Operation::Response);
         assert_eq!(response.user(), 0x280D04F3.into());
         assert_eq!(response.resource(), 0xE2EE7397.into());
@@ -562,33 +579,38 @@ mod tests {
                 148, 235, 110, 140, 84, 128, 141, 33, 147, 29, 235, 185, 202, 42
             ]
         );
-        assert!(response.check_auth_ok(&key, challenge.clone()));
+        assert!(response.check_auth_ok(&key, challenge));
         check_ser_de(&response);
 
         // A modified `operation` field causes an authentication failure.
-        let mut msg_clone = response.clone();
-        msg_clone.operation = Operation::Knock;
-        assert!(!msg_clone.check_auth_ok(&key, challenge.clone()));
+        let challenge = make_challenge();
+        let mut msg = make_response();
+        msg.operation = Operation::Knock;
+        assert!(!msg.check_auth_ok(&key, challenge));
 
         // A modified `user` field causes an authentication failure.
-        let mut msg_clone = response.clone();
-        msg_clone.user.0 += 1;
-        assert!(!msg_clone.check_auth_ok(&key, challenge.clone()));
+        let challenge = make_challenge();
+        let mut msg = make_response();
+        msg.user.0 += 1;
+        assert!(!msg.check_auth_ok(&key, challenge));
 
         // A modified `resource` field causes an authentication failure.
-        let mut msg_clone = response.clone();
-        msg_clone.resource.0 += 1;
-        assert!(!msg_clone.check_auth_ok(&key, challenge.clone()));
+        let challenge = make_challenge();
+        let mut msg = make_response();
+        msg.resource.0 += 1;
+        assert!(!msg.check_auth_ok(&key, challenge));
 
         // A modified `salt` field causes an authentication failure.
-        let mut msg_clone = response.clone();
-        msg_clone.salt[4] = 0;
-        assert!(!msg_clone.check_auth_ok(&key, challenge.clone()));
+        let challenge = make_challenge();
+        let mut msg = make_response();
+        msg.salt[4] = 0;
+        assert!(!msg.check_auth_ok(&key, challenge));
 
         // A modified `auth` field causes an authentication failure.
-        let mut msg_clone = response.clone();
-        msg_clone.auth[20] = 0;
-        assert!(!msg_clone.check_auth_ok(&key, challenge.clone()));
+        let challenge = make_challenge();
+        let mut msg = make_response();
+        msg.auth[20] = 0;
+        assert!(!msg.check_auth_ok(&key, challenge));
     }
 
     #[test]

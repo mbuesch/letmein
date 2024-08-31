@@ -16,7 +16,7 @@ use tokio::net::{TcpListener, TcpStream};
 pub trait ConnectionOps {
     fn addr(&self) -> SocketAddr;
     async fn recv_msg(&mut self) -> ah::Result<Option<Message>>;
-    async fn send_msg(&mut self, msg: Message) -> ah::Result<()>;
+    async fn send_msg(&mut self, msg: &Message) -> ah::Result<()>;
 }
 
 pub struct Connection {
@@ -39,7 +39,7 @@ impl ConnectionOps for Connection {
         Message::recv(&mut self.stream).await
     }
 
-    async fn send_msg(&mut self, msg: Message) -> ah::Result<()> {
+    async fn send_msg(&mut self, msg: &Message) -> ah::Result<()> {
         msg.send(&mut self.stream).await
     }
 }

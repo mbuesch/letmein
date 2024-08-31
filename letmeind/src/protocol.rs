@@ -59,12 +59,12 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         }
     }
 
-    async fn send_msg(&mut self, msg: Message) -> ah::Result<()> {
+    async fn send_msg(&mut self, msg: &Message) -> ah::Result<()> {
         self.conn.send_msg(msg).await
     }
 
     async fn send_go_away(&mut self) -> ah::Result<()> {
-        self.send_msg(Message::new(
+        self.send_msg(&Message::new(
             Operation::GoAway,
             self.user_id.unwrap_or(u32::MAX.into()),
             self.resource_id.unwrap_or(u32::MAX.into()),
@@ -115,7 +115,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         // Generate and send a challenge.
         let mut challenge = Message::new(Operation::Challenge, user_id, resource_id);
         challenge.generate_challenge();
-        self.send_msg(challenge.clone()).await?;
+        self.send_msg(&challenge).await?;
 
         // Receive the response.
         let response = self.recv_msg(Operation::Response).await?;
@@ -148,7 +148,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Send a come-in message.
         let comein = Message::new(Operation::ComeIn, user_id, resource_id);
-        self.send_msg(comein).await?;
+        self.send_msg(&comein).await?;
 
         Ok(())
     }
