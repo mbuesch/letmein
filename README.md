@@ -150,69 +150,9 @@ The main design goals of letmein are:
   - libdl.so (Android only)
   - libarmmem-*.so (Raspberry Pi only)
 
-## Security analysis
+# Security
 
-The program has carefully been designed to be secure, to the best of my knowledge.
-
-However, nobody is infallible.
-
-- Please read the code and comment on it.
-- Feel free to open an issue, if you have questions, suggestions or requests.
-- Please discuss the pros and cons of the design decisions.
-
-I am interested to hear your opinion.
-
-If you found a security vulnerability, see [the vulnerability reporting process](SECURITY.md) for how to proceed.
-
-### Known weaknesses
-
-There are a couple of known weaknesses that exist in letmein.
-In this paragraph we discuss why these weaknesses exist.
-
-These weaknesses are not addressed by the design of letmein to make the design simpler.
-It is a tradeoff between a simple design and a weakness that doesn't practically impact security.
-
-It is believed that these weaknesses do **not** make letmein insecure in practical use.
-The simple design is supposed to reduce the attack surface and as such improve security.
-
-- **weakness**: The user identifiers and resource identifiers from the configurations are transmitted in plain text over the network.
-  - **rationale**: The user identifiers and resource identifiers shall not include private or secret information.
-
-- **weakness**: The first `Knock` packet is not protected against a replay attack.
-  - **rationale**: It is true that the `Knock` packet can successfully be replayed by an attacker.
-  But that doesn't mean much.
-  The attacker will still not be able to successfully solve the `Challenge`.
-  The authentication of the `Knock` is only in place, because it's easy to implement in the given design and it stops port knocks that don't have a key at all early.
-
-- **weakness**: After a successful knock sequence from legitimate user an [MiM attacker](https://en.wikipedia.org/wiki/Man-in-the-middle_attack) can use the knocked-open port, if she is able to use the same sender-IP-address as the legitimate user.
-  - **rationale**: letmein only authenticates what happens during the knock sequence.
-  What happens after the knock sequence once the firewall is opened for an IP address is completely out of scope of letmein.
-  However, there is a time limit for how long the port is kept open after a successful knock sequence.
-  After the knock sequence has been completed, there is only a limited amount of time an MiM could use it.
-
-- **weakness**: If you knock a port open from behind a [NAT](https://en.wikipedia.org/wiki/Network_address_translation), then the port will be opened for the whole NATed network, because from the outside the NATed network has only one IP address.
-  Everybody from within the NATed network will be able to access the knocked-open port.
-  - **rationale**: The port is only open for a short and limited amount of time and there is supposed to be a second layer of security (see 2FA discussion below).
-  While it's an unfortunate fact that the port will be open for the whole NATed network, this is still much better than having it open for the whole internet (without port knocker).
-
-- **weakness**: The authentication key is a shared secret that is stored in plain text on the server and on the client.
-  - **rationale**: It is true that an attacker that can successfully take over a server or client can steal the keys and authenticate future sessions.
-  This is a tradeoff between implementing complicated public-private-key cryptography, the overall goal of what letmein is supposed to protect and simplicity of the design.
-  letmein is **not** supposed to protect otherwise unprotected services.
-  It is only supposed to be an *additional* barrier of security in an already secure system.
-  Think of this as [2FA](https://en.wikipedia.org/wiki/Multi-factor_authentication).
-  If an attacker could gain access to the letmein keys there are two scenarios:
-  Either there is a second barrier of security (e.g. ssh server login) or all bets are lost anyway, because the attacker has full access already anyway.
-
-- **weakness**: All users that can successfully authenticate to letmein can start to attack the protected service.
-  - **rationale**: Yes, this is pretty much impossible to prevent.
-  Letmein is supposed to prevent pre-authentication attacks.
-  But it is possible to restrict users to certain ports.
-  So that users can only authenticate with resources that they are explicitly allowed to in the server configuration.
-
-- **weakness**: The wire protocol does not have mechanisms for future changes and updates.
-  - **rationale**: While this makes updating to a new protocol version harder, it improves security by simplification of the design.
-  It is not expected that there will be many incompatible protocol changes in the future.
+For more information about security and reporting vulnerabilities, please see the [security documentation](SECURITY.md) of letmein.
 
 # License
 
