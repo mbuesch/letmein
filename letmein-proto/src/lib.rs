@@ -178,6 +178,12 @@ impl TryFrom<u32> for Operation {
     }
 }
 
+impl From<Operation> for u32 {
+    fn from(operation: Operation) -> u32 {
+        operation as _
+    }
+}
+
 /// letmeind message size, in bytes.
 /// All message types have the same size.
 pub const MSG_SIZE: usize = 4 + 4 + 4 + 4 + SALT_SIZE + AUTH_SIZE;
@@ -245,12 +251,13 @@ impl Message {
         assert_eq!(shared_key.len(), KEY_SIZE);
         assert_eq!(challenge.len(), AUTH_SIZE);
 
+        let operation: u32 = self.operation.into();
         let user: u32 = self.user.into();
         let resource: u32 = self.resource.into();
 
         let mut mac = Hmac::<Sha3_256>::new_from_slice(shared_key)
             .expect("HMAC<SHA3-256> initialization failed");
-        mac.update(&(self.operation as u32).to_be_bytes());
+        mac.update(&operation.to_be_bytes());
         mac.update(&user.to_be_bytes());
         mac.update(&resource.to_be_bytes());
         mac.update(&self.salt);
@@ -328,7 +335,7 @@ impl Message {
 
         let mut buf = [0; MSG_SIZE];
         serialize_u32(&mut buf[MSG_OFFS_MAGIC..], self.magic);
-        serialize_u32(&mut buf[MSG_OFFS_OPERATION..], self.operation as u32);
+        serialize_u32(&mut buf[MSG_OFFS_OPERATION..], self.operation.into());
         serialize_u32(&mut buf[MSG_OFFS_USER..], self.user.into());
         serialize_u32(&mut buf[MSG_OFFS_RESOURCE..], self.resource.into());
         buf[MSG_OFFS_SALT..MSG_OFFS_SALT + SALT_SIZE].copy_from_slice(&self.salt);
