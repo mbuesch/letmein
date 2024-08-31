@@ -78,7 +78,7 @@ const FWMSG_OFFS_PORT: usize = 2;
 const FWMSG_OFFS_ADDR: usize = 4;
 
 /// A message to control the firewall.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct FirewallMessage {
     operation: FirewallOperation,
     port: u16,

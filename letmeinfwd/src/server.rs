@@ -67,7 +67,7 @@ impl FirewallConnection {
         FirewallMessage::recv(&mut self.stream).await
     }
 
-    async fn send_msg(&mut self, msg: FirewallMessage) -> ah::Result<()> {
+    async fn send_msg(&mut self, msg: &FirewallMessage) -> ah::Result<()> {
         msg.send(&mut self.stream).await
     }
 
@@ -84,19 +84,19 @@ impl FirewallConnection {
             FirewallOperation::OpenV4 | FirewallOperation::OpenV6 => {
                 // Get the address from the socket message.
                 let Some(addr) = msg.addr() else {
-                    self.send_msg(FirewallMessage::new_nack()).await?;
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
                     return Err(err!("No addr."));
                 };
 
                 // Check if addr is valid.
                 if !addr_check(&addr) {
-                    self.send_msg(FirewallMessage::new_nack()).await?;
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
                     return Err(err!("Invalid addr."));
                 }
 
                 // Get the port from the socket message.
                 let Some(port) = msg.port() else {
-                    self.send_msg(FirewallMessage::new_nack()).await?;
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
                     return Err(err!("No port."));
                 };
 
@@ -104,7 +104,7 @@ impl FirewallConnection {
                 if conf.resource_id_by_port(port, None).is_none() {
                     // Whoops, letmeind should never send us a request for an
                     // unconfigured port. Did some other process write to the unix socket?
-                    self.send_msg(FirewallMessage::new_nack()).await?;
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
                     return Err(err!("The port {port} is not configured in letmeind.conf."));
                 }
 
@@ -115,9 +115,9 @@ impl FirewallConnection {
                 };
 
                 if ok {
-                    self.send_msg(FirewallMessage::new_ack()).await?;
+                    self.send_msg(&FirewallMessage::new_ack()).await?;
                 } else {
-                    self.send_msg(FirewallMessage::new_nack()).await?;
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
                 }
             }
             FirewallOperation::Ack | FirewallOperation::Nack => {
