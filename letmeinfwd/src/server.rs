@@ -108,6 +108,14 @@ impl FirewallConnection {
                     return Err(err!("The port {port} is not configured in letmeind.conf."));
                 }
 
+                // Don't allow letmein to manage its own control port.
+                if port == conf.port() {
+                    // Whoops, letmeind should never send us a request for the
+                    // control port. Did some other process write to the unix socket?
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
+                    return Err(err!("The knocked port {port} is the letmein control port."));
+                }
+
                 // Open the firewall.
                 let ok = {
                     let mut fw = fw.lock().await;

@@ -102,11 +102,21 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Check if the authenticating user is allowed to access this resource.
         match resource {
-            Resource::Port { .. } => {
+            Resource::Port { port, users: _ } => {
+                // Check the mapped user on the resource.
                 if !resource.contains_user(user_id) {
                     let _ = self.send_go_away().await;
                     return Err(err!(
                         "Resource {resource_id} not allowed for user {user_id}"
+                    ));
+                }
+                // The control port is never allowed.
+                let control_port = self.conf.port();
+                if *port == control_port {
+                    let _ = self.send_go_away().await;
+                    return Err(err!(
+                        "Incorrect configuration: The resource {resource_id} uses the \
+                         letmein control port {control_port}. That is not allowed."
                     ));
                 }
             }
