@@ -13,6 +13,7 @@ use anyhow as ah;
 use std::{collections::HashMap, net::IpAddr, time::Instant};
 
 /// Dynamic port/address lease.
+#[derive(Clone)]
 struct Lease {
     addr: IpAddr,
     port: u16,
@@ -22,6 +23,8 @@ struct Lease {
 impl Lease {
     /// Create a new lease with maximum timeout.
     pub fn new(conf: &ConfigRef<'_>, addr: IpAddr, port: u16) -> Self {
+        // The upper layers must never give us a lease request for the control port.
+        assert_ne!(port, conf.port());
         let timeout = Instant::now() + conf.nft_timeout();
         Self {
             addr,
@@ -51,6 +54,12 @@ impl Lease {
     }
 }
 
+impl std::fmt::Display for Lease {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "Lease(addr={}, port={})", self.addr(), self.port())
+    }
+}
+
 /// Key in the lease map.
 type LeaseId = (IpAddr, u16);
 
@@ -58,19 +67,24 @@ type LeaseId = (IpAddr, u16);
 type LeaseMap = HashMap<LeaseId, Lease>;
 
 /// Prune (remove) all leases that have timed out.
-fn prune_all_lease_timeouts(conf: &ConfigRef<'_>, leases: &mut LeaseMap) {
+///
+/// Returns a `Vec` of pruned [Lease]s.
+/// If no lease timed out, an empty `Vec` is returned.
+#[must_use]
+fn prune_all_lease_timeouts(conf: &ConfigRef<'_>, leases: &mut LeaseMap) -> Vec<Lease> {
+    let mut pruned = vec![];
     let now = Instant::now();
     leases.retain(|_, lease| {
         let timed_out = lease.is_timed_out(now);
-        if timed_out && conf.debug() {
-            println!(
-                "firewall: Lease saddr={}, dport={} timed out",
-                lease.addr(),
-                lease.port()
-            );
+        if timed_out {
+            pruned.push(lease.clone());
+            if conf.debug() {
+                println!("firewall: {lease} timed out");
+            }
         }
         !timed_out
     });
+    pruned
 }
 
 /// Firewall maintenance operations.
