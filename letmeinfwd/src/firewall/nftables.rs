@@ -86,7 +86,7 @@ fn rule_comment(lease: Option<&Lease>) -> String {
 
 /// Generate a nftables add-rule for this lease.
 /// This rule will open the port for the IP address.
-fn gen_add_lease_rule(conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<NfListObject> {
+fn gen_add_lease_cmd(conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<NfCmd> {
     let family = family_from_str(conf.nft_family())?;
     let table = conf.nft_table();
     let chain_input = conf.nft_chain_input();
@@ -105,7 +105,7 @@ fn gen_add_lease_rule(conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<NfListO
     if conf.debug() {
         println!("nftables: Adding rule for {lease}");
     }
-    Ok(NfListObject::Rule(rule))
+    Ok(NfCmd::Add(NfListObject::Rule(rule)))
 }
 
 struct ListedRuleset {
@@ -157,11 +157,7 @@ impl ListedRuleset {
 
     /// Generate a nftables delete-rule for this lease.
     /// This rule will close the port for the IP address.
-    pub fn gen_delete_lease_rule(
-        &self,
-        conf: &ConfigRef<'_>,
-        lease: &Lease,
-    ) -> ah::Result<NfListObject> {
+    pub fn gen_delete_lease_cmd(&self, conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<NfCmd> {
         let family = family_from_str(conf.nft_family())?;
         let table = conf.nft_table();
         let chain_input = conf.nft_chain_input();
@@ -171,7 +167,7 @@ impl ListedRuleset {
         if conf.debug() {
             println!("nftables: Deleting rule for {lease}");
         }
-        Ok(NfListObject::Rule(rule))
+        Ok(NfCmd::Delete(NfListObject::Rule(rule)))
     }
 }
 
@@ -244,7 +240,7 @@ impl NftFirewall {
 
         // Open all lease ports, restricted to the peer addresses.
         for lease in self.leases.values() {
-            batch.add(gen_add_lease_rule(conf, lease)?);
+            batch.add_cmd(gen_add_lease_cmd(conf, lease)?);
         }
 
         // Apply all batch commands to the kernel.
@@ -255,7 +251,7 @@ impl NftFirewall {
     fn nftables_add_lease(&mut self, conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<()> {
         // Open the lease port, restricted to the peer address.
         let mut batch = Batch::new();
-        batch.add(gen_add_lease_rule(conf, lease)?);
+        batch.add_cmd(gen_add_lease_cmd(conf, lease)?);
 
         // Apply all batch commands to the kernel.
         self.nftables_apply_batch(conf, batch)
@@ -270,7 +266,7 @@ impl NftFirewall {
             // Add delete commands to remove the lease ports.
             let mut batch = Batch::new();
             for lease in leases {
-                batch.delete(ruleset.gen_delete_lease_rule(conf, lease)?);
+                batch.add_cmd(ruleset.gen_delete_lease_cmd(conf, lease)?);
             }
 
             // Apply all batch commands to the kernel.
