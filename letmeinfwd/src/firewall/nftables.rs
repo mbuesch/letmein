@@ -75,7 +75,7 @@ fn statement_accept() -> Statement {
 
 /// Comment string for a `Rule`.
 /// It can be used as unique identifier for lease rules.
-fn rule_comment(lease: Option<&Lease>) -> String {
+fn gen_rule_comment(lease: Option<&Lease>) -> String {
     const BASE: &str = "GENERATED/letmein";
     if let Some(lease) = lease {
         format!("[{}]:{}/{}", lease.addr(), lease.port(), BASE)
@@ -101,7 +101,7 @@ fn gen_add_lease_cmd(conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<NfCmd> {
             statement_accept(),
         ],
     );
-    rule.comment = Some(rule_comment(Some(lease)));
+    rule.comment = Some(gen_rule_comment(Some(lease)));
     if conf.debug() {
         println!("nftables: Adding rule for {lease}");
     }
@@ -115,14 +115,17 @@ struct ListedRuleset {
 impl ListedRuleset {
     /// Get the active ruleset from the kernel.
     pub fn from_kernel() -> ah::Result<Self> {
-        let ruleset = get_current_ruleset(None, None)?;
+        let ruleset = get_current_ruleset(
+            None, // program
+            None, // args
+        )?;
         Ok(Self {
             objs: ruleset.objects,
         })
     }
 
     /// Get the nftables handle corresponding to the lease.
-    /// The rule_comment is the main identifier.
+    /// The rule's comment is the main identifier.
     fn find_handle(
         &self,
         family: NfFamily,
@@ -130,7 +133,7 @@ impl ListedRuleset {
         chain_input: &str,
         lease: &Lease,
     ) -> ah::Result<u32> {
-        let comment = rule_comment(Some(lease));
+        let comment = gen_rule_comment(Some(lease));
         for obj in &self.objs {
             match obj {
                 NfObject::ListObject(NfListObject::Rule(Rule {
@@ -189,7 +192,12 @@ impl NftFirewall {
     /// Apply a rules batch to the kernel.
     fn nftables_apply_batch(&self, conf: &ConfigRef<'_>, batch: Batch) -> ah::Result<()> {
         let ruleset = batch.to_nftables();
-        apply_ruleset(&ruleset, None, None).context("Apply nftables")?;
+        apply_ruleset(
+            &ruleset, // rules
+            None,     // program
+            None,     // args
+        )
+        .context("Apply nftables")?;
         if conf.debug() {
             println!(
                 "nftables: A total of {} rules is installed.",
@@ -211,12 +219,12 @@ impl NftFirewall {
         batch.add_cmd(NfCmd::Flush(FlushObject::Chain(Chain::new(
             family,
             table.to_string(),
-            chain_input.to_string(),
-            None,
-            None,
-            None,
-            None,
-            None,
+            chain_input.to_string(), // name
+            None,                    // _type
+            None,                    // hook
+            None,                    // prio
+            None,                    // dev
+            None,                    // policy
         ))));
         if conf.debug() {
             println!("nftables: Chain flushed");
@@ -229,8 +237,8 @@ impl NftFirewall {
             chain_input.to_string(),
             vec![statement_match_dport(conf.port()), statement_accept()],
         );
-        rule.comment = Some(rule_comment(None));
-        batch.add(NfListObject::Rule(rule));
+        rule.comment = Some(gen_rule_comment(None));
+        batch.add_cmd(NfCmd::Add(NfListObject::Rule(rule)));
         if conf.debug() {
             println!(
                 "nftables: Adding control port rule for port={}",
