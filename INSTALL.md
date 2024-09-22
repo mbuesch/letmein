@@ -23,6 +23,18 @@ On Debian please install the `nftables` package:
 apt install nftables
 ```
 
+## Downloading letmein
+
+Either download the release source tarball and gpg signature from
+[the official release directory](https://bues.ch/releases/letmein/)
+
+or download the release source code from the
+[Github Release section](https://github.com/mbuesch/letmein/releases)
+
+or clone the
+[git repository](https://github.com/mbuesch/letmein)
+to get the latest development version.
+
 ## Building letmein
 
 Run the `build.sh` script to build letmein.
