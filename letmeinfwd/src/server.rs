@@ -108,7 +108,7 @@ impl FirewallConnection {
                     return Err(err!("The port {port} is not configured in letmeind.conf."));
                 }
 
-                // Don't allow letmein to manage its own control port.
+                // Don't allow the user to manage the control port.
                 if port == conf.port() {
                     // Whoops, letmeind should never send us a request for the
                     // control port. Did some other process write to the unix socket?
