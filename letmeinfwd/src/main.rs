@@ -15,7 +15,7 @@ mod firewall;
 mod server;
 
 use crate::{
-    firewall::{nftables::NftFirewall, FirewallMaintain},
+    firewall::{nftables::NftFirewall, FirewallMaintain as _},
     server::FirewallServer,
 };
 use anyhow::{self as ah, format_err as err, Context as _};

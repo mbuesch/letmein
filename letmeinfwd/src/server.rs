@@ -6,10 +6,7 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{
-    firewall::{FirewallMaintain, FirewallOpen},
-    set_owner_mode, ConfigRef, LETMEIND_GID, LETMEIND_UID,
-};
+use crate::{firewall::FirewallOpen, set_owner_mode, ConfigRef, LETMEIND_GID, LETMEIND_UID};
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
 use letmein_systemd::{systemd_notify_ready, unix_from_systemd};
@@ -75,7 +72,7 @@ impl FirewallConnection {
     pub async fn handle_message(
         &mut self,
         conf: &ConfigRef<'_>,
-        fw: Arc<Mutex<impl FirewallMaintain + FirewallOpen>>,
+        fw: Arc<Mutex<impl FirewallOpen>>,
     ) -> ah::Result<()> {
         let Some(msg) = self.recv_msg().await? else {
             return Err(err!("Disconnected."));
