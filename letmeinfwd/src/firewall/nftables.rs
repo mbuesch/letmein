@@ -21,12 +21,39 @@ use nftables::{
 };
 use std::net::IpAddr;
 
-fn family_from_str(family: &str) -> ah::Result<NfFamily> {
-    match family {
-        "inet" => Ok(NfFamily::INet),
-        "ip" => Ok(NfFamily::IP),
-        "ip6" => Ok(NfFamily::IP6),
-        fam => Err(err!("Unknown nftables family: {fam}")),
+struct NftNames<'a> {
+    family: NfFamily,
+    table: &'a str,
+    chain_input: &'a str,
+}
+
+impl<'a> NftNames<'a> {
+    fn get(conf: &'a ConfigRef<'_>) -> ah::Result<Self> {
+        let family = match conf.nft_family() {
+            "inet" => NfFamily::INet,
+            "ip" => NfFamily::IP,
+            "ip6" => NfFamily::IP6,
+            fam => {
+                return Err(err!("Unknown nftables family: {fam}"));
+            }
+        };
+        let table = match conf.nft_table() {
+            "" => {
+                return Err(err!("nftables table not specified."));
+            }
+            table => table,
+        };
+        let chain_input = match conf.nft_chain_input() {
+            "" => {
+                return Err(err!("nftables chain-input not specified."));
+            }
+            table => table,
+        };
+        Ok(NftNames {
+            family,
+            table,
+            chain_input,
+        })
     }
 }
 
@@ -87,14 +114,11 @@ fn gen_rule_comment(lease: Option<&Lease>) -> String {
 /// Generate a nftables add-rule for this lease.
 /// This rule will open the port for the IP address.
 fn gen_add_lease_cmd(conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<NfCmd> {
-    let family = family_from_str(conf.nft_family())?;
-    let table = conf.nft_table();
-    let chain_input = conf.nft_chain_input();
-
+    let names = NftNames::get(conf).context("Read configuration")?;
     let mut rule = Rule::new(
-        family,
-        table.to_string(),
-        chain_input.to_string(),
+        names.family,
+        names.table.to_string(),
+        names.chain_input.to_string(),
         vec![
             statement_match_saddr(lease.addr()),
             statement_match_dport(lease.port()),
@@ -161,12 +185,15 @@ impl ListedRuleset {
     /// Generate a nftables delete-rule for this lease.
     /// This rule will close the port for the IP address.
     pub fn gen_delete_lease_cmd(&self, conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<NfCmd> {
-        let family = family_from_str(conf.nft_family())?;
-        let table = conf.nft_table();
-        let chain_input = conf.nft_chain_input();
-
-        let mut rule = Rule::new(family, table.to_string(), chain_input.to_string(), vec![]);
-        rule.handle = Some(self.find_handle(family, table, chain_input, lease)?);
+        let names = NftNames::get(conf).context("Read configuration")?;
+        let mut rule = Rule::new(
+            names.family,
+            names.table.to_string(),
+            names.chain_input.to_string(),
+            vec![],
+        );
+        rule.handle =
+            Some(self.find_handle(names.family, names.table, names.chain_input, lease)?);
         if conf.debug() {
             println!("nftables: Deleting rule for {lease}");
         }
@@ -209,22 +236,20 @@ impl NftFirewall {
 
     /// Generate all nftables rules and apply them to the kernel after flushing the chain.
     fn nftables_full_rebuild(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
-        let family = family_from_str(conf.nft_family())?;
-        let table = conf.nft_table();
-        let chain_input = conf.nft_chain_input();
+        let names = NftNames::get(conf).context("Read configuration")?;
 
         let mut batch = Batch::new();
 
         // Remove all rules from our chain.
         batch.add_cmd(NfCmd::Flush(FlushObject::Chain(Chain::new(
-            family,
-            table.to_string(),
-            chain_input.to_string(), // name
-            None,                    // _type
-            None,                    // hook
-            None,                    // prio
-            None,                    // dev
-            None,                    // policy
+            names.family,
+            names.table.to_string(),
+            names.chain_input.to_string(), // name
+            None,                          // _type
+            None,                          // hook
+            None,                          // prio
+            None,                          // dev
+            None,                          // policy
         ))));
         if conf.debug() {
             println!("nftables: Chain flushed");
@@ -232,9 +257,9 @@ impl NftFirewall {
 
         // Open the port letmeind is listening on.
         let mut rule = Rule::new(
-            family,
-            table.to_string(),
-            chain_input.to_string(),
+            names.family,
+            names.table.to_string(),
+            names.chain_input.to_string(),
             vec![statement_match_dport(conf.port()), statement_accept()],
         );
         rule.comment = Some(gen_rule_comment(None));
