@@ -209,6 +209,16 @@ impl NftFirewall {
     /// Create a new firewall handler instance.
     /// This will also remove all rules from the kernel.
     pub async fn new(conf: &ConfigRef<'_>) -> ah::Result<Self> {
+        // Test if the `nft` binary is available.
+        if let Err(e) = std::process::Command::new("nft").args(["--help"]).output() {
+            return Err(err!(
+                "Failed to execute the 'nft' program.\n\
+                Did you install the 'nftables' support package in your distribution's package manager?\n\
+                Is the 'nft' binary available in the $PATH?\n\
+                The execution error was: {e}"
+            ));
+        }
+
         let mut this = Self {
             leases: LeaseMap::new(),
         };
