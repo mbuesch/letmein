@@ -16,7 +16,7 @@ keywords = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-clap = { workspace = true, features = [ "derive" ] }
+clap = { workspace = true }
 letmein-conf = { workspace = true }
 letmein-fwproto = { workspace = true }
 letmein-proto = { workspace = true }
