@@ -78,7 +78,9 @@ This section holds a table of user identifiers with their corresponding secret s
 
 There is an arbitrary amount of options of the following style in this section:
 
-`USER = KEY`
+```
+USER = KEY
+```
 
 Where the `USER` is a 32 bit hexadecimal number and the `KEY` is a 256 bit hexadecimal number.
 
@@ -96,17 +98,46 @@ Modifying the generated key is discouraged.
 Humans are bad at creating random keys.
 Please do not try to manually create your own key by typing it down or modifying an existing key.
 Doing so will probably result in an extremely low quality key.
+The KEY is **not** transmitted in clear text over the network.
+A secure [HMAC](https://en.wikipedia.org/wiki/HMAC) algorithm is used instead.
 
 The key is a shared secret between the client(s) and the server.
 Only the server and the client(s) shall have knowledge of the key.
 
 The key is what authenticates the user to the server.
 Therefore, it is important that the key is kept secret at both the client end and the server end.
-Possession of the key is what authenticates the peers.
+Possession of the key is what authenticates the client to the server.
+
+If a client wants to knock a port open on a server, the client and the server must share the same `USER = KEY` entry.
+This configuration entry is what essentially authorizes the client to knock a port open on the server.
 
 ## `[RESOURCES]`
 
-TODO
+This section holds a table of knock-able ports.
+
+There is an arbitrary amount of options of the following style in this section:
+
+```
+ID = port: ...
+```
+
+or
+
+```
+ID = port: ... / users: ... , ...
+```
+
+The first variant declares a resource usable by all users.
+
+The second variant declares a resource usable only by a subset of users.
+
+TODO describe ID
+
+TODO describe port
+
+TODO describe users
+
+If a client wants to knock a port open on a server, the client and the server must share a compatible resource entry for the port.
 
 # Server specific configuration parts
 
