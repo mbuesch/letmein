@@ -74,7 +74,35 @@ This option defaults to `seccomp=off`, if it is absent from the configuration.
 
 ## `[KEYS]`
 
-TODO
+This section holds a table of user identifiers with their corresponding secret shared keys.
+
+There is an arbitrary amount of options of the following style in this section:
+
+`USER = KEY`
+
+Where the `USER` is a 32 bit hexadecimal number and the `KEY` is a 256 bit hexadecimal number.
+
+The `USER` can be any 32 bit hexadecimal number.
+It's up to the administrator to choose a number.
+It is just an identifier to identify the user.
+There isn't any other meaning to this value.
+Please note that the user identifier is transmitted in clear text (unencrypted) over the network.
+Therefore, the user identifier shall not be considered to be secret.
+Please pick any number that makes sense for your environment, but ensure that it is not secret.
+
+The `KEY` is a secure random 256 bit shared key.
+The key shall be generated with the `letmein gen-key` command to generate a truly random and secure unique key.
+Modifying the generated key is discouraged.
+Humans are bad at creating random keys.
+Please do not try to manually create your own key by typing it down or modifying an existing key.
+Doing so will probably result in an extremely low quality key.
+
+The key is a shared secret between the client(s) and the server.
+Only the server and the client(s) shall have knowledge of the key.
+
+The key is what authenticates the user to the server.
+Therefore, it is important that the key is kept secret at both the client end and the server end.
+Possession of the key is what authenticates the peers.
 
 ## `[RESOURCES]`
 
