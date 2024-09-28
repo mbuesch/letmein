@@ -24,11 +24,13 @@ The server and client configuration files are very similar and contain common pa
 
 ### `debug`
 
-The `debug` option can have the values `true` or `false.
+The `debug` option can have the values `true` or `false`.
 Setting this option to `true` will enable verbose debug messages to the console and system log (e.g. `journalctl`).
 
 Setting this option to `true` is a good idea, if you are configuring letmein for the first time on a machine.
 It will show you exactly which actions are done to the firewall.
+
+This option defaults to `debug=false`, if it is absent from the configuration.
 
 ### `port`
 
@@ -36,8 +38,16 @@ The `port` option specifies the control port letmein will listen on.
 This is the public internet facing port of the daemon.
 All communication between the client and the server will happen on this port.
 
+On the server this option specifies which port it will listen on.
+
+On the client this option specifies the default port used to connect to the server.
+The user can override the port on the client command line.
+See `letmein knock --help` for more information.
+
 You do *not* have to manually open the firewall for this port.
 Letmein will open this port by itself when it's up and running.
+
+This option defaults to `port=5800`, if it is absent from the configuration.
 
 ### `seccomp`
 
@@ -59,6 +69,8 @@ If you see seccomp warning messages or seccomp kills, please open an [issue](htt
 
 Currently this is a server-only option that only affects the network facing daemon `letmeind`.
 In future seccomp support could be added to `letmeinfwd` and the client, too.
+
+This option defaults to `seccomp=off`, if it is absent from the configuration.
 
 ## `[KEYS]`
 
@@ -82,6 +94,8 @@ If you don't know what this means, please use the example [nftables.conf](nftabl
 
 For more information about the nftables firewall, please see the nftables documentation.
 
+This option has no default and must be specified in the server configuration.
+
 ### `table`
 
 This is the name of the nftables table that contains the chain that letmein should control.
@@ -92,6 +106,8 @@ If you don't know what this means, please use the example [nftables.conf](nftabl
 
 For more information about the nftables firewall, please see the nftables documentation.
 
+This option has no default and must be specified in the server configuration.
+
 ### `chain-input`
 
 This is the name of the nftables chain that letmein should control.
@@ -101,6 +117,8 @@ In the example configuration the table is `chain-input=LETMEIN-INPUT`.
 If you don't know what this means, please use the example [nftables.conf](nftables.conf) that comes with letmein and set this option to the default `chain-input=LETMEIN-INPUT`.
 
 For more information about the nftables firewall, please see the nftables documentation.
+
+This option has no default and must be specified in the server configuration.
 
 ### `timeout`
 
@@ -114,3 +132,5 @@ For most applications the port does only have to be open for the initial connect
 Established connections will stay active when the port is closed.
 
 It is recommended to set this to a small duration of e.g. one minute `timeout=60` or ten minutes `timeout=600`.
+
+This option defaults to `timeout=600`, if it is absent from the configuration.
