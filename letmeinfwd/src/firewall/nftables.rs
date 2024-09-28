@@ -58,18 +58,33 @@ impl<'a> NftNames<'a> {
 }
 
 /// Create an nftables IP source address match statement.
-fn statement_match_saddr(addr: IpAddr) -> Statement {
+fn statement_match_saddr(family: NfFamily, addr: IpAddr) -> ah::Result<Statement> {
     let (protocol, addr) = match addr {
-        IpAddr::V4(addr) => ("ip", addr.to_string()),
+        IpAddr::V4(addr) => match family {
+            NfFamily::INet | NfFamily::IP => ("ip", addr.to_string()),
+            _ => {
+                return Err(err!("IP version not supported by nftables firewall family"));
+            }
+        },
         IpAddr::V6(addr) => {
             if let Some(addr) = addr.to_ipv4_mapped() {
-                ("ip", addr.to_string())
+                match family {
+                    NfFamily::INet | NfFamily::IP => ("ip", addr.to_string()),
+                    _ => {
+                        return Err(err!("IP version not supported by nftables firewall family"));
+                    }
+                }
             } else {
-                ("ip6", addr.to_string())
+                match family {
+                    NfFamily::INet | NfFamily::IP6 => ("ip6", addr.to_string()),
+                    _ => {
+                        return Err(err!("IP version not supported by nftables firewall family"));
+                    }
+                }
             }
         }
     };
-    Statement::Match(Match {
+    Ok(Statement::Match(Match {
         left: Expression::Named(NamedExpression::Payload(Payload::PayloadField(
             PayloadField {
                 protocol: protocol.to_string(),
@@ -78,7 +93,7 @@ fn statement_match_saddr(addr: IpAddr) -> Statement {
         ))),
         right: Expression::String(addr),
         op: Operator::EQ,
-    })
+    }))
 }
 
 /// Create an nftables port match statement.
@@ -120,7 +135,7 @@ fn gen_add_lease_cmd(conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<NfCmd> {
         names.table.to_string(),
         names.chain_input.to_string(),
         vec![
-            statement_match_saddr(lease.addr()),
+            statement_match_saddr(names.family, lease.addr())?,
             statement_match_dport(lease.port()),
             statement_accept(),
         ],
