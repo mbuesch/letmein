@@ -123,6 +123,10 @@ Tested platforms are:
 
 The server application `letmeind` is Linux-only, because it only supports `nftables` as firewall backend.
 
+## Configuration
+
+See the [configuration documentation](CONFIGURATION.md) for detailled information about how to configure the letmein server and client.
+
 ## Security notice: User identifiers and resource identifiers
 
 Please be aware that the user identifiers and resource identifiers from the configuration files are transmitted over the network without encryption in clear text.
