@@ -22,6 +22,5 @@ letmein-systemd = { workspace = true, features = [ "unix" ] }
 libc = { workspace = true }
 nftables = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync", "time" ] }
-user_lookup = { workspace = true, features = [ "sync" ] }
 
 # vim: ts=4 sw=4 expandtab

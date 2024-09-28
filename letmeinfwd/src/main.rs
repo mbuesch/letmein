@@ -13,10 +13,12 @@ std::compile_error!("letmeind server and letmeinfwd do not support non-Linux pla
 
 mod firewall;
 mod server;
+mod uid_gid;
 
 use crate::{
     firewall::{nftables::NftFirewall, FirewallMaintain as _},
     server::FirewallServer,
+    uid_gid::{os_get_gid, os_get_uid},
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
@@ -38,7 +40,6 @@ use tokio::{
     sync::{self, Mutex, RwLock, RwLockReadGuard, Semaphore},
     task, time,
 };
-use user_lookup::sync_reader::{GroupReader, PasswdReader};
 
 const FW_MAINTAIN_PERIOD: Duration = Duration::from_millis(5000);
 
@@ -86,28 +87,6 @@ fn make_run_subdir(rundir: &Path) -> ah::Result<()> {
     )
     .context("Set /run subdirectory owner and mode")?;
     Ok(())
-}
-
-/// Resolve a user name into a UID.
-fn os_get_uid(user_name: &str) -> ah::Result<u32> {
-    let Some(user) = PasswdReader::new(Duration::from_secs(0))
-        .get_by_username(user_name)
-        .context("Get /etc/passwd user")?
-    else {
-        return Err(err!("User '{user_name}' not found in /etc/passwd."));
-    };
-    Ok(user.uid)
-}
-
-/// Resolve a group name into a GID.
-fn os_get_gid(group_name: &str) -> ah::Result<u32> {
-    let Some(group) = GroupReader::new(Duration::from_secs(0))
-        .get_by_name(group_name)
-        .context("Get /etc/group group")?
-    else {
-        return Err(err!("Group '{group_name}' not found in /etc/group."));
-    };
-    Ok(group.gid)
 }
 
 /// Get UIDs and GIDs.

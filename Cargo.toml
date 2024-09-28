@@ -40,7 +40,6 @@ seccompiler = "0.4"
 sha3 = "0.10"
 subtle = "2"
 tokio = "1"
-user_lookup = { version = "0.3", default-features = false }
 
 letmein-conf = { version = "5", path = "./letmein-conf" }
 letmein-fwproto = { version = "5", path = "./letmein-fwproto" }
