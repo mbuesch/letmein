@@ -131,11 +131,24 @@ The first variant declares a resource usable by all users.
 
 The second variant declares a resource usable only by a subset of users.
 
-TODO describe ID
+The `ID` can be any 32 bit hexadecimal number.
+It's up to the administrator to choose a number.
+It is just an identifier to identify the resource.
+There isn't any other meaning to this value.
+Please note that the resource identifier is transmitted in clear text (unencrypted) over the network.
+Therefore, the resource identifier shall not be considered to be secret.
+Please pick any number that makes sense for your environment, but ensure that it is not secret.
 
-TODO describe port
+The `port` is the TCP port number that this resource represents.
+It can be any port number between 0 and 65535.
+When this resource is successfully authenticated from a knocking client, the port number will be opened in the firewall.
+Only ports for which a resource has been configured here are knock-able.
 
-TODO describe users
+A resource can optionally be restricted to one or multiple `users`.
+If the `users` list is not given, then the resource is unrestricted and any successfully authenticated user can knock it open.
+If a `users` list is given, then only these users can knock the port open.
+The `users` list is just a comma separated list of user identifiers.
+See `[KEYS]` section above for more information about user identifiers.
 
 If a client wants to knock a port open on a server, the client and the server must share a compatible resource entry for the port.
 
