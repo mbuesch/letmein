@@ -12,19 +12,65 @@ use crate::ConfigRef;
 use anyhow as ah;
 use std::{collections::HashMap, net::IpAddr, time::Instant};
 
+/// TCP and/or UDP port number.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LeasePort {
+    /// TCP port.
+    Tcp(u16),
+    /// UDP port.
+    Udp(u16),
+    /// TCP + UDP port.
+    TcpUdp(u16),
+}
+
+impl std::fmt::Display for LeasePort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Tcp(p) => write!(f, "{p}/TCP"),
+            Self::Udp(p) => write!(f, "{p}/UDP"),
+            Self::TcpUdp(p) => write!(f, "{p}/TCP+UDP"),
+        }
+    }
+}
+
+/// TCP or UDP port number.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SingleLeasePort {
+    /// TCP port.
+    Tcp(u16),
+    /// UDP port.
+    Udp(u16),
+}
+
+impl std::fmt::Display for SingleLeasePort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Tcp(p) => write!(f, "{p}/TCP"),
+            Self::Udp(p) => write!(f, "{p}/UDP"),
+        }
+    }
+}
+
 /// Dynamic port/address lease.
 #[derive(Clone)]
 struct Lease {
     addr: IpAddr,
-    port: u16,
+    port: LeasePort,
     timeout: Instant,
 }
 
 impl Lease {
     /// Create a new lease with maximum timeout.
-    pub fn new(conf: &ConfigRef<'_>, addr: IpAddr, port: u16) -> Self {
+    pub fn new(conf: &ConfigRef<'_>, addr: IpAddr, port: LeasePort) -> Self {
         // The upper layers must never give us a lease request for the control port.
-        assert_ne!(port, conf.port());
+        assert_ne!(
+            conf.port(),
+            match port {
+                LeasePort::Tcp(p) => p,
+                LeasePort::Udp(p) => p,
+                LeasePort::TcpUdp(p) => p,
+            }
+        );
         let timeout = Instant::now() + conf.nft_timeout();
         Self {
             addr,
@@ -49,7 +95,7 @@ impl Lease {
     }
 
     /// Get the port number of this lease.
-    pub fn port(&self) -> u16 {
+    pub fn port(&self) -> LeasePort {
         self.port
     }
 }
@@ -61,7 +107,7 @@ impl std::fmt::Display for Lease {
 }
 
 /// Key in the lease map.
-type LeaseId = (IpAddr, u16);
+type LeaseId = (IpAddr, LeasePort);
 
 /// A map of [Lease]s.
 type LeaseMap = HashMap<LeaseId, Lease>;
@@ -111,7 +157,7 @@ pub trait FirewallOpen {
         &mut self,
         conf: &ConfigRef<'_>,
         remote_addr: IpAddr,
-        port: u16,
+        port: LeasePort,
     ) -> ah::Result<()>;
 }
 

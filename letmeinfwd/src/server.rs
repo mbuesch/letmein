@@ -6,9 +6,12 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{firewall::FirewallOpen, set_owner_mode, ConfigRef, LETMEIND_GID, LETMEIND_UID};
+use crate::{
+    firewall::{FirewallOpen, LeasePort},
+    set_owner_mode, ConfigRef, LETMEIND_GID, LETMEIND_UID,
+};
 use anyhow::{self as ah, format_err as err, Context as _};
-use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
+use letmein_fwproto::{FirewallMessage, FirewallOperation, PortType, SOCK_FILE};
 use letmein_systemd::{systemd_notify_ready, unix_from_systemd};
 use std::{
     fs::{metadata, remove_file, OpenOptions},
@@ -78,7 +81,7 @@ impl FirewallConnection {
             return Err(err!("Disconnected."));
         };
         match msg.operation() {
-            FirewallOperation::OpenV4 | FirewallOperation::OpenV6 => {
+            FirewallOperation::Open => {
                 // Get the address from the socket message.
                 let Some(addr) = msg.addr() else {
                     self.send_msg(&FirewallMessage::new_nack()).await?;
@@ -92,7 +95,7 @@ impl FirewallConnection {
                 }
 
                 // Get the port from the socket message.
-                let Some(port) = msg.port() else {
+                let Some((port_type, port)) = msg.port() else {
                     self.send_msg(&FirewallMessage::new_nack()).await?;
                     return Err(err!("No port."));
                 };
@@ -113,10 +116,17 @@ impl FirewallConnection {
                     return Err(err!("The knocked port {port} is the letmein control port."));
                 }
 
+                // Convert from protocol port type to lease port type.
+                let lease_port = match port_type {
+                    PortType::Tcp => LeasePort::Tcp(port),
+                    PortType::Udp => LeasePort::Udp(port),
+                    PortType::TcpUdp => LeasePort::TcpUdp(port),
+                };
+
                 // Open the firewall.
                 let ok = {
                     let mut fw = fw.lock().await;
-                    fw.open_port(conf, addr, port).await.is_ok()
+                    fw.open_port(conf, addr, lease_port).await.is_ok()
                 };
 
                 if ok {

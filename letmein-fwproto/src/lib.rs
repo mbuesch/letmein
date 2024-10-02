@@ -25,30 +25,27 @@ use tokio::{io::ErrorKind, net::UnixStream};
 pub const SOCK_FILE: &str = "letmeinfwd.sock";
 
 /// The operation to perform on the firewall.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[repr(u16)]
 pub enum FirewallOperation {
-    /// Open an IPv6 port.
-    OpenV6,
-    /// Open an IPv4 port.
-    OpenV4,
+    /// Not-Acknowledge message.
+    #[default]
+    Nack,
     /// Acknowledge message.
     Ack,
-    /// Not-Acknowledge message.
-    Nack,
+    /// Open a port.
+    Open,
 }
 
 impl TryFrom<u16> for FirewallOperation {
     type Error = ah::Error;
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
-        const OPERATION_OPENV6: u16 = FirewallOperation::OpenV6 as u16;
-        const OPERATION_OPENV4: u16 = FirewallOperation::OpenV4 as u16;
+        const OPERATION_OPEN: u16 = FirewallOperation::Open as u16;
         const OPERATION_ACK: u16 = FirewallOperation::Ack as u16;
         const OPERATION_NACK: u16 = FirewallOperation::Nack as u16;
         match value {
-            OPERATION_OPENV6 => Ok(Self::OpenV6),
-            OPERATION_OPENV4 => Ok(Self::OpenV4),
+            OPERATION_OPEN => Ok(Self::Open),
             OPERATION_ACK => Ok(Self::Ack),
             OPERATION_NACK => Ok(Self::Nack),
             _ => Err(err!("Invalid FirewallMessage/Operation value")),
@@ -62,61 +59,134 @@ impl From<FirewallOperation> for u16 {
     }
 }
 
+/// The type of port to open in the firewall.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[repr(u16)]
+pub enum PortType {
+    /// TCP port only.
+    #[default]
+    Tcp,
+    /// UDP port only.
+    Udp,
+    /// TCP and UDP port.
+    TcpUdp,
+}
+
+impl TryFrom<u16> for PortType {
+    type Error = ah::Error;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        const PORTTYPE_TCP: u16 = PortType::Tcp as u16;
+        const PORTTYPE_UDP: u16 = PortType::Udp as u16;
+        const PORTTYPE_TCPUDP: u16 = PortType::TcpUdp as u16;
+        match value {
+            PORTTYPE_TCP => Ok(Self::Tcp),
+            PORTTYPE_UDP => Ok(Self::Udp),
+            PORTTYPE_TCPUDP => Ok(Self::TcpUdp),
+            _ => Err(err!("Invalid FirewallMessage/PortType value")),
+        }
+    }
+}
+
+impl From<PortType> for u16 {
+    fn from(port_type: PortType) -> u16 {
+        port_type as _
+    }
+}
+
+/// The type of address to open in the firewall.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[repr(u16)]
+pub enum AddrType {
+    /// IPv6 address.
+    #[default]
+    Ipv6,
+    /// IPv4 address.
+    Ipv4,
+}
+
+impl TryFrom<u16> for AddrType {
+    type Error = ah::Error;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        const ADDRTYPE_IPV6: u16 = AddrType::Ipv6 as u16;
+        const ADDRTYPE_IPV4: u16 = AddrType::Ipv4 as u16;
+        match value {
+            ADDRTYPE_IPV6 => Ok(Self::Ipv6),
+            ADDRTYPE_IPV4 => Ok(Self::Ipv4),
+            _ => Err(err!("Invalid FirewallMessage/AddrType value")),
+        }
+    }
+}
+
+impl From<AddrType> for u16 {
+    fn from(addr_type: AddrType) -> u16 {
+        addr_type as _
+    }
+}
+
 /// Size of the `addr` field in the message.
 const ADDR_SIZE: usize = 16;
 
 /// Size of the firewall control message.
-const FWMSG_SIZE: usize = 2 + 2 + ADDR_SIZE;
+const FWMSG_SIZE: usize = 2 + 2 + 2 + 2 + ADDR_SIZE;
 
 /// Byte offset of the `operation` field in the firewall control message.
 const FWMSG_OFFS_OPERATION: usize = 0;
 
+/// Byte offset of the `port_type` field in the firewall control message.
+const FWMSG_OFFS_PORT_TYPE: usize = 2;
+
 /// Byte offset of the `port` field in the firewall control message.
-const FWMSG_OFFS_PORT: usize = 2;
+const FWMSG_OFFS_PORT: usize = 4;
+
+/// Byte offset of the `addr_type` field in the firewall control message.
+const FWMSG_OFFS_ADDR_TYPE: usize = 6;
 
 /// Byte offset of the `addr` field in the firewall control message.
-const FWMSG_OFFS_ADDR: usize = 4;
+const FWMSG_OFFS_ADDR: usize = 8;
 
 /// A message to control the firewall.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Default)]
 pub struct FirewallMessage {
     operation: FirewallOperation,
+    port_type: PortType,
     port: u16,
+    addr_type: AddrType,
     addr: [u8; ADDR_SIZE],
 }
 
 /// Convert an `IpAddr` to the `operation` and `addr` fields of a firewall control message.
-fn addr_to_octets(addr: IpAddr) -> (FirewallOperation, [u8; ADDR_SIZE]) {
+fn addr_to_octets(addr: IpAddr) -> (AddrType, [u8; ADDR_SIZE]) {
     match addr {
         IpAddr::V4(addr) => {
             let o = addr.octets();
             (
-                FirewallOperation::OpenV4,
+                AddrType::Ipv4,
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, o[0], o[1], o[2], o[3]],
             )
         }
-        IpAddr::V6(addr) => (FirewallOperation::OpenV6, addr.octets()),
+        IpAddr::V6(addr) => (AddrType::Ipv6, addr.octets()),
     }
 }
 
 /// Convert a firewall control message `operation` and `addr` fields to an `IpAddr`.
-fn octets_to_addr(operation: FirewallOperation, addr: &[u8; ADDR_SIZE]) -> Option<IpAddr> {
-    match operation {
-        FirewallOperation::OpenV4 => {
-            Some(Ipv4Addr::new(addr[12], addr[13], addr[14], addr[15]).into())
-        }
-        FirewallOperation::OpenV6 => Some((*addr).into()),
-        FirewallOperation::Ack | FirewallOperation::Nack => None,
+fn octets_to_addr(addr_type: AddrType, addr: &[u8; ADDR_SIZE]) -> IpAddr {
+    match addr_type {
+        AddrType::Ipv4 => Ipv4Addr::new(addr[12], addr[13], addr[14], addr[15]).into(),
+        AddrType::Ipv6 => (*addr).into(),
     }
 }
 
 impl FirewallMessage {
     /// Construct a new message that requests installing a firewall-port-open rule.
-    pub fn new_open(addr: IpAddr, port: u16) -> Self {
-        let (operation, addr) = addr_to_octets(addr);
+    pub fn new_open(addr: IpAddr, port_type: PortType, port: u16) -> Self {
+        let (addr_type, addr) = addr_to_octets(addr);
         Self {
-            operation,
+            operation: FirewallOperation::Open,
+            port_type,
             port,
+            addr_type,
             addr,
         }
     }
@@ -125,8 +195,7 @@ impl FirewallMessage {
     pub fn new_ack() -> Self {
         Self {
             operation: FirewallOperation::Ack,
-            port: 0,
-            addr: [0; ADDR_SIZE],
+            ..Default::default()
         }
     }
 
@@ -134,8 +203,7 @@ impl FirewallMessage {
     pub fn new_nack() -> Self {
         Self {
             operation: FirewallOperation::Nack,
-            port: 0,
-            addr: [0; ADDR_SIZE],
+            ..Default::default()
         }
     }
 
@@ -145,16 +213,19 @@ impl FirewallMessage {
     }
 
     /// Get the port number from this message.
-    pub fn port(&self) -> Option<u16> {
+    pub fn port(&self) -> Option<(PortType, u16)> {
         match self.operation {
-            FirewallOperation::OpenV4 | FirewallOperation::OpenV6 => Some(self.port),
+            FirewallOperation::Open => Some((self.port_type, self.port)),
             FirewallOperation::Ack | FirewallOperation::Nack => None,
         }
     }
 
     /// Get the `IpAddr` from this message.
     pub fn addr(&self) -> Option<IpAddr> {
-        octets_to_addr(self.operation, &self.addr)
+        match self.operation {
+            FirewallOperation::Open => Some(octets_to_addr(self.addr_type, &self.addr)),
+            FirewallOperation::Ack | FirewallOperation::Nack => None,
+        }
     }
 
     /// Serialize this message into a byte stream.
@@ -169,7 +240,9 @@ impl FirewallMessage {
 
         let mut buf = [0; FWMSG_SIZE];
         serialize_u16(&mut buf[FWMSG_OFFS_OPERATION..], self.operation.into());
+        serialize_u16(&mut buf[FWMSG_OFFS_PORT_TYPE..], self.port_type.into());
         serialize_u16(&mut buf[FWMSG_OFFS_PORT..], self.port);
+        serialize_u16(&mut buf[FWMSG_OFFS_ADDR_TYPE..], self.addr_type.into());
         buf[FWMSG_OFFS_ADDR..FWMSG_OFFS_ADDR + ADDR_SIZE].copy_from_slice(&self.addr);
 
         Ok(buf)
@@ -190,12 +263,16 @@ impl FirewallMessage {
         }
 
         let operation = deserialize_u16(&buf[FWMSG_OFFS_OPERATION..])?;
+        let port_type = deserialize_u16(&buf[FWMSG_OFFS_PORT_TYPE..])?;
         let port = deserialize_u16(&buf[FWMSG_OFFS_PORT..])?;
+        let addr_type = deserialize_u16(&buf[FWMSG_OFFS_ADDR_TYPE..])?;
         let addr = &buf[FWMSG_OFFS_ADDR..FWMSG_OFFS_ADDR + ADDR_SIZE];
 
         Ok(Self {
             operation: operation.try_into()?,
+            port_type: port_type.try_into()?,
             port,
+            addr_type: addr_type.try_into()?,
             addr: addr.try_into()?,
         })
     }
@@ -262,22 +339,61 @@ mod tests {
 
     #[test]
     fn test_msg_open_v6() {
-        let msg = FirewallMessage::new_open("::1".parse().unwrap(), 0x9876);
-        assert_eq!(msg.operation(), FirewallOperation::OpenV6);
-        assert_eq!(msg.port(), Some(0x9876));
+        let msg = FirewallMessage::new_open("::1".parse().unwrap(), PortType::Tcp, 0x9876);
+        assert_eq!(msg.operation(), FirewallOperation::Open);
+        assert_eq!(msg.port(), Some((PortType::Tcp, 0x9876)));
         assert_eq!(msg.addr(), Some("::1".parse().unwrap()));
         check_ser_de(&msg);
 
         let msg = FirewallMessage::new_open(
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
+            PortType::Tcp,
             0x9876,
         );
         let bytes = msg.msg_serialize().unwrap();
         assert_eq!(
             bytes,
             [
-                0x00, 0x00, // operation
+                0x00, 0x02, // operation
+                0x00, 0x00, // port_type
                 0x98, 0x76, // port
+                0x00, 0x00, // addr_type
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
+                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
+            ]
+        );
+
+        let msg = FirewallMessage::new_open(
+            "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
+            PortType::Udp,
+            0x9876,
+        );
+        let bytes = msg.msg_serialize().unwrap();
+        assert_eq!(
+            bytes,
+            [
+                0x00, 0x02, // operation
+                0x00, 0x01, // port_type
+                0x98, 0x76, // port
+                0x00, 0x00, // addr_type
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
+                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
+            ]
+        );
+
+        let msg = FirewallMessage::new_open(
+            "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
+            PortType::TcpUdp,
+            0x9876,
+        );
+        let bytes = msg.msg_serialize().unwrap();
+        assert_eq!(
+            bytes,
+            [
+                0x00, 0x02, // operation
+                0x00, 0x02, // port_type
+                0x98, 0x76, // port
+                0x00, 0x00, // addr_type
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
                 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
             ]
@@ -286,9 +402,9 @@ mod tests {
 
     #[test]
     fn test_msg_open_v4() {
-        let msg = FirewallMessage::new_open("1.2.3.4".parse().unwrap(), 0x9876);
-        assert_eq!(msg.operation(), FirewallOperation::OpenV4);
-        assert_eq!(msg.port(), Some(0x9876));
+        let msg = FirewallMessage::new_open("1.2.3.4".parse().unwrap(), PortType::Tcp, 0x9876);
+        assert_eq!(msg.operation(), FirewallOperation::Open);
+        assert_eq!(msg.port(), Some((PortType::Tcp, 0x9876)));
         assert_eq!(msg.addr(), Some("1.2.3.4".parse().unwrap()));
         check_ser_de(&msg);
 
@@ -296,8 +412,10 @@ mod tests {
         assert_eq!(
             bytes,
             [
-                0x00, 0x01, // operation
+                0x00, 0x02, // operation
+                0x00, 0x00, // port_type
                 0x98, 0x76, // port
+                0x00, 0x01, // addr_type
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
                 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, // addr
             ]
@@ -316,8 +434,10 @@ mod tests {
         assert_eq!(
             bytes,
             [
-                0x00, 0x02, // operation
+                0x00, 0x01, // operation
+                0x00, 0x00, // port_type
                 0x00, 0x00, // port
+                0x00, 0x00, // addr_type
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
             ]
@@ -336,8 +456,10 @@ mod tests {
         assert_eq!(
             bytes,
             [
-                0x00, 0x03, // operation
+                0x00, 0x00, // operation
+                0x00, 0x00, // port_type
                 0x00, 0x00, // port
+                0x00, 0x00, // addr_type
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
             ]

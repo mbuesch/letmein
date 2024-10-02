@@ -139,10 +139,14 @@ Please note that the resource identifier is transmitted in clear text (unencrypt
 Therefore, the resource identifier shall not be considered to be secret.
 Please pick any number that makes sense for your environment, but ensure that it is not secret.
 
-The `port` is the TCP port number that this resource represents.
+The `port` is the TCP/UDP port number that this resource represents.
 It can be any port number between 0 and 65535.
 When this resource is successfully authenticated from a knocking client, the port number will be opened in the firewall.
 Only ports for which a resource has been configured here are knock-able.
+
+By default the port will only be opened for TCP.
+If you want TCP+UDP or UDP only, then specify this as flags in the resource.
+See examples below.
 
 A resource can optionally be restricted to one or multiple `users`.
 If the `users` list is not given, then the resource is unrestricted and any successfully authenticated user can knock it open.
@@ -151,6 +155,25 @@ The `users` list is just a comma separated list of user identifiers.
 See `[KEYS]` section above for more information about user identifiers.
 
 If a client wants to knock a port open on a server, the client and the server must share a compatible resource entry for the port.
+
+Example resources:
+
+```
+# Resource: TCP port 1234.
+00000001 = port: 1234
+
+# Resource: TCP port 1234.
+00000001 = port: 1234 / tcp
+
+# Resource: TCP and UDP port 1234.
+00000001 = port: 1234 / tcp,udp
+
+# Resource: UDP port 1234.
+00000001 = port: 1234 / udp
+
+# Resource: TCP and UDP port 1234. Only for users 00000005 and 00000006
+00000001 = port: 1234 / tcp,udp / users: 00000005,00000006
+```
 
 # Server specific configuration parts
 

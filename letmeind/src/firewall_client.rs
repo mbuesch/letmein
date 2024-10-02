@@ -11,6 +11,8 @@ use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
 use std::{net::IpAddr, path::Path};
 use tokio::net::UnixStream;
 
+pub use letmein_fwproto::PortType;
+
 pub struct FirewallClient {
     stream: UnixStream,
 }
@@ -26,9 +28,14 @@ impl FirewallClient {
     }
 
     /// Send a request to open a firewall `port` for the specified `addr`.
-    pub async fn open_port(&mut self, addr: IpAddr, port: u16) -> ah::Result<()> {
+    pub async fn open_port(
+        &mut self,
+        addr: IpAddr,
+        port_type: PortType,
+        port: u16,
+    ) -> ah::Result<()> {
         // Send an open-port request to the firewall daemon.
-        FirewallMessage::new_open(addr, port)
+        FirewallMessage::new_open(addr, port_type, port)
             .send(&mut self.stream)
             .await
             .context("Send port-open message")?;
@@ -44,9 +51,7 @@ impl FirewallClient {
         match msg_reply.operation() {
             FirewallOperation::Ack => Ok(()),
             FirewallOperation::Nack => Err(err!("The firewall rejected the port-open request")),
-            FirewallOperation::OpenV4 | FirewallOperation::OpenV6 => {
-                Err(err!("Received invalid reply"))
-            }
+            FirewallOperation::Open => Err(err!("Received invalid reply")),
         }
     }
 }

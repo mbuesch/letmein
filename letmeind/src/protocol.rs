@@ -6,7 +6,11 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{firewall_client::FirewallClient, server::ConnectionOps, ConfigRef};
+use crate::{
+    firewall_client::{FirewallClient, PortType},
+    server::ConnectionOps,
+    ConfigRef,
+};
 use anyhow::{self as ah, format_err as err};
 use letmein_conf::Resource;
 use letmein_proto::{Message, Operation, ResourceId, UserId};
@@ -102,7 +106,12 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Check if the authenticating user is allowed to access this resource.
         match resource {
-            Resource::Port { port, users: _ } => {
+            Resource::Port {
+                port,
+                tcp: _,
+                udp: _,
+                users: _,
+            } => {
                 // Check the mapped user on the resource.
                 if !resource.contains_user(user_id) {
                     let _ = self.send_go_away().await;
@@ -138,7 +147,20 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Reconfigure the firewall.
         match resource {
-            Resource::Port { port, users: _ } => {
+            Resource::Port {
+                port,
+                tcp,
+                udp,
+                users: _,
+            } => {
+                // Port type to open.
+                let port_type = match (tcp, udp) {
+                    (true, false) => PortType::Tcp,
+                    (false, true) => PortType::Udp,
+                    (true, true) => PortType::TcpUdp,
+                    (false, false) => unreachable!(),
+                };
+
                 // Connect to letmeinfwd unix socket.
                 let mut fw = match FirewallClient::new(self.rundir).await {
                     Err(e) => {
@@ -149,7 +171,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 };
 
                 // Send an open-port request to letmeinfwd.
-                if let Err(e) = fw.open_port(self.conn.addr().ip(), *port).await {
+                if let Err(e) = fw.open_port(self.conn.addr().ip(), port_type, *port).await {
                     let _ = self.send_go_away().await;
                     return Err(err!("letmeinfwd firewall open: {e}"));
                 }

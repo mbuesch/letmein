@@ -7,7 +7,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::{
-    firewall::{prune_all_lease_timeouts, FirewallMaintain, FirewallOpen, Lease, LeaseMap},
+    firewall::{
+        prune_all_lease_timeouts, FirewallMaintain, FirewallOpen, Lease, LeaseMap, LeasePort,
+        SingleLeasePort,
+    },
     ConfigRef,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
@@ -97,11 +100,15 @@ fn statement_match_saddr(family: NfFamily, addr: IpAddr) -> ah::Result<Statement
 }
 
 /// Create an nftables port match statement.
-fn statement_match_dport(port: u16) -> Statement {
+fn statement_match_dport(port: SingleLeasePort) -> Statement {
+    let (protocol, port) = match port {
+        SingleLeasePort::Tcp(port) => ("tcp".to_string(), port),
+        SingleLeasePort::Udp(port) => ("udp".to_string(), port),
+    };
     Statement::Match(Match {
         left: Expression::Named(NamedExpression::Payload(Payload::PayloadField(
             PayloadField {
-                protocol: "tcp".to_string(),
+                protocol,
                 field: "dport".to_string(),
             },
         ))),
@@ -117,34 +124,58 @@ fn statement_accept() -> Statement {
 
 /// Comment string for a `Rule`.
 /// It can be used as unique identifier for lease rules.
-fn gen_rule_comment(lease: Option<&Lease>) -> String {
-    const BASE: &str = "GENERATED/letmein";
-    if let Some(lease) = lease {
-        format!("[{}]:{}/{}", lease.addr(), lease.port(), BASE)
+fn gen_rule_comment(addr: Option<IpAddr>, port: Option<SingleLeasePort>) -> String {
+    const BASE: &str = "letmein/GENERATED";
+    if let (Some(addr), Some(port)) = (addr, port) {
+        format!("{}/{}/{}", addr, port, BASE)
     } else {
         BASE.to_string()
     }
 }
 
-/// Generate a nftables add-rule for this lease.
+/// Generate a nftables add-rule for this addr/port.
 /// This rule will open the port for the IP address.
-fn gen_add_lease_cmd(conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<NfCmd> {
+fn gen_add_lease_cmd(
+    conf: &ConfigRef<'_>,
+    addr: IpAddr,
+    port: SingleLeasePort,
+) -> ah::Result<NfCmd> {
     let names = NftNames::get(conf).context("Read configuration")?;
     let mut rule = Rule::new(
         names.family,
         names.table.to_string(),
         names.chain_input.to_string(),
         vec![
-            statement_match_saddr(names.family, lease.addr())?,
-            statement_match_dport(lease.port()),
+            statement_match_saddr(names.family, addr)?,
+            statement_match_dport(port),
             statement_accept(),
         ],
     );
-    rule.comment = Some(gen_rule_comment(Some(lease)));
-    if conf.debug() {
-        println!("nftables: Adding rule for {lease}");
-    }
+    rule.comment = Some(gen_rule_comment(Some(addr), Some(port)));
     Ok(NfCmd::Add(NfListObject::Rule(rule)))
+}
+
+/// Generate the nftables add-rule commands for this lease.
+/// These commands will open the port(s) for the IP address.
+fn gen_add_lease_cmds(conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<Vec<NfCmd>> {
+    let mut cmds = Vec::with_capacity(2);
+    let addr = lease.addr();
+    match lease.port() {
+        LeasePort::Tcp(port) => {
+            cmds.push(gen_add_lease_cmd(conf, addr, SingleLeasePort::Tcp(port))?);
+        }
+        LeasePort::Udp(port) => {
+            cmds.push(gen_add_lease_cmd(conf, addr, SingleLeasePort::Udp(port))?);
+        }
+        LeasePort::TcpUdp(port) => {
+            cmds.push(gen_add_lease_cmd(conf, addr, SingleLeasePort::Tcp(port))?);
+            cmds.push(gen_add_lease_cmd(conf, addr, SingleLeasePort::Udp(port))?);
+        }
+    }
+    if conf.debug() {
+        println!("nftables: Adding rules for {lease}");
+    }
+    Ok(cmds)
 }
 
 struct ListedRuleset {
@@ -170,9 +201,10 @@ impl ListedRuleset {
         family: NfFamily,
         table: &str,
         chain_input: &str,
-        lease: &Lease,
+        addr: IpAddr,
+        port: SingleLeasePort,
     ) -> ah::Result<u32> {
-        let comment = gen_rule_comment(Some(lease));
+        let comment = gen_rule_comment(Some(addr), Some(port));
         for obj in &self.objs {
             match obj {
                 NfObject::ListObject(NfListObject::Rule(Rule {
@@ -193,26 +225,49 @@ impl ListedRuleset {
             }
         }
         Err(err!(
-            "Nftables 'handle' for {lease} not found in the kernel ruleset."
+            "Nftables 'handle' for {addr}:{port} not found in the kernel ruleset."
         ))
     }
 
-    /// Generate a nftables delete-rule for this lease.
-    /// This rule will close the port for the IP address.
-    pub fn gen_delete_lease_cmd(&self, conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<NfCmd> {
+    /// Generate nftables delete-rules for this lease.
+    /// These rules will close the ports for the IP address.
+    pub fn gen_delete_lease_cmds(
+        &self,
+        conf: &ConfigRef<'_>,
+        lease: &Lease,
+    ) -> ah::Result<Vec<NfCmd>> {
+        let mut cmds = Vec::with_capacity(2);
         let names = NftNames::get(conf).context("Read configuration")?;
-        let mut rule = Rule::new(
-            names.family,
-            names.table.to_string(),
-            names.chain_input.to_string(),
-            vec![],
-        );
-        rule.handle =
-            Some(self.find_handle(names.family, names.table, names.chain_input, lease)?);
-        if conf.debug() {
-            println!("nftables: Deleting rule for {lease}");
+        let addr = lease.addr();
+
+        let new_rule = |port: SingleLeasePort| -> ah::Result<NfCmd> {
+            let mut rule = Rule::new(
+                names.family,
+                names.table.to_string(),
+                names.chain_input.to_string(),
+                vec![],
+            );
+            rule.handle =
+                Some(self.find_handle(names.family, names.table, names.chain_input, addr, port)?);
+            Ok(NfCmd::Delete(NfListObject::Rule(rule)))
+        };
+
+        match lease.port() {
+            LeasePort::Tcp(port) => {
+                cmds.push(new_rule(SingleLeasePort::Tcp(port))?);
+            }
+            LeasePort::Udp(port) => {
+                cmds.push(new_rule(SingleLeasePort::Udp(port))?);
+            }
+            LeasePort::TcpUdp(port) => {
+                cmds.push(new_rule(SingleLeasePort::Tcp(port))?);
+                cmds.push(new_rule(SingleLeasePort::Udp(port))?);
+            }
         }
-        Ok(NfCmd::Delete(NfListObject::Rule(rule)))
+        if conf.debug() {
+            println!("nftables: Deleting rules for {lease}");
+        }
+        Ok(cmds)
     }
 }
 
@@ -241,8 +296,22 @@ impl NftFirewall {
         Ok(this)
     }
 
+    /// Print the number of rules required for all leases.
+    fn print_total_rule_count(&self, conf: &ConfigRef<'_>) {
+        if conf.debug() {
+            let mut count = 1; // One for the control port.
+            for lease in self.leases.values() {
+                count += match lease.port() {
+                    LeasePort::Tcp(_) | LeasePort::Udp(_) => 1,
+                    LeasePort::TcpUdp(_) => 2,
+                };
+            }
+            println!("nftables: A total of {count} rules is installed.");
+        }
+    }
+
     /// Apply a rules batch to the kernel.
-    fn nftables_apply_batch(&self, conf: &ConfigRef<'_>, batch: Batch) -> ah::Result<()> {
+    fn nftables_apply_batch(&self, _conf: &ConfigRef<'_>, batch: Batch) -> ah::Result<()> {
         let ruleset = batch.to_nftables();
         apply_ruleset(
             &ruleset, // rules
@@ -250,12 +319,6 @@ impl NftFirewall {
             None,     // args
         )
         .context("Apply nftables")?;
-        if conf.debug() {
-            println!(
-                "nftables: A total of {} rules is installed.",
-                self.leases.len() + 1
-            );
-        }
         Ok(())
     }
 
@@ -285,9 +348,12 @@ impl NftFirewall {
             names.family,
             names.table.to_string(),
             names.chain_input.to_string(),
-            vec![statement_match_dport(conf.port()), statement_accept()],
+            vec![
+                statement_match_dport(SingleLeasePort::Tcp(conf.port())),
+                statement_accept(),
+            ],
         );
-        rule.comment = Some(gen_rule_comment(None));
+        rule.comment = Some(gen_rule_comment(None, None));
         batch.add_cmd(NfCmd::Add(NfListObject::Rule(rule)));
         if conf.debug() {
             println!(
@@ -298,7 +364,9 @@ impl NftFirewall {
 
         // Open all lease ports, restricted to the peer addresses.
         for lease in self.leases.values() {
-            batch.add_cmd(gen_add_lease_cmd(conf, lease)?);
+            for cmd in gen_add_lease_cmds(conf, lease)? {
+                batch.add_cmd(cmd);
+            }
         }
 
         // Apply all batch commands to the kernel.
@@ -309,7 +377,9 @@ impl NftFirewall {
     fn nftables_add_lease(&mut self, conf: &ConfigRef<'_>, lease: &Lease) -> ah::Result<()> {
         // Open the lease port, restricted to the peer address.
         let mut batch = Batch::new();
-        batch.add_cmd(gen_add_lease_cmd(conf, lease)?);
+        for cmd in gen_add_lease_cmds(conf, lease)? {
+            batch.add_cmd(cmd);
+        }
 
         // Apply all batch commands to the kernel.
         self.nftables_apply_batch(conf, batch)
@@ -324,7 +394,9 @@ impl NftFirewall {
             // Add delete commands to remove the lease ports.
             let mut batch = Batch::new();
             for lease in leases {
-                batch.add_cmd(ruleset.gen_delete_lease_cmd(conf, lease)?);
+                for cmd in ruleset.gen_delete_lease_cmds(conf, lease)? {
+                    batch.add_cmd(cmd);
+                }
             }
 
             // Apply all batch commands to the kernel.
@@ -338,17 +410,22 @@ impl FirewallMaintain for NftFirewall {
     /// Remove all leases and remove all rules from the kernel.
     async fn clear(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
         self.leases.clear();
-        self.nftables_full_rebuild(conf)
+        self.nftables_full_rebuild(conf)?;
+        self.print_total_rule_count(conf);
+        Ok(())
     }
 
     /// Run the periodic maintenance of the firewall.
     /// This will remove timed-out leases.
     async fn maintain(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
         let pruned = prune_all_lease_timeouts(conf, &mut self.leases);
-        if let Err(e) = self.nftables_remove_leases(conf, &pruned) {
-            eprintln!("WARNING: Failed to remove lease(s): '{e}'.");
-            eprintln!("Trying full rebuild.");
-            self.nftables_full_rebuild(conf)?;
+        if !pruned.is_empty() {
+            if let Err(e) = self.nftables_remove_leases(conf, &pruned) {
+                eprintln!("WARNING: Failed to remove lease(s): '{e}'.");
+                eprintln!("Trying full rebuild.");
+                self.nftables_full_rebuild(conf)?;
+            }
+            self.print_total_rule_count(conf);
         }
         Ok(())
     }
@@ -358,6 +435,7 @@ impl FirewallMaintain for NftFirewall {
     async fn reload(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()> {
         let _pruned = prune_all_lease_timeouts(conf, &mut self.leases);
         self.nftables_full_rebuild(conf)?;
+        self.print_total_rule_count(conf);
         Ok(())
     }
 }
@@ -370,7 +448,7 @@ impl FirewallOpen for NftFirewall {
         &mut self,
         conf: &ConfigRef<'_>,
         remote_addr: IpAddr,
-        port: u16,
+        port: LeasePort,
     ) -> ah::Result<()> {
         let id = (remote_addr, port);
         if let Some(lease) = self.leases.get_mut(&id) {
@@ -379,6 +457,7 @@ impl FirewallOpen for NftFirewall {
             let lease = Lease::new(conf, remote_addr, port);
             self.nftables_add_lease(conf, &lease)?;
             self.leases.insert(id, lease);
+            self.print_total_rule_count(conf);
         }
         Ok(())
     }

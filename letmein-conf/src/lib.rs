@@ -15,8 +15,12 @@
 #![forbid(unsafe_code)]
 
 mod ini;
+mod parse_items;
 
-use crate::ini::Ini;
+use crate::{
+    ini::Ini,
+    parse_items::{Map, MapItem},
+};
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_proto::{Key, ResourceId, UserId, PORT};
 use std::{
@@ -43,13 +47,23 @@ const DEFAULT_NFT_TIMEOUT: u32 = 600;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Resource {
     /// Port resource.
-    Port { port: u16, users: Vec<UserId> },
+    Port {
+        port: u16,
+        tcp: bool,
+        udp: bool,
+        users: Vec<UserId>,
+    },
 }
 
 impl Resource {
     pub fn contains_user(&self, id: UserId) -> bool {
         match self {
-            Self::Port { port: _, users } => {
+            Self::Port {
+                port: _,
+                tcp: _,
+                udp: _,
+                users,
+            } => {
                 if users.is_empty() {
                     // This resource is unrestricted.
                     return true;
@@ -158,56 +172,6 @@ fn parse_hex<const SIZE: usize>(s: &str) -> ah::Result<[u8; SIZE]> {
     Ok(ret)
 }
 
-/// Split a comma separated string into a vec:
-/// "a, b, c" -> vec!["a", " b", " c"]
-/// A conversion function is applied before inserting into the vec.
-fn split_commaitems<T, F>(value: &str, conv: F) -> ah::Result<Vec<T>>
-where
-    F: Fn(&str) -> ah::Result<T>,
-{
-    if value.trim().is_empty() {
-        return Ok(vec![]);
-    }
-    let mut ret = Vec::with_capacity(8);
-    for item in value.split(',') {
-        ret.push(conv(item)?);
-    }
-    Ok(ret)
-}
-
-/// Convert slash separated key:value pairs HashMap.
-/// "a: b / c: d" -> { "a": " b", "c": " d" }
-/// A conversion function is applied before inserting into the HashMap.
-fn split_subitems<FK, FV, TK, TV>(
-    value: &str,
-    conv_key: FK,
-    conv_value: FV,
-) -> ah::Result<HashMap<TK, TV>>
-where
-    FK: Fn(&str) -> ah::Result<TK>,
-    FV: Fn(&str) -> ah::Result<TV>,
-    TK: Eq + std::hash::Hash,
-    TV: Eq + std::hash::Hash,
-{
-    let mut ret = HashMap::with_capacity(8);
-    for item in value.split('/') {
-        let Some(idx) = item.find(':') else {
-            return Err(err!("Invalid item. No colon."));
-        };
-        let chlen = ':'.len_utf8();
-        if idx < chlen {
-            return Err(err!("Invalid item name."));
-        }
-        let name = item[..=(idx - chlen)].trim();
-        if name.is_empty() {
-            return Err(err!("Invalid item name."));
-        }
-        let value = &item[idx + chlen..];
-        ret.insert(conv_key(name)?, conv_value(value)?);
-    }
-    Ok(ret)
-}
-
 fn get_debug(ini: &Ini) -> ah::Result<bool> {
     if let Some(debug) = ini.get("GENERAL", "debug") {
         return parse_bool(debug);
@@ -233,8 +197,8 @@ fn get_keys(ini: &Ini) -> ah::Result<HashMap<UserId, Key>> {
     let mut keys = HashMap::new();
     if let Some(options) = ini.options_iter("KEYS") {
         for (id, key) in options {
-            let id = id.parse().context("KEYS")?;
-            let key = parse_hex(key).context("KEYS")?;
+            let id = id.parse().context("[KEYS]")?;
+            let key = parse_hex(key).context("[KEYS]")?;
             if key == [0; std::mem::size_of::<Key>()] {
                 return Err(err!("Invalid key {id}: Key is all zeros (00)"));
             }
@@ -248,22 +212,79 @@ fn get_keys(ini: &Ini) -> ah::Result<HashMap<UserId, Key>> {
 }
 
 fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
-    let empty = "".to_string();
     let mut resources = HashMap::new();
     if let Some(options) = ini.options_iter("RESOURCES") {
         for (id, resource) in options {
-            let id = id.parse().context("RESOURCES")?;
-            let items = split_subitems(resource, |k| Ok(k.to_string()), |v| Ok(v.to_string()))
-                .context("RESOURCES")?;
-            if let Some(port) = items.get("port") {
-                let port = parse_u16(port).context("[RESOURCES] port")?;
-                let users = items.get("users").unwrap_or(&empty);
-                let users = split_commaitems(users, |s| s.parse()).context("RESOURCES")?;
-                let res = Resource::Port { port, users };
-                resources.insert(id, res);
-            } else {
-                return Err(err!("Unknown resource type: {resource}"));
+            let id = id.parse().context("[RESOURCES]")?;
+            let map = resource.parse::<Map>().context("[RESOURCES]")?;
+
+            let mut port: Option<u16> = None;
+            let mut users: Vec<String> = vec![];
+            let mut tcp = false;
+            let mut udp = false;
+
+            for item in map.items() {
+                match item {
+                    MapItem::KeyValue(k, v) => {
+                        if k == "port" {
+                            if port.is_some() {
+                                return Err(err!("[RESOURCE] multiple 'port' values"));
+                            }
+                            port = Some(parse_u16(v).context("[RESOURCES] port")?);
+                        } else {
+                            return Err(err!("[RESOURCE] unknown option"));
+                        }
+                    }
+                    MapItem::KeyValues(k, vs) => {
+                        if k == "users" {
+                            if !users.is_empty() {
+                                return Err(err!("[RESOURCE] multiple 'users' values"));
+                            }
+                            users = vs.clone();
+                        } else {
+                            return Err(err!("[RESOURCE] unknown option"));
+                        }
+                    }
+                    MapItem::Values(vs) => {
+                        for v in vs {
+                            match &v.to_lowercase()[..] {
+                                "tcp" => {
+                                    tcp = true;
+                                }
+                                "udp" => {
+                                    udp = true;
+                                }
+                                v => {
+                                    return Err(err!("[RESOURCE] unknown option: {v}"));
+                                }
+                            }
+                        }
+                    }
+                }
             }
+            if !tcp && !udp {
+                // Default, if no tcp/udp option is given.
+                tcp = true;
+            }
+            let Some(port) = port else {
+                return Err(err!("[RESOURCE] '{id}': No 'port' value present"));
+            };
+
+            let mut res_users = vec![];
+            for user in users {
+                if let Ok(user) = user.parse() {
+                    res_users.push(user);
+                } else {
+                    return Err(err!("[RESOURCE] '{id}': 'user' id is invalid"));
+                }
+            }
+            let res = Resource::Port {
+                port,
+                tcp,
+                udp,
+                users: res_users,
+            };
+            resources.insert(id, res);
         }
     }
     Ok(resources)
@@ -543,6 +564,50 @@ mod tests {
             resources.get(&0x9876ABCD.into()).unwrap(),
             &Resource::Port {
                 port: 4096,
+                tcp: true,
+                udp: false,
+                users: vec![]
+            }
+        );
+
+        let mut ini = Ini::new();
+        ini.parse_str("[RESOURCES]\n9876ABCD = port : 4096 / TCP\n")
+            .unwrap();
+        let resources = get_resources(&ini).unwrap();
+        assert_eq!(
+            resources.get(&0x9876ABCD.into()).unwrap(),
+            &Resource::Port {
+                port: 4096,
+                tcp: true,
+                udp: false,
+                users: vec![]
+            }
+        );
+
+        let mut ini = Ini::new();
+        ini.parse_str("[RESOURCES]\n9876ABCD = port : 4096 / udp / users: 1, 2 ,3  \n")
+            .unwrap();
+        let resources = get_resources(&ini).unwrap();
+        assert_eq!(
+            resources.get(&0x9876ABCD.into()).unwrap(),
+            &Resource::Port {
+                port: 4096,
+                tcp: false,
+                udp: true,
+                users: vec![1.into(), 2.into(), 3.into()]
+            }
+        );
+
+        let mut ini = Ini::new();
+        ini.parse_str("[RESOURCES]\n9876ABCD = port : 4096 / udp, tcp\n")
+            .unwrap();
+        let resources = get_resources(&ini).unwrap();
+        assert_eq!(
+            resources.get(&0x9876ABCD.into()).unwrap(),
+            &Resource::Port {
+                port: 4096,
+                tcp: true,
+                udp: true,
                 users: vec![]
             }
         );
