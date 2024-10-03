@@ -205,6 +205,9 @@ fn get_keys(ini: &Ini) -> ah::Result<HashMap<UserId, Key>> {
             if key == [0xFF; std::mem::size_of::<Key>()] {
                 return Err(err!("Invalid key {id}: Key is all ones (FF)"));
             }
+            if keys.contains_key(&id) {
+                return Err(err!("[KEYS] Multiple definitions of key '{id}'"));
+            }
             keys.insert(id, key);
         }
     }
@@ -278,6 +281,21 @@ fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
                     return Err(err!("[RESOURCE] '{id}': 'user' id is invalid"));
                 }
             }
+
+            for (res_id, res) in &resources {
+                let Resource::Port { port: res_port, .. } = res;
+                if *res_id == id {
+                    return Err(err!(
+                        "[RESOURCE] Multiple definitions of resource ID '{id}'"
+                    ));
+                }
+                if *res_port == port {
+                    return Err(err!(
+                        "[RESOURCE] Multiple definitions of resource port '{port}'"
+                    ));
+                }
+            }
+
             let res = Resource::Port {
                 port,
                 tcp,
