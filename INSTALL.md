@@ -104,3 +104,32 @@ If you use [Arch Linux](https://archlinux.org/), then you can install the client
 The AUR package will install the configuration to `/etc` and the binaries to `/usr/bin`.
 
 (The AUR package is maintained by a third party maintainer. Thanks!)
+
+# Uninstalling
+
+## Installed by `install-*.sh`
+
+If you installed letmein with the `install-*.sh` scripts (see above), run the following commands to completely remove letmein from your system.
+
+WARNING: This also removes the configuration files.
+
+```sh
+systemctl stop letmeind.socket
+systemctl stop letmeind.service
+systemctl stop letmeinfwd.socket
+systemctl stop letmeinfwd.service
+systemctl disable letmeind.service
+systemctl disable letmeind.socket
+systemctl disable letmeinfwd.service
+systemctl disable letmeinfwd.socket
+
+rm /etc/systemd/system/letmeind.socket
+rm /etc/systemd/system/letmeind.service
+rm /etc/systemd/system/letmeinfwd.socket
+rm /etc/systemd/system/letmeinfwd.service
+rm -r /opt/letmein
+```
+
+## Installed by other method
+
+If you used another method please refer to the documentation of your install method.

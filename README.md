@@ -107,6 +107,10 @@ Match host your-server.com exec "letmein knock -u 00000000 your-server.com 22"
 
 See the [installation instructions](INSTALL.md) for more information about how to build and install letmein.
 
+## Uninstalling
+
+If you want to completely remove letmein from your system, see the [uninstall instructions](INSTALL.md#uninstalling).
+
 ## Platform support
 
 ### Client
