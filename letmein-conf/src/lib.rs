@@ -15,10 +15,12 @@
 #![forbid(unsafe_code)]
 
 mod ini;
+mod parse;
 mod parse_items;
 
 use crate::{
     ini::Ini,
+    parse::{parse_bool, parse_hex, parse_u16, parse_u32},
     parse_items::{Map, MapItem},
 };
 use anyhow::{self as ah, format_err as err, Context as _};
@@ -116,60 +118,6 @@ impl std::str::FromStr for Seccomp {
             )),
         }
     }
-}
-
-fn parse_bool(s: &str) -> ah::Result<bool> {
-    let s = s.to_lowercase();
-    let s = s.trim();
-    match s {
-        "true" | "1" | "yes" | "on" => Ok(true),
-        "false" | "0" | "no" | "off" => Ok(false),
-        _ => Err(err!("Invalid boolean string")),
-    }
-}
-
-fn parse_u16(s: &str) -> ah::Result<u16> {
-    let s = s.trim();
-    if let Some(s) = s.strip_prefix("0x") {
-        Ok(u16::from_str_radix(s, 16)?)
-    } else {
-        Ok(s.parse::<u16>()?)
-    }
-}
-
-fn parse_u32(s: &str) -> ah::Result<u32> {
-    let s = s.trim();
-    if let Some(s) = s.strip_prefix("0x") {
-        Ok(u32::from_str_radix(s, 16)?)
-    } else {
-        Ok(s.parse::<u32>()?)
-    }
-}
-
-fn parse_hexdigit(s: &str) -> ah::Result<u8> {
-    assert_eq!(s.len(), 1);
-    Ok(u8::from_str_radix(s, 16)?)
-}
-
-fn parse_hex<const SIZE: usize>(s: &str) -> ah::Result<[u8; SIZE]> {
-    let s = s.trim();
-    if !s.is_ascii() {
-        return Err(err!("Hex string contains invalid characters."));
-    }
-    let len = s.len();
-    if len != SIZE * 2 {
-        return Err(err!(
-            "Hex string is too short: Expected {}, got {} chars",
-            SIZE * 2,
-            len,
-        ));
-    }
-    let mut ret = [0; SIZE];
-    for i in 0..SIZE {
-        ret[i] = parse_hexdigit(&s[i * 2..i * 2 + 1])? << 4;
-        ret[i] |= parse_hexdigit(&s[i * 2 + 1..i * 2 + 2])?;
-    }
-    Ok(ret)
 }
 
 fn get_debug(ini: &Ini) -> ah::Result<bool> {
