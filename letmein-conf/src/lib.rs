@@ -182,18 +182,25 @@ fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
                                 return Err(err!("[RESOURCE] multiple 'port' values"));
                             }
                             port = Some(parse_u16(v).context("[RESOURCES] port")?);
+                        } else if k == "users" {
+                            if !users.is_empty() {
+                                return Err(err!("[RESOURCE] multiple 'users' values"));
+                            }
+                            users.push(v.clone());
                         } else {
-                            return Err(err!("[RESOURCE] unknown option"));
+                            return Err(err!("[RESOURCE] unknown option: {k}"));
                         }
                     }
                     MapItem::KeyValues(k, vs) => {
-                        if k == "users" {
+                        if k == "port" {
+                            return Err(err!("[RESOURCE] invalid 'port' option"));
+                        } else if k == "users" {
                             if !users.is_empty() {
                                 return Err(err!("[RESOURCE] multiple 'users' values"));
                             }
                             users = vs.clone();
                         } else {
-                            return Err(err!("[RESOURCE] unknown option"));
+                            return Err(err!("[RESOURCE] unknown option: {k}"));
                         }
                     }
                     MapItem::Values(vs) => {
@@ -565,7 +572,7 @@ mod tests {
         );
 
         let mut ini = Ini::new();
-        ini.parse_str("[RESOURCES]\n9876ABCD = port : 4096 / udp, tcp\n")
+        ini.parse_str("[RESOURCES]\n9876ABCD = port : 4096 / udp, tcp / users: 4\n")
             .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
@@ -574,7 +581,7 @@ mod tests {
                 port: 4096,
                 tcp: true,
                 udp: true,
-                users: vec![]
+                users: vec![4.into()]
             }
         );
     }
