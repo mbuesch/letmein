@@ -84,6 +84,9 @@ The simple design is supposed to reduce the attack surface and as such improve s
   - **rationale**: The port is only open for a short and limited amount of time and there is supposed to be a second layer of security (see 2FA discussion below).
   While it's an unfortunate fact that the port will be open for the whole NATed network, this is still much better than having it open for the whole internet (without port knocker).
 
+- **weakness**: If you use letmein to protect UDP ports, IP address spoofing can give some access for attackers after legitimate authentication of a user. With UDP IP address spoofing an attacker might be able to impersonate a legitimate user session after successful knocking.
+  - **rationale**: This is a general property of UDP. The rationale is similar to that of NAT (see above). Letmein still massively reduces the attack surface by closing the port by default.
+
 - **weakness**: The authentication key is a shared secret that is stored in plain text on the server and on the client.
   - **rationale**: It is true that an attacker that can successfully take over a server or client can steal the keys and authenticate future sessions.
   This is a tradeoff between implementing complicated public-private-key cryptography, the overall goal of what letmein is supposed to protect and simplicity of the design.
