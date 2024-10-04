@@ -71,7 +71,6 @@ pub enum Allow {
     Write,
     Recv,
     Send,
-    Prctl,
     Signal,
     Futex,
 }
@@ -223,10 +222,6 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_sendto));
                     add_sys(&mut map, sys!(SYS_sendmsg));
                     add_sys(&mut map, sys!(SYS_sendmmsg));
-                }
-                Allow::Prctl => {
-                    //TODO: The arguments should be restricted to what is needed.
-                    add_sys(&mut map, sys!(SYS_prctl));
                 }
                 Allow::Signal => {
                     add_sys(&mut map, sys!(SYS_rt_sigreturn));

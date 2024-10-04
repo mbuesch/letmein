@@ -12,7 +12,7 @@ use build_target::{target_arch, Arch};
 use letmein_seccomp::{Action, Allow, Filter};
 use std::{env, fs::OpenOptions, io::Write, path::Path};
 
-const SECCOMP_ALLOW_LIST: [Allow; 11] = [
+const SECCOMP_ALLOW_LIST: [Allow; 10] = [
     Allow::Mmap,
     Allow::Mprotect,
     Allow::Read,
@@ -21,7 +21,6 @@ const SECCOMP_ALLOW_LIST: [Allow; 11] = [
     Allow::Send,
     Allow::TcpAccept,
     Allow::UnixConnect,
-    Allow::Prctl,
     Allow::Signal,
     Allow::Futex,
 ];

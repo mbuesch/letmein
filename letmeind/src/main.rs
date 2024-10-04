@@ -203,7 +203,11 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                 let mut conf = conf.write().await;
                 match conf.seccomp() {
                     Seccomp::Log | Seccomp::Kill => {
-                        eprintln!("SIGHUP: Error: Reloading not possible with --seccomp enabled.");
+                        // open/read syscalls are disabled.
+                        eprintln!(
+                            "SIGHUP: Error: Reloading not possible with --seccomp enabled. \
+                            Please restart letmeind instead."
+                        );
                     }
                     Seccomp::Off => {
                         println!("SIGHUP: Reloading.");
