@@ -7,22 +7,17 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 #![forbid(unsafe_code)]
+#![allow(unused_imports)]
 
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 std::compile_error!("letmeind server and letmein-seccomp do not support non-Linux platforms.");
 
 use anyhow::{self as ah, Context as _};
-use seccompiler::BpfProgram;
-
-#[cfg(feature = "compile")]
 use seccompiler::{
-    SeccompAction, SeccompCmpArgLen, SeccompCmpOp, SeccompCondition, SeccompFilter, SeccompRule,
+    apply_filter_all_threads, sock_filter, BpfProgram, SeccompAction, SeccompCmpArgLen,
+    SeccompCmpOp, SeccompCondition, SeccompFilter, SeccompRule,
 };
-#[cfg(feature = "compile")]
 use std::{collections::BTreeMap, env::consts::ARCH};
-
-#[cfg(feature = "install")]
-use seccompiler::apply_filter_all_threads;
 
 #[cfg(feature = "compile")]
 macro_rules! sys {
@@ -50,9 +45,6 @@ macro_rules! args {
         )?
     };
 }
-
-#[cfg(feature = "de")]
-use seccompiler::sock_filter;
 
 /// Returns `true` if seccomp is supported on this platform.
 pub fn seccomp_supported() -> bool {
