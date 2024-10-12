@@ -67,14 +67,33 @@ pub fn seccomp_supported() -> bool {
 pub enum Allow {
     Mmap,
     Mprotect,
+    GetUidGid,
+    ArchPrctl { op: u32 },
+    Dup,
+    Pipe,
     UnixConnect,
+    UnixListen,
     TcpAccept,
+    Netlink,
+    SetSockOpt,
+    Access,
+    Open,
     Read,
     Write,
+    Ioctl { op: u32 },
+    Fcntl { op: u32 },
+    Stat,
     Recv,
     Send,
     Signal,
+    SigAction,
     Futex,
+    SetTidAddress,
+    Rseq,
+    Clone,
+    Exec,
+    Wait,
+    Rlimit,
 }
 
 /// Action to be performed, if a syscall is executed that is not in the allow-list.
@@ -216,6 +235,7 @@ impl Filter {
             add_sys(map, sys!(SYS_epoll_pwait2));
             add_sys(map, sys!(SYS_epoll_wait));
             add_sys(map, sys!(SYS_lseek));
+            add_sys(map, sys!(SYS_poll));
             add_sys(map, sys!(SYS_ppoll));
             add_sys(map, sys!(SYS_pselect6));
         }
@@ -237,8 +257,34 @@ impl Filter {
                 Allow::Mprotect => {
                     add_sys(&mut map, sys!(SYS_mprotect));
                 }
+                Allow::GetUidGid => {
+                    add_sys(&mut map, sys!(SYS_getuid));
+                    add_sys(&mut map, sys!(SYS_geteuid));
+                    add_sys(&mut map, sys!(SYS_getgid));
+                    add_sys(&mut map, sys!(SYS_getegid));
+                }
+                Allow::ArchPrctl { op: _ } => {
+                    //TODO restrict to op
+                    add_sys(&mut map, sys!(SYS_arch_prctl));
+                }
+                Allow::Dup => {
+                    add_sys(&mut map, sys!(SYS_dup));
+                    add_sys(&mut map, sys!(SYS_dup2));
+                    add_sys(&mut map, sys!(SYS_dup3));
+                }
+                Allow::Pipe => {
+                    add_sys(&mut map, sys!(SYS_pipe));
+                    add_sys(&mut map, sys!(SYS_pipe2));
+                }
                 Allow::UnixConnect => {
                     add_sys(&mut map, sys!(SYS_connect));
+                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_UNIX));
+                    add_sys(&mut map, sys!(SYS_getsockopt));
+                }
+                Allow::UnixListen => {
+                    add_sys(&mut map, sys!(SYS_accept4));
+                    add_sys(&mut map, sys!(SYS_bind));
+                    add_sys(&mut map, sys!(SYS_listen));
                     add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_UNIX));
                     add_sys(&mut map, sys!(SYS_getsockopt));
                 }
@@ -247,6 +293,24 @@ impl Filter {
                     add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_INET));
                     add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_INET6));
                     add_sys(&mut map, sys!(SYS_getsockopt));
+                }
+                Allow::Netlink => {
+                    add_sys(&mut map, sys!(SYS_connect));
+                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_NETLINK));
+                    add_sys(&mut map, sys!(SYS_getsockopt));
+                }
+                Allow::SetSockOpt => {
+                    add_sys(&mut map, sys!(SYS_setsockopt));
+                }
+                Allow::Access => {
+                    add_sys(&mut map, sys!(SYS_access));
+                    add_sys(&mut map, sys!(SYS_faccessat));
+                    add_sys(&mut map, sys!(SYS_faccessat2));
+                }
+                Allow::Open => {
+                    //TODO: This should be restricted
+                    add_sys(&mut map, sys!(SYS_open));
+                    add_sys(&mut map, sys!(SYS_openat));
                 }
                 Allow::Read => {
                     add_sys(&mut map, sys!(SYS_pread64));
@@ -264,6 +328,19 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_writev));
                     add_read_write_rules(&mut map);
                 }
+                Allow::Ioctl { op: _ } => {
+                    //TODO restrict to op
+                    add_sys(&mut map, sys!(SYS_ioctl));
+                }
+                Allow::Fcntl { op: _ } => {
+                    //TODO restrict to op
+                    add_sys(&mut map, sys!(SYS_fcntl));
+                }
+                Allow::Stat => {
+                    add_sys(&mut map, sys!(SYS_fstat));
+                    add_sys(&mut map, sys!(SYS_statx));
+                    add_sys(&mut map, sys!(SYS_newfstatat));
+                }
                 Allow::Recv => {
                     add_sys(&mut map, sys!(SYS_recvfrom));
                     add_sys(&mut map, sys!(SYS_recvmsg));
@@ -278,6 +355,9 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_rt_sigreturn));
                     add_sys(&mut map, sys!(SYS_rt_sigprocmask));
                 }
+                Allow::SigAction => {
+                    add_sys(&mut map, sys!(SYS_rt_sigaction));
+                }
                 Allow::Futex => {
                     add_sys(&mut map, sys!(SYS_futex));
                     add_sys(&mut map, sys!(SYS_get_robust_list));
@@ -290,6 +370,26 @@ impl Filter {
                     //add_sys(&mut map, sys!(SYS_futex_wake));
                     //add_sys(&mut map, sys!(SYS_futex_wait));
                     //add_sys(&mut map, sys!(SYS_futex_requeue));
+                }
+                Allow::SetTidAddress => {
+                    add_sys(&mut map, sys!(SYS_set_tid_address));
+                }
+                Allow::Rseq => {
+                    add_sys(&mut map, sys!(SYS_rseq));
+                }
+                Allow::Clone => {
+                    add_sys(&mut map, sys!(SYS_clone3));
+                }
+                Allow::Exec => {
+                    //TODO restrict the path
+                    add_sys(&mut map, sys!(SYS_execve));
+                }
+                Allow::Wait => {
+                    add_sys(&mut map, sys!(SYS_wait4));
+                }
+                Allow::Rlimit => {
+                    //TODO do we only need `get`?
+                    add_sys(&mut map, sys!(SYS_prlimit64));
                 }
             }
         }

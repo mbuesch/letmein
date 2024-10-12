@@ -22,7 +22,8 @@ use crate::{
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
-use letmein_conf::{Config, ConfigVariant};
+use letmein_conf::{Config, ConfigVariant, Seccomp};
+use letmein_seccomp::{include_precompiled_filters, seccomp_supported, Filter as SeccompFilter};
 use std::{
     fs::{create_dir_all, metadata, set_permissions, OpenOptions},
     io::Write as _,
@@ -107,6 +108,33 @@ fn make_pidfile(rundir: &Path) -> ah::Result<()> {
         .context("Write to PID-file")
 }
 
+include_precompiled_filters!(SECCOMP_FILTER_KILL, SECCOMP_FILTER_LOG);
+
+fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
+    // See build.rs for the filter definition.
+    let filter_bytes = match seccomp {
+        Seccomp::Log => SECCOMP_FILTER_LOG,
+        Seccomp::Kill => SECCOMP_FILTER_KILL,
+        Seccomp::Off => return Ok(()),
+    };
+
+    // Install seccomp filter.
+    if seccomp_supported() {
+        println!("Seccomp mode: {}", seccomp);
+        assert!(!filter_bytes.is_empty());
+        SeccompFilter::deserialize(filter_bytes)
+            .install()
+            .context("Install seccomp filter")?;
+    } else {
+        println!(
+            "WARNING: Not using seccomp. \
+            Letmein does not support seccomp on this architecture, yet."
+        );
+    }
+
+    Ok(())
+}
+
 #[derive(Parser, Debug, Clone)]
 struct Opts {
     /// Override the default path to the configuration file.
@@ -127,6 +155,13 @@ struct Opts {
     /// even if a systemd socket has been passed to the application.
     #[arg(long, default_value = "false")]
     no_systemd: bool,
+
+    /// Override the `seccomp` setting from the configuration file.
+    ///
+    /// If this option is not given, then the value
+    /// from the configuration file is used instead.
+    #[arg(long)]
+    seccomp: Option<Seccomp>,
 }
 
 impl Opts {
@@ -161,6 +196,8 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
         .context("Firewall server init")?;
 
     make_pidfile(&opts.rundir)?;
+
+    install_seccomp_rules(opts.seccomp.unwrap_or(conf.read().await.seccomp()))?;
 
     // Task: Unix socket handler.
     let conf_clone = Arc::clone(&conf);

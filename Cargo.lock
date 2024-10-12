@@ -473,9 +473,11 @@ name = "letmeinfwd"
 version = "6.0.0"
 dependencies = [
  "anyhow",
+ "build-target",
  "clap",
  "letmein-conf",
  "letmein-fwproto",
+ "letmein-seccomp",
  "letmein-systemd",
  "libc",
  "nftables",

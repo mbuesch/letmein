@@ -7,7 +7,7 @@ StartLimitIntervalSec=0
 [Service]
 Type=notify
 NotifyAccess=main
-ExecStart=/opt/letmein/bin/letmeinfwd
+ExecStart=/opt/letmein/bin/letmeinfwd --seccomp=log
 ExecReload=/bin/kill -HUP $MAINPID
 RuntimeDirectory=letmeinfwd
 RuntimeDirectoryMode=0750

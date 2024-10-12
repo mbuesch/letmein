@@ -18,9 +18,14 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 letmein-conf = { workspace = true }
 letmein-fwproto = { workspace = true }
+letmein-seccomp = { workspace = true, features = [ "de", "install" ] }
 letmein-systemd = { workspace = true, features = [ "unix" ] }
 libc = { workspace = true }
 nftables = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync", "time" ] }
+
+[build-dependencies]
+build-target = { workspace = true }
+letmein-seccomp = { workspace = true, features = [ "compile", "ser" ] }
 
 # vim: ts=4 sw=4 expandtab
