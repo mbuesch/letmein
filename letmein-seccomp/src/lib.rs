@@ -17,7 +17,17 @@ use seccompiler::{
     apply_filter_all_threads, sock_filter, BpfProgram, SeccompAction, SeccompCmpArgLen,
     SeccompCmpOp, SeccompCondition, SeccompFilter, SeccompRule,
 };
-use std::{collections::BTreeMap, env::consts::ARCH};
+use std::{collections::BTreeMap, env::consts::ARCH, fs::OpenOptions, io::Write as _, path::Path};
+
+/// Include the raw serialized bytes of the precompiled seccomp BPF code.
+#[cfg(all(feature = "install", feature = "de"))]
+#[macro_export]
+macro_rules! include_precompiled_filters {
+    ($kill:ident, $log:ident) => {
+        const $kill: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/seccomp_filter_kill.bpf"));
+        const $log: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/seccomp_filter_log.bpf"));
+    };
+}
 
 #[cfg(feature = "compile")]
 macro_rules! sys {
@@ -76,6 +86,16 @@ pub enum Action {
     Log,
 }
 
+impl Action {
+    /// Get the file name of the precompiled BPF file for this action.
+    pub const fn get_bytecode_filename(&self) -> &'static str {
+        match self {
+            Action::Kill => "seccomp_filter_kill.bpf",
+            Action::Log => "seccomp_filter_log.bpf",
+        }
+    }
+}
+
 /// A compiled seccomp filter program.
 pub struct Filter(BpfProgram);
 
@@ -108,6 +128,45 @@ impl Filter {
         }
         assert_eq!(bpf.len(), raw.len() / 8);
         Self(bpf)
+    }
+
+    /// Pre-compile the given allow-list for the given `arch` for
+    /// [Action::Kill] and [Action::Log] actions
+    /// and put the BPF byte code into files in the `out_dir`.
+    ///
+    /// See [Action::get_bytecode_filename] for the file names used.
+    ///
+    /// If compilation fails, empty files will be written.
+    #[cfg(all(feature = "compile", feature = "ser"))]
+    pub fn precompile(allow: &[Allow], arch: &str, out_dir: &Path) -> ah::Result<()> {
+        Self::precompile_action(allow, Action::Kill, arch, out_dir)?;
+        Self::precompile_action(allow, Action::Log, arch, out_dir)?;
+        Ok(())
+    }
+
+    /// Pre-compile the given allow-list for the given `arch` and `deny_action`.
+    /// and put the BPF byte code into a file in the `out_dir`.
+    ///
+    /// See [Action::get_bytecode_filename] for the file name used.
+    ///
+    /// If compilation fails, an empty file will be written.
+    #[cfg(all(feature = "compile", feature = "ser"))]
+    pub fn precompile_action(
+        allow: &[Allow],
+        deny_action: Action,
+        arch: &str,
+        out_dir: &Path,
+    ) -> ah::Result<()> {
+        let filter = Self::compile_for_arch(allow, deny_action, arch)
+            .map(|filter| filter.serialize())
+            .unwrap_or_default();
+        OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(out_dir.join(deny_action.get_bytecode_filename()))?
+            .write_all(&filter)?;
+        Ok(())
     }
 
     #[cfg(feature = "compile")]

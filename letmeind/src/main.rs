@@ -19,7 +19,7 @@ use crate::{protocol::Protocol, server::Server};
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant, Seccomp};
-use letmein_seccomp::{seccomp_supported, Filter as SeccompFilter};
+use letmein_seccomp::{include_precompiled_filters, seccomp_supported, Filter as SeccompFilter};
 use std::{
     fs::{create_dir_all, metadata, OpenOptions},
     io::Write as _,
@@ -73,10 +73,7 @@ fn make_pidfile(rundir: &Path) -> ah::Result<()> {
         .context("Write to PID-file")
 }
 
-const SECCOMP_FILTER_KILL: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/seccomp_filter_kill.bpf"));
-const SECCOMP_FILTER_LOG: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/seccomp_filter_log.bpf"));
+include_precompiled_filters!(SECCOMP_FILTER_KILL, SECCOMP_FILTER_LOG);
 
 fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
     // See build.rs for the filter definition.
