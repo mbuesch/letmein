@@ -265,7 +265,7 @@ impl Filter {
                 }
                 Allow::ArchPrctl { op: _ } => {
                     //TODO restrict to op
-                    #[cfg(not(target_os = "android"))]
+                    #[cfg(target_arch = "x86_64")]
                     add_sys(&mut map, sys!(SYS_arch_prctl));
                 }
                 Allow::Dup => {
@@ -341,7 +341,7 @@ impl Filter {
                 Allow::Stat => {
                     add_sys(&mut map, sys!(SYS_fstat));
                     add_sys(&mut map, sys!(SYS_statx));
-                    #[cfg(not(target_os = "android"))]
+                    #[cfg(target_arch = "x86_64")]
                     add_sys(&mut map, sys!(SYS_newfstatat));
                 }
                 Allow::Recv => {
