@@ -265,6 +265,7 @@ impl Filter {
                 }
                 Allow::ArchPrctl { op: _ } => {
                     //TODO restrict to op
+                    #[cfg(not(target_os = "android"))]
                     add_sys(&mut map, sys!(SYS_arch_prctl));
                 }
                 Allow::Dup => {
@@ -305,6 +306,7 @@ impl Filter {
                 Allow::Access => {
                     add_sys(&mut map, sys!(SYS_access));
                     add_sys(&mut map, sys!(SYS_faccessat));
+                    #[cfg(not(target_os = "android"))]
                     add_sys(&mut map, sys!(SYS_faccessat2));
                 }
                 Allow::Open => {
@@ -339,6 +341,7 @@ impl Filter {
                 Allow::Stat => {
                     add_sys(&mut map, sys!(SYS_fstat));
                     add_sys(&mut map, sys!(SYS_statx));
+                    #[cfg(not(target_os = "android"))]
                     add_sys(&mut map, sys!(SYS_newfstatat));
                 }
                 Allow::Recv => {
@@ -375,9 +378,11 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_set_tid_address));
                 }
                 Allow::Rseq => {
+                    #[cfg(not(target_os = "android"))]
                     add_sys(&mut map, sys!(SYS_rseq));
                 }
                 Allow::Clone => {
+                    #[cfg(not(target_os = "android"))]
                     add_sys(&mut map, sys!(SYS_clone3));
                 }
                 Allow::Exec => {
