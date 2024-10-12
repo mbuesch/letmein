@@ -120,6 +120,13 @@ struct Opts {
     /// even if a systemd socket has been passed to the application.
     #[arg(long, default_value = "false")]
     no_systemd: bool,
+
+    /// Override the `seccomp` setting from the configuration file.
+    ///
+    /// If this option is not given, then the value
+    /// from the configuration file is used instead.
+    #[arg(long)]
+    seccomp: Option<Seccomp>,
 }
 
 impl Opts {
@@ -152,7 +159,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
 
     make_pidfile(&opts.rundir)?;
 
-    install_seccomp_rules(conf.read().await.seccomp())?;
+    install_seccomp_rules(opts.seccomp.unwrap_or(conf.read().await.seccomp()))?;
 
     // Task: Socket handler.
     let conf_clone = Arc::clone(&conf);
