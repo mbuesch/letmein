@@ -86,7 +86,6 @@ fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
     // Install seccomp filter.
     if seccomp_supported() {
         println!("Seccomp mode: {}", seccomp);
-        assert!(!filter_bytes.is_empty());
         SeccompFilter::deserialize(filter_bytes)
             .install()
             .context("Install seccomp filter")?;

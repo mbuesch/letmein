@@ -130,13 +130,15 @@ impl Filter {
             raw.extend_from_slice(&insn.k.to_le_bytes());
         }
         assert_eq!(raw.len(), self.0.len() * 8);
+        assert!(!raw.is_empty());
         raw
     }
 
     /// Simple de-serialization, without serde.
     #[cfg(feature = "de")]
     pub fn deserialize(raw: &[u8]) -> Self {
-        assert!(raw.len() % 8 == 0);
+        assert!(!raw.is_empty());
+        assert_eq!(raw.len() % 8, 0);
         let mut bpf = Vec::with_capacity(raw.len() / 8);
         for i in (0..raw.len()).step_by(8) {
             let code = u16::from_le_bytes(raw[i..i + 2].try_into().unwrap());
@@ -195,6 +197,8 @@ impl Filter {
 
     #[cfg(feature = "compile")]
     pub fn compile_for_arch(allow: &[Allow], deny_action: Action, arch: &str) -> ah::Result<Self> {
+        assert!(!allow.is_empty());
+
         type RulesMap = BTreeMap<i64, Vec<SeccompRule>>;
 
         fn add_sys(map: &mut RulesMap, sys: i64) {
