@@ -123,7 +123,7 @@ fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
             .install()
             .context("Install seccomp filter")?;
     } else {
-        println!(
+        eprintln!(
             "WARNING: Not using seccomp. \
             Letmein does not support seccomp on this architecture, yet."
         );
