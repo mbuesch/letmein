@@ -197,45 +197,51 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     install_seccomp_rules(opts.seccomp.unwrap_or(conf.read().await.seccomp()))?;
 
     // Task: Unix socket handler.
-    let conf_clone = Arc::clone(&conf);
-    let opts_clone = Arc::clone(&opts);
-    let fw_clone = Arc::clone(&fw);
-    task::spawn(async move {
-        let conn_semaphore = Semaphore::new(opts_clone.num_connections);
-        loop {
-            let conf = Arc::clone(&conf_clone);
-            let fw = Arc::clone(&fw_clone);
-            match srv.accept().await {
-                Ok(mut conn) => {
-                    // Socket connection handler.
-                    if let Ok(_permit) = conn_semaphore.acquire().await {
-                        task::spawn(async move {
-                            let conf = conf.read().await;
-                            if let Err(e) = conn.handle_message(&conf, fw).await {
-                                eprintln!("Client error: {e}");
-                            }
-                        });
+    task::spawn({
+        let conf = Arc::clone(&conf);
+        let opts = Arc::clone(&opts);
+        let fw = Arc::clone(&fw);
+
+        async move {
+            let conn_semaphore = Semaphore::new(opts.num_connections);
+            loop {
+                let conf = Arc::clone(&conf);
+                let fw = Arc::clone(&fw);
+                match srv.accept().await {
+                    Ok(mut conn) => {
+                        // Socket connection handler.
+                        if let Ok(_permit) = conn_semaphore.acquire().await {
+                            task::spawn(async move {
+                                let conf = conf.read().await;
+                                if let Err(e) = conn.handle_message(&conf, fw).await {
+                                    eprintln!("Client error: {e}");
+                                }
+                            });
+                        }
                     }
-                }
-                Err(e) => {
-                    eprintln!("Accept connection: {e}");
+                    Err(e) => {
+                        eprintln!("Accept connection: {e}");
+                    }
                 }
             }
         }
     });
 
     // Task: Firewall.
-    let conf_clone = Arc::clone(&conf);
-    let fw_clone = Arc::clone(&fw);
-    task::spawn(async move {
-        let mut interval = time::interval(FW_MAINTAIN_PERIOD);
-        loop {
-            interval.tick().await;
-            let conf = conf_clone.read().await;
-            let mut fw = fw_clone.lock().await;
-            if let Err(e) = fw.maintain(&conf).await {
-                let _ = exit_fw_tx.send(Err(e)).await;
-                break;
+    task::spawn({
+        let conf = Arc::clone(&conf);
+        let fw = Arc::clone(&fw);
+
+        async move {
+            let mut interval = time::interval(FW_MAINTAIN_PERIOD);
+            loop {
+                interval.tick().await;
+                let conf = conf.read().await;
+                let mut fw = fw.lock().await;
+                if let Err(e) = fw.maintain(&conf).await {
+                    let _ = exit_fw_tx.send(Err(e)).await;
+                    break;
+                }
             }
         }
     });

@@ -159,29 +159,32 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     install_seccomp_rules(opts.seccomp.unwrap_or(conf.read().await.seccomp()))?;
 
     // Task: Socket handler.
-    let conf_clone = Arc::clone(&conf);
-    let opts_clone = Arc::clone(&opts);
-    task::spawn(async move {
-        let conn_semaphore = Semaphore::new(opts_clone.num_connections);
-        loop {
-            let conf = Arc::clone(&conf_clone);
-            let opts = Arc::clone(&opts_clone);
-            match srv.accept().await {
-                Ok(conn) => {
-                    // Socket connection handler.
-                    if let Ok(_permit) = conn_semaphore.acquire().await {
-                        task::spawn(async move {
-                            let conf = conf.read().await;
-                            let mut proto = Protocol::new(conn, &conf, &opts.rundir);
-                            if let Err(e) = proto.run().await {
-                                eprintln!("Client error: {e}");
-                            }
-                        });
+    task::spawn({
+        let conf = Arc::clone(&conf);
+        let opts = Arc::clone(&opts);
+
+        async move {
+            let conn_semaphore = Semaphore::new(opts.num_connections);
+            loop {
+                let conf = Arc::clone(&conf);
+                let opts = Arc::clone(&opts);
+                match srv.accept().await {
+                    Ok(conn) => {
+                        // Socket connection handler.
+                        if let Ok(_permit) = conn_semaphore.acquire().await {
+                            task::spawn(async move {
+                                let conf = conf.read().await;
+                                let mut proto = Protocol::new(conn, &conf, &opts.rundir);
+                                if let Err(e) = proto.run().await {
+                                    eprintln!("Client error: {e}");
+                                }
+                            });
+                        }
                     }
-                }
-                Err(e) => {
-                    let _ = exit_sock_tx.send(Err(e)).await;
-                    break;
+                    Err(e) => {
+                        let _ = exit_sock_tx.send(Err(e)).await;
+                        break;
+                    }
                 }
             }
         }
