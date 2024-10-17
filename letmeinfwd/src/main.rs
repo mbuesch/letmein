@@ -38,7 +38,7 @@ use std::{
 use tokio::{
     runtime,
     signal::unix::{signal, SignalKind},
-    sync::{self, Mutex, RwLock, RwLockReadGuard, Semaphore},
+    sync::{self, Mutex, RwLock, Semaphore},
     task, time,
 };
 
@@ -46,8 +46,6 @@ const FW_MAINTAIN_PERIOD: Duration = Duration::from_millis(5000);
 
 static LETMEIND_UID: AtomicU32 = AtomicU32::new(u32::MAX);
 static LETMEIND_GID: AtomicU32 = AtomicU32::new(u32::MAX);
-
-pub type ConfigRef<'a> = RwLockReadGuard<'a, Config>;
 
 /// Create a directory, if it does not exist already.
 fn create_dir_if_not_exists(path: &Path) -> ah::Result<()> {
@@ -182,7 +180,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
         .context("Configuration file")?;
     let conf = Arc::new(RwLock::new(conf));
 
-    let fw = Arc::new(Mutex::new(NftFirewall::new(&conf.read().await).await?));
+    let fw = Arc::new(Mutex::new(NftFirewall::new(&*conf.read().await).await?));
 
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
     let mut sigint = signal(SignalKind::interrupt()).unwrap();

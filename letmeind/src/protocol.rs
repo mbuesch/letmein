@@ -9,23 +9,22 @@
 use crate::{
     firewall_client::{FirewallClient, PortType},
     server::ConnectionOps,
-    ConfigRef,
 };
 use anyhow::{self as ah, format_err as err};
-use letmein_conf::Resource;
+use letmein_conf::{Config, Resource};
 use letmein_proto::{Message, Operation, ResourceId, UserId};
 use std::path::Path;
 
 pub struct Protocol<'a, C> {
     conn: C,
-    conf: &'a ConfigRef<'a>,
+    conf: &'a Config,
     rundir: &'a Path,
     user_id: Option<UserId>,
     resource_id: Option<ResourceId>,
 }
 
 impl<'a, C: ConnectionOps> Protocol<'a, C> {
-    pub fn new(conn: C, conf: &'a ConfigRef<'a>, rundir: &'a Path) -> Self {
+    pub fn new(conn: C, conf: &'a Config, rundir: &'a Path) -> Self {
         Self {
             conn,
             conf,

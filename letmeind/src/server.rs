@@ -6,8 +6,8 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::ConfigRef;
 use anyhow::{self as ah, Context as _};
+use letmein_conf::Config;
 use letmein_proto::Message;
 use letmein_systemd::{systemd_notify_ready, tcp_from_systemd};
 use std::net::SocketAddr;
@@ -49,7 +49,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub async fn new(conf: &ConfigRef<'_>, no_systemd: bool) -> ah::Result<Self> {
+    pub async fn new(conf: &Config, no_systemd: bool) -> ah::Result<Self> {
         // Get socket from systemd?
         if !no_systemd {
             if let Some(listener) = tcp_from_systemd()? {

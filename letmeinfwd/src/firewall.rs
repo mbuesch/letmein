@@ -8,8 +8,8 @@
 
 pub mod nftables;
 
-use crate::ConfigRef;
 use anyhow as ah;
+use letmein_conf::Config;
 use std::{collections::HashMap, net::IpAddr, time::Instant};
 
 /// TCP and/or UDP port number.
@@ -61,7 +61,7 @@ struct Lease {
 
 impl Lease {
     /// Create a new lease with maximum timeout.
-    pub fn new(conf: &ConfigRef<'_>, addr: IpAddr, port: LeasePort) -> Self {
+    pub fn new(conf: &Config, addr: IpAddr, port: LeasePort) -> Self {
         // The upper layers must never give us a lease request for the control port.
         assert_ne!(
             conf.port(),
@@ -80,7 +80,7 @@ impl Lease {
     }
 
     /// Reset the timeout to maximum.
-    pub fn refresh_timeout(&mut self, conf: &ConfigRef<'_>) {
+    pub fn refresh_timeout(&mut self, conf: &Config) {
         self.timeout = Instant::now() + conf.nft_timeout();
     }
 
@@ -117,7 +117,7 @@ type LeaseMap = HashMap<LeaseId, Lease>;
 /// Returns a `Vec` of pruned [Lease]s.
 /// If no lease timed out, an empty `Vec` is returned.
 #[must_use]
-fn prune_all_lease_timeouts(conf: &ConfigRef<'_>, leases: &mut LeaseMap) -> Vec<Lease> {
+fn prune_all_lease_timeouts(conf: &Config, leases: &mut LeaseMap) -> Vec<Lease> {
     let mut pruned = vec![];
     let now = Instant::now();
     leases.retain(|_, lease| {
@@ -136,16 +136,16 @@ fn prune_all_lease_timeouts(conf: &ConfigRef<'_>, leases: &mut LeaseMap) -> Vec<
 /// Firewall maintenance operations.
 pub trait FirewallMaintain {
     /// Delete all leases from the firewall.
-    async fn clear(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()>;
+    async fn clear(&mut self, conf: &Config) -> ah::Result<()>;
 
     /// Run periodic maintenance.
     /// This shall be called in regular intervals every couple of seconds.
     /// This operation shall remove all timed-out leases.
-    async fn maintain(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()>;
+    async fn maintain(&mut self, conf: &Config) -> ah::Result<()>;
 
     /// Re-apply all rules to the underlying firewall.
     /// This operation shall remove all timed-out leases.
-    async fn reload(&mut self, conf: &ConfigRef<'_>) -> ah::Result<()>;
+    async fn reload(&mut self, conf: &Config) -> ah::Result<()>;
 }
 
 /// Firewall knock-open operations.
@@ -155,7 +155,7 @@ pub trait FirewallOpen {
     /// a rule present gracefully.
     async fn open_port(
         &mut self,
-        conf: &ConfigRef<'_>,
+        conf: &Config,
         remote_addr: IpAddr,
         port: LeasePort,
     ) -> ah::Result<()>;

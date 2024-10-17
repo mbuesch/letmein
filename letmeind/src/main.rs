@@ -31,11 +31,9 @@ use std::{
 use tokio::{
     runtime,
     signal::unix::{signal, SignalKind},
-    sync::{self, RwLock, RwLockReadGuard, Semaphore},
+    sync::{self, RwLock, Semaphore},
     task,
 };
-
-pub type ConfigRef<'a> = RwLockReadGuard<'a, Config>;
 
 /// Create a directory, if it does not exist already.
 fn create_dir_if_not_exists(path: &Path) -> ah::Result<()> {
@@ -152,7 +150,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
 
     let (exit_sock_tx, mut exit_sock_rx) = sync::mpsc::channel(1);
 
-    let srv = Server::new(&conf.read().await, opts.no_systemd)
+    let srv = Server::new(&*conf.read().await, opts.no_systemd)
         .await
         .context("Server init")?;
 

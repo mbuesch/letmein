@@ -8,9 +8,10 @@
 
 use crate::{
     firewall::{FirewallOpen, LeasePort},
-    set_owner_mode, ConfigRef, LETMEIND_GID, LETMEIND_UID,
+    set_owner_mode, LETMEIND_GID, LETMEIND_UID,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
+use letmein_conf::Config;
 use letmein_fwproto::{FirewallMessage, FirewallOperation, PortType, SOCK_FILE};
 use letmein_systemd::{systemd_notify_ready, unix_from_systemd};
 use std::{
@@ -74,7 +75,7 @@ impl FirewallConnection {
     /// Handle the firewall daemon unix socket communication.
     pub async fn handle_message(
         &mut self,
-        conf: &ConfigRef<'_>,
+        conf: &Config,
         fw: Arc<Mutex<impl FirewallOpen>>,
     ) -> ah::Result<()> {
         let Some(msg) = self.recv_msg().await? else {
