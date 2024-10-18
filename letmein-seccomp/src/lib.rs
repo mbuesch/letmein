@@ -71,9 +71,11 @@ pub enum Allow {
     ArchPrctl { op: u32 },
     Dup,
     Pipe,
+    Listen,
+    UnixAccept,
     UnixConnect,
-    UnixListen,
     TcpAccept,
+    TcpConnect,
     Netlink,
     SetSockOpt,
     Access,
@@ -94,6 +96,7 @@ pub enum Allow {
     Exec,
     Wait,
     Rlimit,
+    Uname,
 }
 
 /// Action to be performed, if a syscall is executed that is not in the allow-list.
@@ -281,20 +284,28 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_pipe));
                     add_sys(&mut map, sys!(SYS_pipe2));
                 }
+                Allow::Listen => {
+                    add_sys(&mut map, sys!(SYS_bind));
+                    add_sys(&mut map, sys!(SYS_listen));
+                }
+                Allow::UnixAccept => {
+                    add_sys(&mut map, sys!(SYS_accept4));
+                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_UNIX));
+                    add_sys(&mut map, sys!(SYS_getsockopt));
+                }
                 Allow::UnixConnect => {
                     add_sys(&mut map, sys!(SYS_connect));
                     add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_UNIX));
                     add_sys(&mut map, sys!(SYS_getsockopt));
                 }
-                Allow::UnixListen => {
-                    add_sys(&mut map, sys!(SYS_accept4));
-                    add_sys(&mut map, sys!(SYS_bind));
-                    add_sys(&mut map, sys!(SYS_listen));
-                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_UNIX));
-                    add_sys(&mut map, sys!(SYS_getsockopt));
-                }
                 Allow::TcpAccept => {
                     add_sys(&mut map, sys!(SYS_accept4));
+                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_INET));
+                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_INET6));
+                    add_sys(&mut map, sys!(SYS_getsockopt));
+                }
+                Allow::TcpConnect => {
+                    add_sys(&mut map, sys!(SYS_connect));
                     add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_INET));
                     add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_INET6));
                     add_sys(&mut map, sys!(SYS_getsockopt));
@@ -399,6 +410,9 @@ impl Filter {
                 Allow::Rlimit => {
                     //TODO do we only need `get`?
                     add_sys(&mut map, sys!(SYS_prlimit64));
+                }
+                Allow::Uname => {
+                    add_sys(&mut map, sys!(SYS_uname));
                 }
             }
         }

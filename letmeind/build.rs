@@ -12,13 +12,14 @@ use build_target::target_arch;
 use letmein_seccomp::{Allow, Filter};
 use std::path::Path;
 
-const SECCOMP_ALLOW_LIST: [Allow; 10] = [
+const SECCOMP_ALLOW_LIST: [Allow; 11] = [
     Allow::Mmap,
     Allow::Mprotect,
     Allow::Read,
     Allow::Write,
     Allow::Recv,
     Allow::Send,
+    Allow::Listen,
     Allow::TcpAccept,
     Allow::UnixConnect,
     Allow::Signal,

@@ -12,7 +12,7 @@ use build_target::target_arch;
 use letmein_seccomp::{Allow, Filter};
 use std::path::Path;
 
-const SECCOMP_ALLOW_LIST: [Allow; 27] = [
+const SECCOMP_ALLOW_LIST: [Allow; 28] = [
     Allow::Mmap,
     Allow::Mprotect,
     Allow::GetUidGid,
@@ -28,7 +28,8 @@ const SECCOMP_ALLOW_LIST: [Allow; 27] = [
     Allow::Stat,
     Allow::Recv,
     Allow::Send,
-    Allow::UnixListen,
+    Allow::Listen,
+    Allow::UnixAccept,
     Allow::Netlink,
     Allow::SetSockOpt,
     Allow::Signal,
