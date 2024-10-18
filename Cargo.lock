@@ -397,11 +397,13 @@ name = "letmein"
 version = "6.0.0"
 dependencies = [
  "anyhow",
+ "build-target",
  "clap",
  "hickory-proto",
  "hickory-resolver",
  "letmein-conf",
  "letmein-proto",
+ "letmein-seccomp",
  "tokio",
 ]
 

@@ -23,4 +23,13 @@ letmein-conf = { workspace = true }
 letmein-proto = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "net", "macros", ] }
 
+[build-dependencies]
+build-target = { workspace = true }
+
+[target.'cfg(any(target_os="linux", target_os="android"))'.dependencies]
+letmein-seccomp = { workspace = true, features = [ "de", "install" ] }
+
+[target.'cfg(any(target_os="linux", target_os="android"))'.build-dependencies]
+letmein-seccomp = { workspace = true, features = [ "compile", "ser" ] }
+
 # vim: ts=4 sw=4 expandtab
