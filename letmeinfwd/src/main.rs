@@ -229,6 +229,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     let mut sigint = signal(SignalKind::interrupt()).unwrap();
     let mut sighup = signal(SignalKind::hangup()).unwrap();
 
+    let (exit_sock_tx, mut exit_sock_rx) = sync::mpsc::channel(1);
     let (exit_fw_tx, mut exit_fw_rx) = sync::mpsc::channel(1);
 
     let srv = FirewallServer::new(opts.no_systemd, &opts.rundir)
@@ -264,7 +265,8 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                         }
                     }
                     Err(e) => {
-                        eprintln!("Accept connection: {e}");
+                        let _ = exit_sock_tx.send(Err(e)).await;
+                        break;
                     }
                 }
             }
@@ -305,6 +307,10 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
             }
             _ = sighup.recv() => {
                 handle_sighup(Arc::clone(&conf), &opts, Arc::clone(&fw), seccomp).await;
+            }
+            code = exit_sock_rx.recv() => {
+                exitcode = code.unwrap_or_else(|| Err(err!("Unknown error code.")));
+                break;
             }
             code = exit_fw_rx.recv() => {
                 exitcode = code.unwrap_or_else(|| Err(err!("Unknown error code.")));
