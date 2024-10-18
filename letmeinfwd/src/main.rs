@@ -132,6 +132,49 @@ fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
     Ok(())
 }
 
+/// Handle SIGHUP:
+/// Try to reload the configuration and try to re-apply the firewall rules.
+async fn handle_sighup(
+    conf: Arc<RwLock<Config>>,
+    opts: &Opts,
+    fw: Arc<Mutex<NftFirewall>>,
+    seccomp: Seccomp,
+) {
+    match seccomp {
+        Seccomp::Log | Seccomp::Kill => {
+            // Can't open the config file. The open() syscall is restricted.
+            eprintln!(
+                "SIGHUP: Error: Reloading not possible with --seccomp enabled. \
+                Please restart letmeinfwd instead."
+            );
+        }
+        Seccomp::Off => {
+            println!("SIGHUP: Reloading.");
+            {
+                let mut conf = conf.write().await;
+                if let Err(e) = conf.load(&opts.get_config()) {
+                    eprintln!("Failed to load configuration file: {e}");
+                }
+            }
+            {
+                let conf = conf.read().await;
+                let mut fw = fw.lock().await;
+                if let Err(e) = fw.reload(&conf).await {
+                    eprintln!("Failed to reload filewall rules: {e}");
+                }
+                if conf.seccomp() != Seccomp::Off {
+                    eprintln!(
+                        "WARNING: Seccomp has been turned ON in \
+                        the configuration file, but SIGHUP reloading \
+                        does not actually enable seccomp. \
+                        Please restart letmeinfwd."
+                    );
+                }
+            }
+        }
+    }
+}
+
 #[derive(Parser, Debug, Clone)]
 struct Opts {
     /// Override the default path to the configuration file.
@@ -194,7 +237,8 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
 
     make_pidfile(&opts.rundir)?;
 
-    install_seccomp_rules(opts.seccomp.unwrap_or(conf.read().await.seccomp()))?;
+    let seccomp = opts.seccomp.unwrap_or(conf.read().await.seccomp());
+    install_seccomp_rules(seccomp)?;
 
     // Task: Unix socket handler.
     task::spawn({
@@ -260,20 +304,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                 break;
             }
             _ = sighup.recv() => {
-                println!("SIGHUP: Reloading.");
-                {
-                    let mut conf = conf.write().await;
-                    if let Err(e) = conf.load(&opts.get_config()) {
-                        eprintln!("Failed to load configuration file: {e}");
-                    }
-                }
-                {
-                    let conf = conf.read().await;
-                    let mut fw = fw.lock().await;
-                    if let Err(e) = fw.reload(&conf).await {
-                        eprintln!("Failed to reload filewall rules: {e}");
-                    }
-                }
+                handle_sighup(Arc::clone(&conf), &opts, Arc::clone(&fw), seccomp).await;
             }
             code = exit_fw_rx.recv() => {
                 exitcode = code.unwrap_or_else(|| Err(err!("Unknown error code.")));

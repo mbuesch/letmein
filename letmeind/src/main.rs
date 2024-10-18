@@ -97,6 +97,35 @@ fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
     Ok(())
 }
 
+/// Handle SIGHUP:
+/// Try to reload the configuration.
+async fn handle_sighup(conf: Arc<RwLock<Config>>, opts: &Opts, seccomp: Seccomp) {
+    match seccomp {
+        Seccomp::Log | Seccomp::Kill => {
+            // Can't open the config file. The open() syscall is disabled.
+            eprintln!(
+                "SIGHUP: Error: Reloading not possible with --seccomp enabled. \
+                Please restart letmeind instead."
+            );
+        }
+        Seccomp::Off => {
+            println!("SIGHUP: Reloading.");
+            let mut conf = conf.write().await;
+            if let Err(e) = conf.load(&opts.get_config()) {
+                eprintln!("Failed to load configuration file: {e}");
+            }
+            if conf.seccomp() != Seccomp::Off {
+                eprintln!(
+                    "WARNING: Seccomp has been turned ON in \
+                    the configuration file, but SIGHUP reloading \
+                    does not actually enable seccomp. \
+                    Please restart letmeind."
+                );
+            }
+        }
+    }
+}
+
 #[derive(Parser, Debug, Clone)]
 struct Opts {
     /// Override the default path to the configuration file.
@@ -156,7 +185,8 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
 
     make_pidfile(&opts.rundir)?;
 
-    install_seccomp_rules(opts.seccomp.unwrap_or(conf.read().await.seccomp()))?;
+    let seccomp = opts.seccomp.unwrap_or(conf.read().await.seccomp());
+    install_seccomp_rules(seccomp)?;
 
     // Task: Socket handler.
     task::spawn({
@@ -204,22 +234,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                 break;
             }
             _ = sighup.recv() => {
-                let mut conf = conf.write().await;
-                match conf.seccomp() {
-                    Seccomp::Log | Seccomp::Kill => {
-                        // Can't open the config file. The open() syscall is disabled.
-                        eprintln!(
-                            "SIGHUP: Error: Reloading not possible with --seccomp enabled. \
-                            Please restart letmeind instead."
-                        );
-                    }
-                    Seccomp::Off => {
-                        println!("SIGHUP: Reloading.");
-                        if let Err(e) = conf.load(&opts.get_config()) {
-                            eprintln!("Failed to load configuration file: {e}");
-                        }
-                    }
-                }
+                handle_sighup(Arc::clone(&conf), &opts, seccomp).await;
             }
             code = exit_sock_rx.recv() => {
                 exitcode = code.unwrap_or_else(|| Err(err!("Unknown error code.")));
