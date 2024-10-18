@@ -14,11 +14,12 @@ jobs:
       matrix:
         toolchain:
           - 1.75.0 # MSRV
-          - 1.81.0
+          - 1.82.0
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup update ${{ matrix.toolchain }}
+      - run: rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
       - run: cargo build --verbose
       - run: cargo clippy -- --deny warnings
@@ -31,14 +32,15 @@ jobs:
       matrix:
         toolchain:
           - 1.75.0 # MSRV
-          - 1.81.0
+          - 1.82.0
         os:
           - windows-latest
           - macos-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup update ${{ matrix.toolchain }}
+      - run: rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
       - run: cargo build --verbose --package letmein
       - run: cargo clippy --package letmein -- --deny warnings
