@@ -12,12 +12,12 @@ I will always publish vulnerabilities to the public after finding a proper fix.
 
 # Security hardening
 
-The public network facing daemon `letmeind` supports the security hardening technique [seccomp](https://en.wikipedia.org/wiki/Seccomp).
+The public network facing daemon `letmeind`, the firmware update daemon `letmeinfwd` and the client application `letmein` support the security hardening technique [seccomp](https://en.wikipedia.org/wiki/Seccomp).
 
 Seccomp basically disables all Operating System Calls (syscalls) that are not required by the application.
 
-By default seccomp is disabled in `letmeind`.
-To enabled it, edit `/opt/letmein/etc/letmeind.conf` and set the seccomp option:
+By default seccomp is disabled.
+To enabled it, edit `/opt/letmein/etc/letmeind.conf` and `/opt/letmein/etc/letmein.conf` and set the seccomp option:
 
 ```
 [GENERAL]
@@ -25,7 +25,7 @@ seccomp = kill
 ```
 
 Setting the `seccomp` option to `kill` will fully enable seccomp.
-If the `letmeind` daemon executes a syscall that has not explicitly been allowed by the hard-coded allow-list, the Linux kernel will immediately kill `letmeind`.
+If letmein executes a syscall that has not explicitly been allowed by the hard-coded allow-list, the Linux kernel will immediately kill the process.
 That way attacker injected code cannot execute arbitrary syscalls that are not on the allow-list.
 
 Alternatively, you can configure the `seccomp` option to `log`.
@@ -37,7 +37,7 @@ In this case, please open a Github Issue on letmein.
 
 Seccomp is currently only supported on the `x86_64` and `aarch64` CPU architectures.
 
-The seccomp feature of letmeind has been tested with Debian Linux Stable and Unstable.
+The seccomp feature of letmein has been tested with Debian Linux Stable and Unstable.
 
 # Security analysis
 
