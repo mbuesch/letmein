@@ -16,7 +16,7 @@ mod server;
 mod uid_gid;
 
 use crate::{
-    firewall::{nftables::NftFirewall, FirewallMaintain as _},
+    firewall::{nftables::NftFirewall, FirewallMaintain},
     server::FirewallServer,
     uid_gid::{os_get_gid, os_get_uid},
 };
@@ -137,7 +137,7 @@ fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
 async fn handle_sighup(
     conf: Arc<RwLock<Config>>,
     opts: &Opts,
-    fw: Arc<Mutex<NftFirewall>>,
+    fw: Arc<Mutex<impl FirewallMaintain>>,
     seccomp: Seccomp,
 ) {
     match seccomp {
