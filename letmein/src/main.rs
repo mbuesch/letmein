@@ -17,7 +17,8 @@ use anyhow::{self as ah, Context as _};
 use clap::{Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant};
 use letmein_proto::UserId;
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
+use tokio::runtime;
 
 #[derive(Parser, Debug)]
 struct Opts {
@@ -34,6 +35,7 @@ struct Opts {
 }
 
 impl Opts {
+    /// Get the configuration path from command line or default.
     pub fn get_config(&self) -> PathBuf {
         if let Some(config) = &self.config {
             config.clone()
@@ -43,6 +45,7 @@ impl Opts {
     }
 }
 
+/// Parse `UserId` helper for command line argument parsing.
 fn parse_user(s: &str) -> ah::Result<UserId> {
     s.parse()
 }
@@ -126,15 +129,15 @@ enum Command {
     },
 }
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> ah::Result<()> {
-    let opts = Opts::parse();
-
+#[rustfmt::skip]
+async fn async_main(opts: Opts) -> ah::Result<()> {
+    // Read the letmein.conf configuration file.
     let mut conf = Config::new(ConfigVariant::Client);
     conf.load(&opts.get_config())
         .context("Configuration file")?;
     let conf = Arc::new(conf);
 
+    // Run the user specified command.
     match opts.command {
         Command::Knock {
             host,
@@ -153,12 +156,29 @@ async fn main() -> ah::Result<()> {
                 port,
                 user,
             )
-            .await?;
+            .await
         }
-        Command::GenKey { user } => run_genkey(conf, user).await?,
+        Command::GenKey {
+            user,
+        } => {
+            run_genkey(
+                conf,
+                user,
+            )
+            .await
+        }
     }
+}
 
-    Ok(())
+fn main() -> ah::Result<()> {
+    let opts = Opts::parse();
+    runtime::Builder::new_current_thread()
+        .thread_keep_alive(Duration::from_millis(0))
+        .max_blocking_threads(1)
+        .enable_all()
+        .build()
+        .context("Tokio runtime builder")?
+        .block_on(async_main(opts))
 }
 
 // vim: ts=4 sw=4 expandtab

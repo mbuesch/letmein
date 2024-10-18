@@ -15,6 +15,7 @@ use letmein_conf::Config;
 use letmein_proto::{Key, Message, Operation, ResourceId, UserId};
 use std::{path::Path, sync::Arc};
 
+/// Address types to knock.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum AddrMode {
     #[default]
@@ -35,6 +36,7 @@ impl From<(bool, bool)> for AddrMode {
     }
 }
 
+/// Knock protocol sequence - client side.
 struct KnockSeq<'a> {
     pub verbose: bool,
     pub addr: &'a str,
@@ -45,6 +47,7 @@ struct KnockSeq<'a> {
 }
 
 impl<'a> KnockSeq<'a> {
+    /// Check if the server replied with a valid message.
     fn check_reply(&self, msg: &Message) -> ah::Result<()> {
         if msg.user() != self.user {
             eprintln!(
@@ -53,6 +56,7 @@ impl<'a> KnockSeq<'a> {
                 self.user,
                 msg.user(),
             );
+            // continue processing this message.
         }
         if msg.resource() != self.resource {
             eprintln!(
@@ -61,10 +65,12 @@ impl<'a> KnockSeq<'a> {
                 self.resource,
                 msg.resource(),
             );
+            // continue processing this message.
         }
         Ok(())
     }
 
+    /// Run the knock protocol sequence.
     pub async fn knock_sequence(&self, resolver_mode: ResMode) -> ah::Result<()> {
         if self.verbose {
             println!(
@@ -109,6 +115,7 @@ impl<'a> KnockSeq<'a> {
     }
 }
 
+/// Run the `knock` command.
 pub async fn run_knock(
     conf: Arc<Config>,
     verbose: bool,

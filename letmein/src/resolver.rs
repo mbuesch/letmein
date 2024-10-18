@@ -11,6 +11,7 @@ use hickory_proto::rr::{record_data::RData, record_type::RecordType};
 use hickory_resolver::{config::ResolverConfig, TokioAsyncResolver};
 use std::net::IpAddr;
 
+/// Host name resolution target mode.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum ResMode {
     #[default]
@@ -18,14 +19,17 @@ pub enum ResMode {
     Ipv4,
 }
 
+/// Check if a string can be parsed into an IPv4 address.
 pub fn is_ipv4_addr(host: &str) -> bool {
     host.parse::<IpAddr>().map(|a| a.is_ipv4()).unwrap_or(false)
 }
 
+/// Check if a string can be parsed into an IPv6 address.
 pub fn is_ipv6_addr(host: &str) -> bool {
     host.parse::<IpAddr>().map(|a| a.is_ipv6()).unwrap_or(false)
 }
 
+/// Resolve a host name into an address.
 pub async fn resolve(host: &str, mode: ResMode) -> ah::Result<IpAddr> {
     // Try to parse host as an IP address.
     if let Ok(addr) = host.parse::<IpAddr>() {

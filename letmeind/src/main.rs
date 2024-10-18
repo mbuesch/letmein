@@ -71,14 +71,18 @@ fn make_pidfile(rundir: &Path) -> ah::Result<()> {
         .context("Write to PID-file")
 }
 
-include_precompiled_filters!(SECCOMP_FILTER_KILL, SECCOMP_FILTER_LOG);
-
+/// Install the precompiled `seccomp` rules, if requested.
 fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
+    if seccomp == Seccomp::Off {
+        return Ok(());
+    }
+
     // See build.rs for the filter definition.
+    include_precompiled_filters!(SECCOMP_FILTER_KILL, SECCOMP_FILTER_LOG);
     let filter_bytes = match seccomp {
         Seccomp::Log => SECCOMP_FILTER_LOG,
         Seccomp::Kill => SECCOMP_FILTER_KILL,
-        Seccomp::Off => return Ok(()),
+        Seccomp::Off => unreachable!(),
     };
 
     // Install seccomp filter.
@@ -110,6 +114,7 @@ async fn handle_sighup(conf: Arc<RwLock<Config>>, opts: &Opts, seccomp: Seccomp)
         }
         Seccomp::Off => {
             println!("SIGHUP: Reloading.");
+            // Reload the configuration.
             let mut conf = conf.write().await;
             if let Err(e) = conf.load(&opts.get_config()) {
                 eprintln!("Failed to load configuration file: {e}");
@@ -156,6 +161,7 @@ struct Opts {
 }
 
 impl Opts {
+    /// Get the configuration path from command line or default.
     pub fn get_config(&self) -> PathBuf {
         if let Some(config) = &self.config {
             config.clone()
@@ -166,29 +172,36 @@ impl Opts {
 }
 
 async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
+    // Create directories in /run
     make_run_subdir(&opts.rundir)?;
 
+    // Read the letmeind.conf configuration file.
     let mut conf = Config::new(ConfigVariant::Server);
     conf.load(&opts.get_config())
         .context("Configuration file")?;
     let conf = Arc::new(RwLock::new(conf));
 
+    // Register unix signal handlers.
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
     let mut sigint = signal(SignalKind::interrupt()).unwrap();
     let mut sighup = signal(SignalKind::hangup()).unwrap();
 
+    // Create async IPC channels.
     let (exit_sock_tx, mut exit_sock_rx) = sync::mpsc::channel(1);
 
+    // Start the TCP control port listener.
     let srv = Server::new(&*conf.read().await, opts.no_systemd)
         .await
         .context("Server init")?;
 
+    // Create the PID-file.
     make_pidfile(&opts.rundir)?;
 
+    // Install `seccomp` rules, if required.
     let seccomp = opts.seccomp.unwrap_or(conf.read().await.seccomp());
     install_seccomp_rules(seccomp)?;
 
-    // Task: Socket handler.
+    // Spawn task: Socket handler.
     task::spawn({
         let conf = Arc::clone(&conf);
         let opts = Arc::clone(&opts);

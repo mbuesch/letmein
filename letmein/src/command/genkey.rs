@@ -11,6 +11,7 @@ use letmein_conf::Config;
 use letmein_proto::{secure_random, Key, UserId};
 use std::sync::Arc;
 
+/// Generate a new truly random and secure user key.
 pub async fn run_genkey(conf: Arc<Config>, user: Option<UserId>) -> ah::Result<()> {
     let user = user.unwrap_or_else(|| conf.default_user());
     let key: Key = secure_random();
