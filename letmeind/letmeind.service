@@ -19,7 +19,6 @@ RestartSec=10
 User=letmeind
 Group=letmeind
 Nice=0
-#Environment=RUST_BACKTRACE=1
 
 [Install]
 # Don't do socket-activation. Always start the service.

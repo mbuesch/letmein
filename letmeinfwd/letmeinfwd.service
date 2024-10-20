@@ -18,9 +18,8 @@ RestartSec=10
 User=root
 Group=letmeind
 Nice=0
-#Environment=RUST_BACKTRACE=1
 
 [Install]
 # We can't do socket-activation.
-# This service opens the letmeind communication port.
+# This service opens the letmeind control port.
 WantedBy=multi-user.target
