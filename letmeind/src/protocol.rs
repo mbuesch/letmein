@@ -13,7 +13,7 @@ use crate::{
 use anyhow::{self as ah, format_err as err};
 use letmein_conf::{Config, Resource};
 use letmein_proto::{Message, Operation, ResourceId, UserId};
-use std::path::Path;
+use std::{net::SocketAddr, path::Path};
 
 pub struct Protocol<'a, C> {
     conn: C,
@@ -32,6 +32,10 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
             user_id: None,
             resource_id: None,
         }
+    }
+
+    pub fn addr(&self) -> SocketAddr {
+        self.conn.addr()
     }
 
     async fn recv_msg(&mut self, expect_operation: Operation) -> ah::Result<Message> {
@@ -170,7 +174,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 };
 
                 // Send an open-port request to letmeinfwd.
-                if let Err(e) = fw.open_port(self.conn.addr().ip(), port_type, *port).await {
+                if let Err(e) = fw.open_port(self.addr().ip(), port_type, *port).await {
                     let _ = self.send_go_away().await;
                     return Err(err!("letmeinfwd firewall open: {e}"));
                 }

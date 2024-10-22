@@ -219,7 +219,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                                 let conf = conf.read().await;
                                 let mut proto = Protocol::new(conn, &conf, &opts.rundir);
                                 if let Err(e) = proto.run().await {
-                                    eprintln!("Client error: {e}");
+                                    eprintln!("Client '{}' ERROR: {}", proto.addr().ip(), e);
                                 }
                             });
                         }
