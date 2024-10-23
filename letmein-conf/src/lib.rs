@@ -20,7 +20,7 @@ mod parse_items;
 
 use crate::{
     ini::Ini,
-    parse::{parse_bool, parse_hex, parse_u16, parse_u32},
+    parse::{parse_bool, parse_duration, parse_hex, parse_u16},
     parse_items::{Map, MapItem},
 };
 use anyhow::{self as ah, format_err as err, Context as _};
@@ -43,7 +43,8 @@ const CLIENT_CONF_PATH: &str = "etc/letmein.conf";
 #[cfg(target_os = "windows")]
 const CLIENT_CONF_PATH: &str = "letmein.conf";
 
-const DEFAULT_NFT_TIMEOUT: u32 = 600;
+const DEFAULT_CONTROL_TIMEOUT: Duration = Duration::from_millis(5_000);
+const DEFAULT_NFT_TIMEOUT: Duration = Duration::from_millis(600_000);
 
 /// Configured resource.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -132,6 +133,13 @@ fn get_port(ini: &Ini) -> ah::Result<u16> {
         return parse_u16(port);
     }
     Ok(PORT)
+}
+
+fn get_control_timeout(ini: &Ini) -> ah::Result<Duration> {
+    if let Some(timeout) = ini.get("GENERAL", "control-timeout") {
+        return parse_duration(timeout);
+    }
+    Ok(DEFAULT_CONTROL_TIMEOUT)
 }
 
 fn get_seccomp(ini: &Ini) -> ah::Result<Seccomp> {
@@ -301,9 +309,9 @@ fn get_nft_chain_input(ini: &Ini) -> ah::Result<String> {
     }
 }
 
-fn get_nft_timeout(ini: &Ini) -> ah::Result<u32> {
+fn get_nft_timeout(ini: &Ini) -> ah::Result<Duration> {
     if let Some(nft_timeout) = ini.get("NFTABLES", "timeout") {
-        parse_u32(nft_timeout)
+        parse_duration(nft_timeout)
     } else {
         Ok(DEFAULT_NFT_TIMEOUT)
     }
@@ -326,6 +334,7 @@ pub struct Config {
     path: Option<PathBuf>,
     debug: bool,
     port: u16,
+    control_timeout: Duration,
     seccomp: Seccomp,
     keys: HashMap<UserId, Key>,
     resources: HashMap<ResourceId, Resource>,
@@ -333,7 +342,7 @@ pub struct Config {
     nft_family: String,
     nft_table: String,
     nft_chain_input: String,
-    nft_timeout: u32,
+    nft_timeout: Duration,
 }
 
 impl Config {
@@ -342,6 +351,7 @@ impl Config {
         Self {
             variant,
             port: PORT,
+            control_timeout: DEFAULT_CONTROL_TIMEOUT,
             nft_timeout: DEFAULT_NFT_TIMEOUT,
             ..Default::default()
         }
@@ -401,6 +411,7 @@ impl Config {
 
         let debug = get_debug(ini)?;
         let port = get_port(ini)?;
+        let control_timeout = get_control_timeout(ini)?;
         let seccomp = get_seccomp(ini)?;
         let keys = get_keys(ini)?;
         let resources = get_resources(ini)?;
@@ -416,6 +427,7 @@ impl Config {
 
         self.debug = debug;
         self.port = port;
+        self.control_timeout = control_timeout;
         self.seccomp = seccomp;
         self.keys = keys;
         self.resources = resources;
@@ -435,6 +447,10 @@ impl Config {
     /// Get the `port` option from `[GENERAL]` section.
     pub fn port(&self) -> u16 {
         self.port
+    }
+
+    pub fn control_timeout(&self) -> Duration {
+        self.control_timeout
     }
 
     /// Get the `seccomp` option from `[GENERAL]` section.
@@ -494,7 +510,7 @@ impl Config {
 
     /// Get the `timeout` option from `[NFTABLES]` section.
     pub fn nft_timeout(&self) -> Duration {
-        Duration::from_secs(self.nft_timeout.into())
+        self.nft_timeout
     }
 }
 
@@ -505,8 +521,15 @@ mod tests {
     #[test]
     fn test_general() {
         let mut ini = Ini::new();
-        ini.parse_str("[GENERAL]\ndebug = true\n").unwrap();
+        ini.parse_str("[GENERAL]\ndebug = true\nport = 1234\ncontrol-timeout=1.5\nseccomp = kill")
+            .unwrap();
         assert!(get_debug(&ini).unwrap());
+        assert_eq!(get_port(&ini).unwrap(), 1234);
+        assert_eq!(
+            get_control_timeout(&ini).unwrap(),
+            Duration::from_millis(1500)
+        );
+        assert_eq!(get_seccomp(&ini).unwrap(), Seccomp::Kill);
     }
 
     #[test]
@@ -608,7 +631,7 @@ mod tests {
         assert_eq!(nft_family, "inet");
         assert_eq!(nft_table, "filter");
         assert_eq!(nft_chain_input, "LETMEIN-INPUT");
-        assert_eq!(nft_timeout, 50);
+        assert_eq!(nft_timeout, Duration::from_secs(50));
     }
 }
 

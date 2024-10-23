@@ -13,7 +13,7 @@ use crate::{
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::Config;
 use letmein_proto::{Key, Message, Operation, ResourceId, UserId};
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 
 /// Address types to knock.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -41,6 +41,7 @@ struct KnockSeq<'a> {
     pub verbose: bool,
     pub addr: &'a str,
     pub server_port: u16,
+    pub control_timeout: Duration,
     pub user: UserId,
     pub resource: ResourceId,
     pub key: &'a Key,
@@ -78,9 +79,14 @@ impl<'a> KnockSeq<'a> {
                 self.addr, self.server_port
             );
         }
-        let mut client = Client::new(self.addr, self.server_port, resolver_mode)
-            .await
-            .context("Client init")?;
+        let mut client = Client::new(
+            self.addr,
+            self.server_port,
+            self.control_timeout,
+            resolver_mode,
+        )
+        .await
+        .context("Client init")?;
 
         if self.verbose {
             println!("Sending 'Knock' packet.");
@@ -136,11 +142,13 @@ pub async fn run_knock(
         ));
     };
     let server_port = server_port.unwrap_or_else(|| conf.port());
+    let control_timeout = conf.control_timeout();
 
     let seq = KnockSeq {
         verbose,
         addr,
         server_port,
+        control_timeout,
         user,
         resource,
         key,

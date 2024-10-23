@@ -49,6 +49,21 @@ Letmein will open this port by itself when it's up and running.
 
 This option defaults to `port=5800`, if it is absent from the configuration.
 
+### `control-timeout`
+
+The `control-timeout` option specifies the timeout for receiving and sending messages on the control port.
+If the timeout is exceeded, the TCP connection will be aborted.
+
+On the server this option aborts client connections that don't make progress during the authentication proctocol.
+This kicks out clients that don't make progress from the limited number of connections available.
+
+On the client this option allows for better error messages to the user by aborting authentication attempts that don't make any progress.
+
+Don't choose a too small timeout.
+Otherwise the authentication handshake will fail over very slow network connections.
+
+This option defaults to `control-timeout=5.0` seconds, if it is absent from the configuration.
+
 ### `seccomp`
 
 The `seccomp` option turns [Seccomp](https://en.wikipedia.org/wiki/Seccomp) security hardening on or off.

@@ -21,7 +21,7 @@ hickory-proto = { workspace = true }
 hickory-resolver = { workspace = true }
 letmein-conf = { workspace = true }
 letmein-proto = { workspace = true }
-tokio = { workspace = true, features = [ "rt", "net", "macros", ] }
+tokio = { workspace = true, features = [ "rt", "net", "macros", "time", ] }
 
 [build-dependencies]
 build-target = { workspace = true }

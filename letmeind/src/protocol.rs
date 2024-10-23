@@ -14,6 +14,7 @@ use anyhow::{self as ah, format_err as err};
 use letmein_conf::{Config, Resource};
 use letmein_proto::{Message, Operation, ResourceId, UserId};
 use std::{net::SocketAddr, path::Path};
+use tokio::time::timeout;
 
 pub struct Protocol<'a, C> {
     conn: C,
@@ -39,7 +40,10 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
     }
 
     async fn recv_msg(&mut self, expect_operation: Operation) -> ah::Result<Message> {
-        if let Some(msg) = self.conn.recv_msg().await? {
+        if let Some(msg) = timeout(self.conf.control_timeout(), self.conn.recv_msg())
+            .await
+            .map_err(|_| err!("RX communication with peer timed out"))??
+        {
             if msg.operation() != expect_operation {
                 let _ = self.send_go_away().await;
                 return Err(err!(
@@ -67,7 +71,9 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
     }
 
     async fn send_msg(&mut self, msg: &Message) -> ah::Result<()> {
-        self.conn.send_msg(msg).await
+        timeout(self.conf.control_timeout(), self.conn.send_msg(msg))
+            .await
+            .map_err(|_| err!("TX communication with peer timed out"))?
     }
 
     async fn send_go_away(&mut self) -> ah::Result<()> {

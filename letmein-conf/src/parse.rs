@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{self as ah, format_err as err};
+use std::time::Duration;
 
 pub fn parse_bool(s: &str) -> ah::Result<bool> {
     let s = s.to_lowercase();
@@ -27,12 +28,22 @@ pub fn parse_u16(s: &str) -> ah::Result<u16> {
     }
 }
 
-pub fn parse_u32(s: &str) -> ah::Result<u32> {
+fn parse_u32(s: &str) -> ah::Result<u32> {
     let s = s.trim();
     if let Some(s) = s.strip_prefix("0x") {
         Ok(u32::from_str_radix(s, 16)?)
     } else {
         Ok(s.parse::<u32>()?)
+    }
+}
+
+fn parse_f64(s: &str) -> ah::Result<f64> {
+    let s = s.trim();
+    let value = s.parse::<f64>()?;
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(err!("Invalid floating point value (Inf or NaN)"))
     }
 }
 
@@ -60,6 +71,18 @@ pub fn parse_hex<const SIZE: usize>(s: &str) -> ah::Result<[u8; SIZE]> {
         ret[i] |= parse_hexdigit(&s[i * 2 + 1..i * 2 + 2])?;
     }
     Ok(ret)
+}
+
+pub fn parse_duration(s: &str) -> ah::Result<Duration> {
+    if let Ok(secs) = parse_u32(s) {
+        return Ok(Duration::from_secs(secs.into()));
+    }
+    if let Ok(secs) = parse_f64(s) {
+        if secs >= 0.0 && secs <= u32::MAX.into() {
+            return Ok(Duration::from_secs_f64(secs));
+        }
+    }
+    Err(err!("Invalid Duration"))
 }
 
 // vim: ts=4 sw=4 expandtab

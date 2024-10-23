@@ -9,26 +9,38 @@
 use crate::resolver::{resolve, ResMode};
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_proto::{Message, Operation};
-use tokio::net::TcpStream;
+use std::time::Duration;
+use tokio::{net::TcpStream, time::timeout};
 
 /// TCP control connection to the server.
 pub struct Client {
     stream: TcpStream,
+    control_timeout: Duration,
 }
 
 impl Client {
     /// Create a new letmein control connection.
-    pub async fn new(host: &str, port: u16, mode: ResMode) -> ah::Result<Self> {
+    pub async fn new(
+        host: &str,
+        port: u16,
+        control_timeout: Duration,
+        mode: ResMode,
+    ) -> ah::Result<Self> {
         let addr = resolve(host, mode).await.context("Resolve host name")?;
         let stream = TcpStream::connect((addr, port))
             .await
             .context("Connect to server")?;
-        Ok(Self { stream })
+        Ok(Self {
+            stream,
+            control_timeout,
+        })
     }
 
     /// Receive a message from the TCP control connection.
     pub async fn recv_msg(&mut self) -> ah::Result<Option<Message>> {
-        Message::recv(&mut self.stream).await
+        timeout(self.control_timeout, Message::recv(&mut self.stream))
+            .await
+            .map_err(|_| err!("RX communication with peer timed out"))?
     }
 
     /// Receive a specific message type from the TCP control connection.
@@ -55,7 +67,9 @@ impl Client {
 
     /// Send a message to the TCP control connection.
     pub async fn send_msg(&mut self, msg: Message) -> ah::Result<()> {
-        msg.send(&mut self.stream).await
+        timeout(self.control_timeout, msg.send(&mut self.stream))
+            .await
+            .map_err(|_| err!("TX communication with peer timed out"))?
     }
 }
 
