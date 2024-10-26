@@ -20,7 +20,7 @@ use nftables::{
     stmt::{Match, Operator, Statement},
     types::NfFamily,
 };
-use std::net::IpAddr;
+use std::{fmt::Write as _, net::IpAddr};
 
 struct NftNames<'a> {
     family: NfFamily,
@@ -122,13 +122,15 @@ fn statement_accept() -> Statement {
 
 /// Comment string for a `Rule`.
 /// It can be used as unique identifier for lease rules.
-fn gen_rule_comment(addr: Option<IpAddr>, port: Option<SingleLeasePort>) -> String {
-    const BASE: &str = "letmein/GENERATED";
-    if let (Some(addr), Some(port)) = (addr, port) {
-        format!("{}/{}/{}", addr, port, BASE)
+fn gen_rule_comment(addr: Option<IpAddr>, port: SingleLeasePort) -> ah::Result<String> {
+    let mut comment = String::with_capacity(256);
+    if let Some(addr) = addr {
+        write!(&mut comment, "{addr}/")?;
     } else {
-        BASE.to_string()
+        write!(&mut comment, "any/")?;
     }
+    write!(&mut comment, "{port}/accept/letmein/GENERATED")?;
+    Ok(comment)
 }
 
 /// Generate a nftables add-rule for this addr/port.
@@ -146,7 +148,7 @@ fn gen_add_lease_cmd(conf: &Config, addr: IpAddr, port: SingleLeasePort) -> ah::
         ],
         ..Default::default()
     };
-    rule.comment = Some(gen_rule_comment(Some(addr), Some(port)));
+    rule.comment = Some(gen_rule_comment(Some(addr), port)?);
     Ok(NfCmd::Add(NfListObject::Rule(rule)))
 }
 
@@ -199,7 +201,7 @@ impl ListedRuleset {
         addr: IpAddr,
         port: SingleLeasePort,
     ) -> ah::Result<u32> {
-        let comment = gen_rule_comment(Some(addr), Some(port));
+        let comment = gen_rule_comment(Some(addr), port)?;
         for obj in &self.objs {
             if let NfObject::ListObject(obj) = obj {
                 match &**obj {
@@ -344,7 +346,7 @@ impl NftFirewall {
             ],
             ..Default::default()
         };
-        rule.comment = Some(gen_rule_comment(None, None));
+        rule.comment = Some(gen_rule_comment(None, SingleLeasePort::Tcp(conf.port()))?);
         batch.add_cmd(NfCmd::Add(NfListObject::Rule(rule)));
         if conf.debug() {
             println!(
