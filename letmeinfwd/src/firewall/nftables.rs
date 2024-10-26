@@ -269,6 +269,7 @@ impl ListedRuleset {
 
 pub struct NftFirewall {
     leases: LeaseMap,
+    shutdown: bool,
 }
 
 impl NftFirewall {
@@ -287,15 +288,23 @@ impl NftFirewall {
 
         let mut this = Self {
             leases: LeaseMap::new(),
+            shutdown: false,
         };
-        this.clear(conf).await.context("nftables initialization")?;
+
+        this.nftables_full_rebuild(conf)
+            .context("nftables initialization")?;
+        this.print_total_rule_count(conf);
+
         Ok(this)
     }
 
     /// Print the number of rules required for all leases.
     fn print_total_rule_count(&self, conf: &Config) {
         if conf.debug() {
-            let mut count = 1; // One for the control port.
+            let mut count = 0;
+            if !self.shutdown {
+                count += 1; // One for the control port.
+            }
             for lease in self.leases.values() {
                 count += match lease.port() {
                     LeasePort::Tcp(_) | LeasePort::Udp(_) => 1,
@@ -335,30 +344,32 @@ impl NftFirewall {
             println!("nftables: Chain flushed");
         }
 
-        // Open the port letmeind is listening on.
-        let mut rule = Rule {
-            family: names.family,
-            table: names.table.to_string(),
-            chain: names.chain_input.to_string(),
-            expr: vec![
-                statement_match_dport(SingleLeasePort::Tcp(conf.port())),
-                statement_accept(),
-            ],
-            ..Default::default()
-        };
-        rule.comment = Some(gen_rule_comment(None, SingleLeasePort::Tcp(conf.port()))?);
-        batch.add_cmd(NfCmd::Add(NfListObject::Rule(rule)));
-        if conf.debug() {
-            println!(
-                "nftables: Adding control port rule for port={}",
-                conf.port()
-            );
-        }
+        if !self.shutdown {
+            // Open the port letmeind is listening on.
+            let mut rule = Rule {
+                family: names.family,
+                table: names.table.to_string(),
+                chain: names.chain_input.to_string(),
+                expr: vec![
+                    statement_match_dport(SingleLeasePort::Tcp(conf.port())),
+                    statement_accept(),
+                ],
+                ..Default::default()
+            };
+            rule.comment = Some(gen_rule_comment(None, SingleLeasePort::Tcp(conf.port()))?);
+            batch.add_cmd(NfCmd::Add(NfListObject::Rule(rule)));
+            if conf.debug() {
+                println!(
+                    "nftables: Adding control port rule for port={}",
+                    conf.port()
+                );
+            }
 
-        // Open all lease ports, restricted to the peer addresses.
-        for lease in self.leases.values() {
-            for cmd in gen_add_lease_cmds(conf, lease)? {
-                batch.add_cmd(cmd);
+            // Open all lease ports, restricted to the peer addresses.
+            for lease in self.leases.values() {
+                for cmd in gen_add_lease_cmds(conf, lease)? {
+                    batch.add_cmd(cmd);
+                }
             }
         }
 
@@ -401,7 +412,9 @@ impl NftFirewall {
 
 impl FirewallMaintain for NftFirewall {
     /// Remove all leases and remove all rules from the kernel.
-    async fn clear(&mut self, conf: &Config) -> ah::Result<()> {
+    async fn shutdown(&mut self, conf: &Config) -> ah::Result<()> {
+        assert!(!self.shutdown);
+        self.shutdown = true;
         self.leases.clear();
         self.nftables_full_rebuild(conf)?;
         self.print_total_rule_count(conf);
@@ -411,6 +424,7 @@ impl FirewallMaintain for NftFirewall {
     /// Run the periodic maintenance of the firewall.
     /// This will remove timed-out leases.
     async fn maintain(&mut self, conf: &Config) -> ah::Result<()> {
+        assert!(!self.shutdown);
         let pruned = prune_all_lease_timeouts(conf, &mut self.leases);
         if !pruned.is_empty() {
             if let Err(e) = self.nftables_remove_leases(conf, &pruned) {
@@ -426,6 +440,7 @@ impl FirewallMaintain for NftFirewall {
     /// Perform a reload (SIGHUP) of the firewall.
     /// This will always re-apply the rules to the kernel.
     async fn reload(&mut self, conf: &Config) -> ah::Result<()> {
+        assert!(!self.shutdown);
         let _pruned = prune_all_lease_timeouts(conf, &mut self.leases);
         self.nftables_full_rebuild(conf)?;
         self.print_total_rule_count(conf);
@@ -443,6 +458,7 @@ impl FirewallOpen for NftFirewall {
         remote_addr: IpAddr,
         port: LeasePort,
     ) -> ah::Result<()> {
+        assert!(!self.shutdown);
         let id = (remote_addr, port);
         if let Some(lease) = self.leases.get_mut(&id) {
             lease.refresh_timeout(conf);

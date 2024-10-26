@@ -136,7 +136,7 @@ fn prune_all_lease_timeouts(conf: &Config, leases: &mut LeaseMap) -> Vec<Lease> 
 /// Firewall maintenance operations.
 pub trait FirewallMaintain {
     /// Delete all leases from the firewall.
-    async fn clear(&mut self, conf: &Config) -> ah::Result<()>;
+    async fn shutdown(&mut self, conf: &Config) -> ah::Result<()>;
 
     /// Run periodic maintenance.
     /// This shall be called in regular intervals every couple of seconds.

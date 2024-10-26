@@ -342,7 +342,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     {
         let conf = conf.read().await;
         let mut fw = fw.lock().await;
-        if let Err(e) = fw.clear(&conf).await {
+        if let Err(e) = fw.shutdown(&conf).await {
             eprintln!("WARNING: Failed to remove firewall rules: {e}");
             if exitcode.is_ok() {
                 exitcode = Err(err!("Failed to remove firewall rules"));
