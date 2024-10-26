@@ -135,16 +135,17 @@ fn gen_rule_comment(addr: Option<IpAddr>, port: Option<SingleLeasePort>) -> Stri
 /// This rule will open the port for the IP address.
 fn gen_add_lease_cmd(conf: &Config, addr: IpAddr, port: SingleLeasePort) -> ah::Result<NfCmd> {
     let names = NftNames::get(conf).context("Read configuration")?;
-    let mut rule = Rule::new(
-        names.family,
-        names.table.to_string(),
-        names.chain_input.to_string(),
-        vec![
+    let mut rule = Rule {
+        family: names.family,
+        table: names.table.to_string(),
+        chain: names.chain_input.to_string(),
+        expr: vec![
             statement_match_saddr(names.family, addr)?,
             statement_match_dport(port),
             statement_accept(),
         ],
-    );
+        ..Default::default()
+    };
     rule.comment = Some(gen_rule_comment(Some(addr), Some(port)));
     Ok(NfCmd::Add(NfListObject::Rule(rule)))
 }
@@ -200,22 +201,24 @@ impl ListedRuleset {
     ) -> ah::Result<u32> {
         let comment = gen_rule_comment(Some(addr), Some(port));
         for obj in &self.objs {
-            match obj {
-                NfObject::ListObject(NfListObject::Rule(Rule {
-                    family: rule_family,
-                    table: rule_table,
-                    chain: rule_chain,
-                    handle: Some(rule_handle),
-                    comment: Some(rule_comment),
-                    ..
-                })) if *rule_family == family
-                    && *rule_table == table
-                    && *rule_chain == chain_input
-                    && *rule_comment == comment =>
-                {
-                    return Ok(*rule_handle);
+            if let NfObject::ListObject(obj) = obj {
+                match &**obj {
+                    NfListObject::Rule(Rule {
+                        family: rule_family,
+                        table: rule_table,
+                        chain: rule_chain,
+                        handle: Some(rule_handle),
+                        comment: Some(rule_comment),
+                        ..
+                    }) if *rule_family == family
+                        && *rule_table == table
+                        && *rule_chain == chain_input
+                        && *rule_comment == comment =>
+                    {
+                        return Ok(*rule_handle);
+                    }
+                    _ => (),
                 }
-                _ => (),
             }
         }
         Err(err!(
@@ -231,12 +234,13 @@ impl ListedRuleset {
         let addr = lease.addr();
 
         let new_rule = |port: SingleLeasePort| -> ah::Result<NfCmd> {
-            let mut rule = Rule::new(
-                names.family,
-                names.table.to_string(),
-                names.chain_input.to_string(),
-                vec![],
-            );
+            let mut rule = Rule {
+                family: names.family,
+                table: names.table.to_string(),
+                chain: names.chain_input.to_string(),
+                expr: vec![],
+                ..Default::default()
+            };
             rule.handle =
                 Some(self.find_handle(names.family, names.table, names.chain_input, addr, port)?);
             Ok(NfCmd::Delete(NfListObject::Rule(rule)))
@@ -319,30 +323,27 @@ impl NftFirewall {
         let mut batch = Batch::new();
 
         // Remove all rules from our chain.
-        batch.add_cmd(NfCmd::Flush(FlushObject::Chain(Chain::new(
-            names.family,
-            names.table.to_string(),
-            names.chain_input.to_string(), // name
-            None,                          // _type
-            None,                          // hook
-            None,                          // prio
-            None,                          // dev
-            None,                          // policy
-        ))));
+        batch.add_cmd(NfCmd::Flush(FlushObject::Chain(Chain {
+            family: names.family,
+            table: names.table.to_string(),
+            name: names.chain_input.to_string(),
+            ..Default::default()
+        })));
         if conf.debug() {
             println!("nftables: Chain flushed");
         }
 
         // Open the port letmeind is listening on.
-        let mut rule = Rule::new(
-            names.family,
-            names.table.to_string(),
-            names.chain_input.to_string(),
-            vec![
+        let mut rule = Rule {
+            family: names.family,
+            table: names.table.to_string(),
+            chain: names.chain_input.to_string(),
+            expr: vec![
                 statement_match_dport(SingleLeasePort::Tcp(conf.port())),
                 statement_accept(),
             ],
-        );
+            ..Default::default()
+        };
         rule.comment = Some(gen_rule_comment(None, None));
         batch.add_cmd(NfCmd::Add(NfListObject::Rule(rule)));
         if conf.debug() {
