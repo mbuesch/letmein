@@ -44,7 +44,7 @@ tokio = "1"
 letmein-conf = { version = "7", path = "./letmein-conf" }
 letmein-fwproto = { version = "7", path = "./letmein-fwproto" }
 letmein-proto = { version = "7", path = "./letmein-proto" }
-letmein-seccomp = { version = "7", path = "./letmein-seccomp" }
+letmein-seccomp = { version = "7", path = "./letmein-seccomp", default-features = false }
 letmein-systemd = { version = "7", path = "./letmein-systemd" }
 
 [profile.release]

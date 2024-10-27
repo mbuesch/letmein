@@ -15,7 +15,7 @@ categories = { workspace = true }
 keywords = { workspace = true }
 
 [features]
-default = []
+default = [ "compile", "install", "ser", "de" ]
 compile = []
 install = []
 ser = []

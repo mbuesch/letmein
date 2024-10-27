@@ -119,6 +119,7 @@ impl Action {
 }
 
 /// A compiled seccomp filter program.
+#[allow(dead_code)]
 pub struct Filter(BpfProgram);
 
 impl Filter {
