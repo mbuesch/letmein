@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::{
-    firewall::{FirewallOpen, LeasePort},
+    firewall::{FirewallBlock, FirewallOpen, LeasePort},
     set_owner_mode, LETMEIND_GID, LETMEIND_UID,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
@@ -76,7 +76,7 @@ impl FirewallConnection {
     pub async fn handle_message(
         &mut self,
         conf: &Config,
-        fw: Arc<Mutex<impl FirewallOpen>>,
+        fw: Arc<Mutex<impl FirewallOpen + FirewallBlock>>,
     ) -> ah::Result<()> {
         let Some(msg) = self.recv_msg().await? else {
             return Err(err!("Disconnected."));
@@ -128,6 +128,31 @@ impl FirewallConnection {
                 let ok = {
                     let mut fw = fw.lock().await;
                     fw.open_port(conf, addr, lease_port).await.is_ok()
+                };
+
+                if ok {
+                    self.send_msg(&FirewallMessage::new_ack()).await?;
+                } else {
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
+                }
+            }
+            FirewallOperation::BlockAddr => {
+                // Get the address from the socket message.
+                let Some(addr) = msg.addr() else {
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
+                    return Err(err!("No addr."));
+                };
+
+                // Check if addr is valid.
+                if !addr_check(&addr) {
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
+                    return Err(err!("Invalid addr."));
+                }
+
+                // Block the address in the firewall.
+                let ok = {
+                    let mut fw = fw.lock().await;
+                    fw.block_addr(conf, addr).await.is_ok()
                 };
 
                 if ok {

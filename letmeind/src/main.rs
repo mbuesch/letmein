@@ -12,10 +12,11 @@
 std::compile_error!("letmeind server does not support non-Linux platforms.");
 
 mod firewall_client;
+mod monitor;
 mod protocol;
 mod server;
 
-use crate::{protocol::Protocol, server::Server};
+use crate::{monitor::Monitor, protocol::Protocol, server::Server};
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant, Seccomp};
@@ -189,6 +190,9 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     // Create async IPC channels.
     let (exit_sock_tx, mut exit_sock_rx) = sync::mpsc::channel(1);
 
+    // Create client monitor.
+    let monitor = Arc::new(Monitor::new(&opts.rundir));
+
     // Start the TCP control port listener.
     let srv = Server::new(&*conf.read().await, opts.no_systemd)
         .await
@@ -205,12 +209,15 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     task::spawn({
         let conf = Arc::clone(&conf);
         let opts = Arc::clone(&opts);
+        let monitor = Arc::clone(&monitor);
 
         async move {
             let conn_semaphore = Semaphore::new(opts.num_connections);
             loop {
                 let conf = Arc::clone(&conf);
                 let opts = Arc::clone(&opts);
+                let monitor = Arc::clone(&monitor);
+
                 match srv.accept().await {
                     Ok(conn) => {
                         // Socket connection handler.
@@ -218,8 +225,11 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                             task::spawn(async move {
                                 let conf = conf.read().await;
                                 let mut proto = Protocol::new(conn, &conf, &opts.rundir);
+                                let ipaddr = proto.addr().ip();
                                 if let Err(e) = proto.run().await {
-                                    eprintln!("Client '{}' ERROR: {}", proto.addr().ip(), e);
+                                    monitor.log_client_error(ipaddr, e).await;
+                                } else {
+                                    monitor.log_client_auth_ok(ipaddr).await;
                                 }
                             });
                         }

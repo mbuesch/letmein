@@ -51,7 +51,33 @@ impl FirewallClient {
         match msg_reply.operation() {
             FirewallOperation::Ack => Ok(()),
             FirewallOperation::Nack => Err(err!("The firewall rejected the port-open request")),
-            FirewallOperation::Open => Err(err!("Received invalid reply")),
+            FirewallOperation::Open | FirewallOperation::BlockAddr => {
+                Err(err!("Received invalid reply"))
+            }
+        }
+    }
+
+    pub async fn block_addr(&mut self, addr: IpAddr) -> ah::Result<()> {
+        // Send an block-address request to the firewall daemon.
+        FirewallMessage::new_block_addr(addr)
+            .send(&mut self.stream)
+            .await
+            .context("Send block-addr message")?;
+
+        // Receive the block-addr reply.
+        let Some(msg_reply) = FirewallMessage::recv(&mut self.stream)
+            .await
+            .context("Receive block-addr reply")?
+        else {
+            return Err(err!("Connection terminated"));
+        };
+
+        match msg_reply.operation() {
+            FirewallOperation::Ack => Ok(()),
+            FirewallOperation::Nack => Err(err!("The firewall rejected the block-addr request")),
+            FirewallOperation::Open | FirewallOperation::BlockAddr => {
+                Err(err!("Received invalid reply"))
+            }
         }
     }
 }

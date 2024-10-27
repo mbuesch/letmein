@@ -161,4 +161,8 @@ pub trait FirewallOpen {
     ) -> ah::Result<()>;
 }
 
+pub trait FirewallBlock {
+    async fn block_addr(&mut self, conf: &Config, remote_addr: IpAddr) -> ah::Result<()>;
+}
+
 // vim: ts=4 sw=4 expandtab

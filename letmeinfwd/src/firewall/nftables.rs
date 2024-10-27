@@ -7,8 +7,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::firewall::{
-    prune_all_lease_timeouts, FirewallMaintain, FirewallOpen, Lease, LeaseMap, LeasePort,
-    SingleLeasePort,
+    prune_all_lease_timeouts, FirewallBlock, FirewallMaintain, FirewallOpen, Lease, LeaseMap,
+    LeasePort, SingleLeasePort,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::Config;
@@ -468,6 +468,14 @@ impl FirewallOpen for NftFirewall {
             self.leases.insert(id, lease);
             self.print_total_rule_count(conf);
         }
+        Ok(())
+    }
+}
+
+impl FirewallBlock for NftFirewall {
+    async fn block_addr(&mut self, conf: &Config, remote_addr: IpAddr) -> ah::Result<()> {
+        assert!(!self.shutdown);
+        //TODO
         Ok(())
     }
 }

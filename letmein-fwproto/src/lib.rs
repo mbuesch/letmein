@@ -35,6 +35,8 @@ pub enum FirewallOperation {
     Ack,
     /// Open a port.
     Open,
+    /// Block an address.
+    BlockAddr,
 }
 
 impl TryFrom<u16> for FirewallOperation {
@@ -44,10 +46,12 @@ impl TryFrom<u16> for FirewallOperation {
         const OPERATION_OPEN: u16 = FirewallOperation::Open as u16;
         const OPERATION_ACK: u16 = FirewallOperation::Ack as u16;
         const OPERATION_NACK: u16 = FirewallOperation::Nack as u16;
+        const OPERATION_BLOCKADDR: u16 = FirewallOperation::BlockAddr as u16;
         match value {
             OPERATION_OPEN => Ok(Self::Open),
             OPERATION_ACK => Ok(Self::Ack),
             OPERATION_NACK => Ok(Self::Nack),
+            OPERATION_BLOCKADDR => Ok(Self::BlockAddr),
             _ => Err(err!("Invalid FirewallMessage/Operation value")),
         }
     }
@@ -207,6 +211,17 @@ impl FirewallMessage {
         }
     }
 
+    /// Construct a new message that requests installing a firewall-block-address rule.
+    pub fn new_block_addr(addr: IpAddr) -> Self {
+        let (addr_type, addr) = addr_to_octets(addr);
+        Self {
+            operation: FirewallOperation::BlockAddr,
+            addr_type,
+            addr,
+            ..Default::default()
+        }
+    }
+
     /// Get the operation type from this message.
     pub fn operation(&self) -> FirewallOperation {
         self.operation
@@ -216,14 +231,16 @@ impl FirewallMessage {
     pub fn port(&self) -> Option<(PortType, u16)> {
         match self.operation {
             FirewallOperation::Open => Some((self.port_type, self.port)),
-            FirewallOperation::Ack | FirewallOperation::Nack => None,
+            FirewallOperation::Ack | FirewallOperation::Nack | FirewallOperation::BlockAddr => None,
         }
     }
 
     /// Get the `IpAddr` from this message.
     pub fn addr(&self) -> Option<IpAddr> {
         match self.operation {
-            FirewallOperation::Open => Some(octets_to_addr(self.addr_type, &self.addr)),
+            FirewallOperation::Open | FirewallOperation::BlockAddr => {
+                Some(octets_to_addr(self.addr_type, &self.addr))
+            }
             FirewallOperation::Ack | FirewallOperation::Nack => None,
         }
     }
