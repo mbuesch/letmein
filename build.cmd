@@ -14,7 +14,7 @@ cargo test --package letmein-proto
 @if ERRORLEVEL 1 goto :error
 cargo auditable build --release --package letmein
 @if ERRORLEVEL 1 goto :error
-cargo audit bin --deny warnings target\release\letmein.exe
+cargo audit --deny warnings bin target\release\letmein.exe
 @if ERRORLEVEL 1 goto :error
 @echo SUCCESS
 @pause
