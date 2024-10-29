@@ -79,10 +79,10 @@ The simple design is supposed to reduce the attack surface and as such improve s
   However, there is a time limit for how long the port is kept open after a successful knock sequence.
   After the knock sequence has been completed, there is only a limited amount of time an MiM could use it.
 
-- **weakness**: If you knock a port open from behind a [NAT](https://en.wikipedia.org/wiki/Network_address_translation), then the port will be opened for the whole NATed network, because from the outside the NATed network has only one IP address.
+- **weakness**: If you knock a port open from behind a [NAT](https://en.wikipedia.org/wiki/Network_address_translation) or [cgNAT](https://de.wikipedia.org/wiki/Carrier-grade_NAT), then the port will be opened for the whole NATed network, because from the outside the NATed network has only one IP address.
   Everybody from within the NATed network will be able to access the knocked-open port.
-  - **rationale**: The port is only open for a short and limited amount of time and there is supposed to be a second layer of security (see 2FA discussion below).
-  While it's an unfortunate fact that the port will be open for the whole NATed network, this is still much better than having it open for the whole internet (without port knocker).
+  - **rationale**: The port is only open for a short and limited amount of time and there is expected to be a second layer of security in the protected service itself (e.g. ssh login; see 2FA discussion below).
+  While it's an unfortunate fact that the port will be open for the whole NATed network, this is still much better than having it open for the whole internet all the time (without port knocker).
 
 - **weakness**: If you use letmein to protect UDP ports, IP address spoofing can give some access for attackers after legitimate authentication of a user. With UDP IP address spoofing an attacker might be able to impersonate a legitimate user session after successful knocking.
   - **rationale**: This is a general property of UDP. The rationale is similar to that of NAT (see above). Letmein still massively reduces the attack surface by closing the port by default.

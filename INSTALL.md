@@ -3,7 +3,8 @@
 ## Prerequisites
 
 The Rust compiler must be installed to build letmein.
-It is recommended to use the latest version of the stable Rust compiler:
+It is recommended to use the latest version of the stable Rust compiler.
+But Rust versions down to and including Rust 1.75 are supported by letmein.
 
 [Rust installer](https://www.rust-lang.org/tools/install)
 
