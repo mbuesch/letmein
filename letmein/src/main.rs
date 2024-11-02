@@ -221,7 +221,10 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
             }
         }
     } else {
-        Err(err!("'letmein' requires a subcommand but one was not provided"))
+        Err(err!(
+            "'letmein' requires a subcommand but one was not provided. \
+            Please run 'letmein --help' for more information."
+        ))
     }
 }
 
