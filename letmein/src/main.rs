@@ -13,7 +13,7 @@ mod command;
 mod resolver;
 
 use crate::command::{genkey::run_genkey, knock::run_knock};
-use anyhow::{self as ah, Context as _};
+use anyhow::{self as ah, format_err as err, Context as _};
 use clap::{Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant};
 use letmein_proto::UserId;
@@ -66,7 +66,7 @@ struct Opts {
     verbose: bool,
 
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 
     /// Override the `seccomp` setting from the configuration file.
     ///
@@ -75,6 +75,10 @@ struct Opts {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     #[arg(long)]
     seccomp: Option<Seccomp>,
+
+    /// Show version information and exit.
+    #[arg(long, short = 'v')]
+    version: bool,
 }
 
 impl Opts {
@@ -185,40 +189,50 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
     install_seccomp_rules(opts.seccomp.unwrap_or(conf.seccomp()))?;
 
     // Run the user specified command.
-    match opts.command {
-        Command::Knock {
-            host,
-            port,
-            user,
-            server_port,
-            ipv4,
-            ipv6,
-        } => {
-            run_knock(
-                conf,
-                opts.verbose,
-                &host,
-                (ipv4, ipv6).into(),
-                server_port,
+    if let Some(command) = opts.command {
+        match command {
+            Command::Knock {
+                host,
                 port,
                 user,
-            )
-            .await
-        }
-        Command::GenKey {
-            user,
-        } => {
-            run_genkey(
-                conf,
+                server_port,
+                ipv4,
+                ipv6,
+            } => {
+                run_knock(
+                    conf,
+                    opts.verbose,
+                    &host,
+                    (ipv4, ipv6).into(),
+                    server_port,
+                    port,
+                    user,
+                )
+                .await
+            }
+            Command::GenKey {
                 user,
-            )
-            .await
+            } => {
+                run_genkey(
+                    conf,
+                    user,
+                )
+                .await
+            }
         }
+    } else {
+        Err(err!("'letmein' requires a subcommand but one was not provided"))
     }
 }
 
 fn main() -> ah::Result<()> {
     let opts = Opts::parse();
+
+    if opts.version {
+        println!("letmein version {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     runtime::Builder::new_current_thread()
         .thread_keep_alive(Duration::from_millis(0))
         .max_blocking_threads(1)

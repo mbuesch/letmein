@@ -209,6 +209,10 @@ struct Opts {
     /// from the configuration file is used instead.
     #[arg(long)]
     seccomp: Option<Seccomp>,
+
+    /// Show version information and exit.
+    #[arg(long, short = 'v')]
+    version: bool,
 }
 
 impl Opts {
@@ -355,6 +359,12 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
 
 fn main() -> ah::Result<()> {
     let opts = Arc::new(Opts::parse());
+
+    if opts.version {
+        println!("letmeinfwd version {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     runtime::Builder::new_current_thread()
         .thread_keep_alive(Duration::from_millis(0))
         .max_blocking_threads(1)
