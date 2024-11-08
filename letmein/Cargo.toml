@@ -17,7 +17,6 @@ keywords = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
-hickory-proto = { workspace = true }
 hickory-resolver = { workspace = true }
 letmein-conf = { workspace = true }
 letmein-proto = { workspace = true }

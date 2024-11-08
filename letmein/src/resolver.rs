@@ -7,8 +7,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{self as ah, format_err as err};
-use hickory_proto::rr::{record_data::RData, record_type::RecordType};
-use hickory_resolver::{config::ResolverConfig, TokioAsyncResolver};
+use hickory_resolver::{
+    config::ResolverConfig,
+    proto::rr::{record_data::RData, record_type::RecordType},
+    TokioAsyncResolver,
+};
 use std::net::IpAddr;
 
 /// Host name resolution target mode.

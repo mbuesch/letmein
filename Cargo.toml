@@ -30,7 +30,6 @@ anyhow = "1"
 build-target = "0.4"
 clap = { version = "4", default-features = false, features = [ "std", "help", "usage", "error-context", "derive" ] }
 getrandom = "0.2"
-hickory-proto = "0.24"
 hickory-resolver = "0.24"
 hmac = "0.12"
 libc = "0.2"
