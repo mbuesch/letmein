@@ -11,17 +11,33 @@ use crate::{
     server::ConnectionOps,
 };
 use anyhow::{self as ah, format_err as err};
-use letmein_conf::{Config, Resource};
+use letmein_conf::{Config, ErrorPolicy, Resource};
 use letmein_proto::{Message, Operation, ResourceId, UserId};
 use std::{net::SocketAddr, path::Path};
 use tokio::time::timeout;
 
+/// Protocol authentication state.
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[allow(clippy::enum_variant_names)]
+enum AuthState {
+    /// Not authenticated.
+    NotAuth,
+
+    /// Basic (not replay-safe) authentication passed.
+    BasicAuth,
+
+    /// Full challenge-response authentication passed.
+    ChallengeResponseAuth,
+}
+
+/// Implementation of the wire protocol message sequence.
 pub struct Protocol<'a, C> {
     conn: C,
     conf: &'a Config,
     rundir: &'a Path,
     user_id: Option<UserId>,
     resource_id: Option<ResourceId>,
+    auth_state: AuthState,
 }
 
 impl<'a, C: ConnectionOps> Protocol<'a, C> {
@@ -32,6 +48,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
             rundir,
             user_id: None,
             resource_id: None,
+            auth_state: AuthState::NotAuth,
         }
     }
 
@@ -77,6 +94,24 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
     }
 
     async fn send_go_away(&mut self) -> ah::Result<()> {
+        // Check if we are allowed to send the error message.
+        match self.conf.control_error_policy() {
+            ErrorPolicy::Always => (),
+            ErrorPolicy::BasicAuth => {
+                if self.auth_state != AuthState::BasicAuth
+                    && self.auth_state != AuthState::ChallengeResponseAuth
+                {
+                    return Ok(());
+                }
+            }
+            ErrorPolicy::FullAuth => {
+                if self.auth_state != AuthState::ChallengeResponseAuth {
+                    return Ok(());
+                }
+            }
+        }
+
+        // Send the error message.
         self.send_msg(&Message::new(
             Operation::GoAway,
             self.user_id.unwrap_or(u32::MAX.into()),
@@ -86,6 +121,11 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
     }
 
     pub async fn run(&mut self) -> ah::Result<()> {
+        self.user_id = None;
+        self.resource_id = None;
+        self.auth_state = AuthState::NotAuth;
+
+        // Receive the initial knock message.
         let knock = self.recv_msg(Operation::Knock).await?;
 
         let user_id = knock.user();
@@ -106,6 +146,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
             let _ = self.send_go_away().await;
             return Err(err!("Knock: Authentication failed"));
         }
+        self.auth_state = AuthState::BasicAuth;
 
         // Get the requested resource from the configuration.
         let Some(resource) = self.conf.resource(resource_id) else {
@@ -153,6 +194,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
             let _ = self.send_go_away().await;
             return Err(err!("Response: Authentication failed"));
         }
+        self.auth_state = AuthState::ChallengeResponseAuth;
 
         // Reconfigure the firewall.
         match resource {
@@ -180,6 +222,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 };
 
                 // Send an open-port request to letmeinfwd.
+                assert_eq!(self.auth_state, AuthState::ChallengeResponseAuth);
                 if let Err(e) = fw.open_port(self.addr().ip(), port_type, *port).await {
                     let _ = self.send_go_away().await;
                     return Err(err!("letmeinfwd firewall open: {e}"));

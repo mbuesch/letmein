@@ -64,6 +64,28 @@ Otherwise the authentication handshake will fail over very slow network connecti
 
 This option defaults to `control-timeout=5.0` seconds, if it is absent from the configuration.
 
+### `control-error-policy`
+
+The `control-error-policy` error policy specifies how to communicate control protocol errors to the client.
+
+If the policy is set to `always`, then error messages will always be transmitted to the connected client.
+
+If the policy is set to `basic-auth`, then error messages are suppressed unless the connected client has passed basic authentication.
+
+If the policy is set to `full-auth`, then error messages are suppressed unless the connected client has passed full authentication.
+
+Setting the policy to `basic-auth` or `full-auth` means that unauthenticated clients don't get error responses.
+This helps to not reveal what service is running on the control port to malicious scanner clients.
+This enables a more stealth operation of the server.
+
+The disadvantage of setting this to anything but `always` is that legitimate clients might not always receive a proper error message and end up in a network timeout instead.
+
+Possible values: always, basic-auth, full-auth
+
+The recommended value is: basic-auth
+
+This option defaults to `control-error-policy=always`, if it is absent from the configuration.
+
 ### `seccomp`
 
 The `seccomp` option turns [Seccomp](https://en.wikipedia.org/wiki/Seccomp) security hardening on or off.

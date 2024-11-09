@@ -77,6 +77,20 @@ impl Resource {
     }
 }
 
+/// Error reporting policy.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub enum ErrorPolicy {
+    /// Always report errors.
+    #[default]
+    Always,
+
+    /// Only report errors if basic authentication passed.
+    BasicAuth,
+
+    /// Only report errors if full authentication passed.
+    FullAuth,
+}
+
 /// Seccomp setting.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub enum Seccomp {
@@ -140,6 +154,21 @@ fn get_control_timeout(ini: &Ini) -> ah::Result<Duration> {
         return parse_duration(timeout);
     }
     Ok(DEFAULT_CONTROL_TIMEOUT)
+}
+
+fn get_control_error_policy(ini: &Ini) -> ah::Result<ErrorPolicy> {
+    if let Some(policy) = ini.get("GENERAL", "control-error-policy") {
+        return match policy.to_lowercase().trim() {
+            "always" => Ok(ErrorPolicy::Always),
+            "basic-auth" => Ok(ErrorPolicy::BasicAuth),
+            "full-auth" => Ok(ErrorPolicy::FullAuth),
+            other => Err(err!(
+                "Config option 'control-error-policy = {other}' is not valid. \
+                    Valid values are: always, basic-auth, full-auth."
+            )),
+        };
+    }
+    Ok(Default::default())
 }
 
 fn get_seccomp(ini: &Ini) -> ah::Result<Seccomp> {
@@ -335,6 +364,7 @@ pub struct Config {
     debug: bool,
     port: u16,
     control_timeout: Duration,
+    control_error_policy: ErrorPolicy,
     seccomp: Seccomp,
     keys: HashMap<UserId, Key>,
     resources: HashMap<ResourceId, Resource>,
@@ -412,6 +442,7 @@ impl Config {
         let debug = get_debug(ini)?;
         let port = get_port(ini)?;
         let control_timeout = get_control_timeout(ini)?;
+        let control_error_policy = get_control_error_policy(ini)?;
         let seccomp = get_seccomp(ini)?;
         let keys = get_keys(ini)?;
         let resources = get_resources(ini)?;
@@ -428,6 +459,7 @@ impl Config {
         self.debug = debug;
         self.port = port;
         self.control_timeout = control_timeout;
+        self.control_error_policy = control_error_policy;
         self.seccomp = seccomp;
         self.keys = keys;
         self.resources = resources;
@@ -449,8 +481,14 @@ impl Config {
         self.port
     }
 
+    /// Get the `control-timeout` option from `[GENERAL]` section.
     pub fn control_timeout(&self) -> Duration {
         self.control_timeout
+    }
+
+    /// Get the `control-error-policy` option from `[GENERAL]` section.
+    pub fn control_error_policy(&self) -> ErrorPolicy {
+        self.control_error_policy
     }
 
     /// Get the `seccomp` option from `[GENERAL]` section.
@@ -521,13 +559,20 @@ mod tests {
     #[test]
     fn test_general() {
         let mut ini = Ini::new();
-        ini.parse_str("[GENERAL]\ndebug = true\nport = 1234\ncontrol-timeout=1.5\nseccomp = kill")
-            .unwrap();
+        ini.parse_str(
+            "[GENERAL]\ndebug = true\nport = 1234\ncontrol-timeout=1.5\n\
+            control-error-policy= basic-auth \nseccomp = kill",
+        )
+        .unwrap();
         assert!(get_debug(&ini).unwrap());
         assert_eq!(get_port(&ini).unwrap(), 1234);
         assert_eq!(
             get_control_timeout(&ini).unwrap(),
             Duration::from_millis(1500)
+        );
+        assert_eq!(
+            get_control_error_policy(&ini).unwrap(),
+            ErrorPolicy::BasicAuth
         );
         assert_eq!(get_seccomp(&ini).unwrap(), Seccomp::Kill);
     }
