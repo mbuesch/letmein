@@ -91,6 +91,32 @@ pub enum ErrorPolicy {
     FullAuth,
 }
 
+impl std::fmt::Display for ErrorPolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Always => write!(f, "Always"),
+            Self::BasicAuth => write!(f, "Basic authentication"),
+            Self::FullAuth => write!(f, "Full challenge-response authentication"),
+        }
+    }
+}
+
+impl std::str::FromStr for ErrorPolicy {
+    type Err = ah::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().trim() {
+            "always" => Ok(ErrorPolicy::Always),
+            "basic-auth" => Ok(ErrorPolicy::BasicAuth),
+            "full-auth" => Ok(ErrorPolicy::FullAuth),
+            other => Err(err!(
+                "Config option 'control-error-policy = {other}' is not valid. \
+                Valid values are: always, basic-auth, full-auth."
+            )),
+        }
+    }
+}
+
 /// Seccomp setting.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub enum Seccomp {
@@ -129,7 +155,8 @@ impl std::str::FromStr for Seccomp {
             "log" => Ok(Self::Log),
             "kill" => Ok(Self::Kill),
             other => Err(err!(
-                "Config option 'seccomp = {other}' is not valid. Valid values are: off, log, kill."
+                "Config option 'seccomp = {other}' is not valid. \
+                Valid values are: off, log, kill."
             )),
         }
     }
@@ -158,15 +185,7 @@ fn get_control_timeout(ini: &Ini) -> ah::Result<Duration> {
 
 fn get_control_error_policy(ini: &Ini) -> ah::Result<ErrorPolicy> {
     if let Some(policy) = ini.get("GENERAL", "control-error-policy") {
-        return match policy.to_lowercase().trim() {
-            "always" => Ok(ErrorPolicy::Always),
-            "basic-auth" => Ok(ErrorPolicy::BasicAuth),
-            "full-auth" => Ok(ErrorPolicy::FullAuth),
-            other => Err(err!(
-                "Config option 'control-error-policy = {other}' is not valid. \
-                    Valid values are: always, basic-auth, full-auth."
-            )),
-        };
+        return policy.parse();
     }
     Ok(Default::default())
 }
