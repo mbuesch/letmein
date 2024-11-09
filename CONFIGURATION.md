@@ -80,9 +80,9 @@ This enables a more stealth operation of the server.
 
 The disadvantage of setting this to anything but `always` is that legitimate clients might not always receive a proper error message and end up in a network timeout instead.
 
-Possible values: always, basic-auth, full-auth
+Possible values: `always`, `basic-auth`, `full-auth`
 
-The recommended value is: basic-auth
+The recommended value is: `basic-auth`
 
 This option defaults to `control-error-policy=always`, if it is absent from the configuration.
 
