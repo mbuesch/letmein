@@ -137,6 +137,26 @@ enum Command {
         #[arg(short = 'P', long)]
         server_port: Option<u16>,
 
+        /// Enforce TCP connection to letmein server port.
+        ///
+        /// You normally don't have to use this option.
+        ///
+        /// If not given, then the `[GENERAL] port` from the
+        /// letmein.conf configuration file will be used instead.
+        /// TCP will be preferred, if both TCP and UDP are specified.
+        #[arg(short = 'T', long)]
+        server_port_tcp: bool,
+
+        /// Enforce UDP connection to letmein server port.
+        ///
+        /// You normally don't have to use this option.
+        ///
+        /// If not given, then the `[GENERAL] port` from the
+        /// letmein.conf configuration file will be used instead.
+        /// TCP will be preferred, if both TCP and UDP are specified.
+        #[arg(short = 'U', long)]
+        server_port_udp: bool,
+
         /// Resolve HOST into an IPv4 address.
         ///
         /// Resolve the HOST into an IPv4 address and knock on that address.
@@ -199,6 +219,8 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
                 port,
                 user,
                 server_port,
+                server_port_tcp,
+                server_port_udp,
                 ipv4,
                 ipv6,
             } => {
@@ -206,6 +228,8 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
                     addr: &host,
                     addr_mode: (ipv4, ipv6).into(),
                     port: server_port,
+                    port_tcp: server_port_tcp,
+                    port_udp: server_port_udp,
                 };
                 run_knock(
                     conf,

@@ -38,6 +38,8 @@ The `port` option specifies the control port letmein will listen on.
 This is the public internet facing port of the daemon.
 All communication between the client and the server will happen on this port.
 
+You can select to listen on a TCP port or an UDP port or both.
+
 On the server this option specifies which port it will listen on.
 
 On the client this option specifies the default port used to connect to the server.
@@ -48,6 +50,22 @@ You do *not* have to manually open the firewall for this port.
 Letmein will open this port by itself when it's up and running.
 
 This option defaults to `port=5800`, if it is absent from the configuration.
+
+#### TCP
+
+If the port configuration is just a plain number such as `port=5800` or if TCP is explicitly specified such as `port=5800/tcp`, then the port will be a TCP port.
+
+#### UDP
+
+If the port configuration explicitly specifies UDP such as `port=5800/udp`, then the port will be a UDP port.
+
+#### TCP + UDP
+
+If the port configuration explicitly specifies TDP,UDP such as `port=5800/udp,tcp`, then the port will be a TCP port and a UDP port.
+
+For the server this means it will listen on both TCP and UDP.
+
+For the client this means that it will connect to the server over TCP, unless there is a command line override via `--server_port_udp`.
 
 ### `control-timeout`
 

@@ -135,20 +135,26 @@ fn gen_rule_comment(addr: Option<IpAddr>, port: SingleLeasePort) -> ah::Result<S
 
 /// Generate a nftables add-rule for this addr/port.
 /// This rule will open the port for the IP address.
-fn gen_add_lease_cmd(conf: &Config, addr: IpAddr, port: SingleLeasePort) -> ah::Result<NfCmd> {
+fn gen_add_lease_cmd(
+    conf: &Config,
+    addr: Option<IpAddr>,
+    port: SingleLeasePort,
+) -> ah::Result<NfCmd> {
     let names = NftNames::get(conf).context("Read configuration")?;
+    let mut expr = Vec::with_capacity(3);
+    if let Some(addr) = addr {
+        expr.push(statement_match_saddr(names.family, addr)?);
+    }
+    expr.push(statement_match_dport(port));
+    expr.push(statement_accept());
     let mut rule = Rule {
         family: names.family,
         table: names.table.to_string(),
         chain: names.chain_input.to_string(),
-        expr: vec![
-            statement_match_saddr(names.family, addr)?,
-            statement_match_dport(port),
-            statement_accept(),
-        ],
+        expr,
         ..Default::default()
     };
-    rule.comment = Some(gen_rule_comment(Some(addr), port)?);
+    rule.comment = Some(gen_rule_comment(addr, port)?);
     Ok(NfCmd::Add(NfListObject::Rule(rule)))
 }
 
@@ -156,7 +162,7 @@ fn gen_add_lease_cmd(conf: &Config, addr: IpAddr, port: SingleLeasePort) -> ah::
 /// These commands will open the port(s) for the IP address.
 fn gen_add_lease_cmds(conf: &Config, lease: &Lease) -> ah::Result<Vec<NfCmd>> {
     let mut cmds = Vec::with_capacity(2);
-    let addr = lease.addr();
+    let addr = Some(lease.addr());
     match lease.port() {
         LeasePort::Tcp(port) => {
             cmds.push(gen_add_lease_cmd(conf, addr, SingleLeasePort::Tcp(port))?);
@@ -270,6 +276,7 @@ impl ListedRuleset {
 pub struct NftFirewall {
     leases: LeaseMap,
     shutdown: bool,
+    num_ctrl_rules: u8,
 }
 
 impl NftFirewall {
@@ -289,6 +296,7 @@ impl NftFirewall {
         let mut this = Self {
             leases: LeaseMap::new(),
             shutdown: false,
+            num_ctrl_rules: 0,
         };
 
         this.nftables_full_rebuild(conf)
@@ -301,10 +309,7 @@ impl NftFirewall {
     /// Print the number of rules required for all leases.
     fn print_total_rule_count(&self, conf: &Config) {
         if conf.debug() {
-            let mut count = 0;
-            if !self.shutdown {
-                count += 1; // One for the control port.
-            }
+            let mut count: usize = self.num_ctrl_rules.into();
             for lease in self.leases.values() {
                 count += match lease.port() {
                     LeasePort::Tcp(_) | LeasePort::Udp(_) => 1,
@@ -344,25 +349,24 @@ impl NftFirewall {
             println!("nftables: Chain flushed");
         }
 
+        self.num_ctrl_rules = 0;
         if !self.shutdown {
             // Open the port letmeind is listening on.
-            let mut rule = Rule {
-                family: names.family,
-                table: names.table.to_string(),
-                chain: names.chain_input.to_string(),
-                expr: vec![
-                    statement_match_dport(SingleLeasePort::Tcp(conf.port())),
-                    statement_accept(),
-                ],
-                ..Default::default()
-            };
-            rule.comment = Some(gen_rule_comment(None, SingleLeasePort::Tcp(conf.port()))?);
-            batch.add_cmd(NfCmd::Add(NfListObject::Rule(rule)));
-            if conf.debug() {
-                println!(
-                    "nftables: Adding control port rule for port={}",
-                    conf.port()
-                );
+            if conf.port().tcp {
+                let p = SingleLeasePort::Tcp(conf.port().port);
+                batch.add_cmd(gen_add_lease_cmd(conf, None, p)?);
+                if conf.debug() {
+                    println!("nftables: Adding control port rule for port={p}");
+                }
+                self.num_ctrl_rules += 1;
+            }
+            if conf.port().udp {
+                let p = SingleLeasePort::Udp(conf.port().port);
+                batch.add_cmd(gen_add_lease_cmd(conf, None, p)?);
+                if conf.debug() {
+                    println!("nftables: Adding control port rule for port={p}");
+                }
+                self.num_ctrl_rules += 1;
             }
 
             // Open all lease ports, restricted to the peer addresses.
