@@ -21,7 +21,7 @@ letmein-conf = { workspace = true }
 letmein-fwproto = { workspace = true }
 letmein-proto = { workspace = true }
 letmein-seccomp = { workspace = true, features = [ "de", "install" ] }
-letmein-systemd = { workspace = true, features = [ "tcp" ] }
+letmein-systemd = { workspace = true, features = [ "udp", "tcp" ] }
 libc = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync", "time" ] }
 

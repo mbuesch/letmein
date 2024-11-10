@@ -85,4 +85,14 @@ pub fn parse_duration(s: &str) -> ah::Result<Duration> {
     Err(err!("Invalid Duration"))
 }
 
+/// Check if the string is a decimal or hexadecimal number (prefix 0x).
+pub fn is_number(s: &str) -> bool {
+    let s = s.trim();
+    if let Some(s) = s.strip_prefix("0x") {
+        s.chars().all(|c| c.is_ascii_hexdigit())
+    } else {
+        s.chars().all(|c| c.is_ascii_digit())
+    }
+}
+
 // vim: ts=4 sw=4 expandtab

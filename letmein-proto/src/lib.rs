@@ -15,13 +15,15 @@
 
 #![forbid(unsafe_code)]
 
-use anyhow::{self as ah, format_err as err, Context as _};
+mod socket;
+
+use anyhow::{self as ah, format_err as err};
 use getrandom::getrandom;
 use hmac::{Hmac, Mac as _};
 use sha3::Sha3_256;
-use std::io::ErrorKind;
 use subtle::ConstantTimeEq as _;
-use tokio::net::TcpStream;
+
+pub use crate::socket::{NetSocket, UdpDispatcher};
 
 /// Internal debugging.
 const DEBUG: bool = false;
@@ -97,6 +99,15 @@ macro_rules! impl_id {
 
 impl_id!(ResourceId);
 impl_id!(UserId);
+
+/// Maximum size of the UDP receive queue.
+const UDP_RX_QUEUE_SIZE: usize = 4;
+
+/// [NetSocket] for sending and receiving a [Message] over TCP or UDP.
+pub type MsgNetSocket = NetSocket<MSG_SIZE, UDP_RX_QUEUE_SIZE>;
+
+/// [UdpDispatcher] for sending and receiving a [Message] over UDP.
+pub type MsgUdpDispatcher = UdpDispatcher<MSG_SIZE, UDP_RX_QUEUE_SIZE>;
 
 /// Generate a cryptographically secure random token.
 ///
@@ -379,57 +390,26 @@ impl Message {
         })
     }
 
-    /// Send this message over a [TcpStream].
-    pub async fn send(&self, stream: &mut TcpStream) -> ah::Result<()> {
-        let txbuf = self.msg_serialize()?;
-        let mut txcount = 0;
-        loop {
-            stream.writable().await.context("Socket polling (tx)")?;
-            match stream.try_write(&txbuf[txcount..]) {
-                Ok(n) => {
-                    txcount += n;
-                    assert!(txcount <= txbuf.len());
-                    if txcount == txbuf.len() {
-                        if DEBUG {
-                            println!("TX: {self:?} {txbuf:?}");
-                        }
-                        return Ok(());
-                    }
-                }
-                Err(e) if e.kind() == ErrorKind::WouldBlock => (),
-                Err(e) => {
-                    return Err(err!("Socket write: {e}"));
-                }
-            }
+    /// Send this message over a [MsgNetSocket].
+    pub async fn send(&self, sock: &MsgNetSocket) -> ah::Result<()> {
+        sock.send(self.msg_serialize()?).await?;
+        if DEBUG {
+            println!("TX: {self:?}");
         }
+        Ok(())
     }
 
-    /// Try to receive a message from a [TcpStream].
-    pub async fn recv(stream: &mut TcpStream) -> ah::Result<Option<Self>> {
-        let mut rxbuf = [0; MSG_SIZE];
-        let mut rxcount = 0;
-        loop {
-            stream.readable().await.context("Socket polling (rx)")?;
-            match stream.try_read(&mut rxbuf[rxcount..]) {
-                Ok(n) => {
-                    if n == 0 {
-                        return Ok(None);
-                    }
-                    rxcount += n;
-                    assert!(rxcount <= MSG_SIZE);
-                    if rxcount == MSG_SIZE {
-                        let msg = Self::try_msg_deserialize(&rxbuf)?;
-                        if DEBUG {
-                            println!("RX: {msg:?} {rxbuf:?}");
-                        }
-                        return Ok(Some(msg));
-                    }
-                }
-                Err(e) if e.kind() == ErrorKind::WouldBlock => (),
-                Err(e) => {
-                    return Err(err!("Socket read: {e}"));
-                }
+    /// Try to receive a message from a [MsgNetSocket].
+    pub async fn recv(sock: &MsgNetSocket) -> ah::Result<Option<Self>> {
+        let buf: Option<[u8; MSG_SIZE]> = sock.recv().await?;
+        if let Some(buf) = buf {
+            let msg = Self::try_msg_deserialize(&buf)?;
+            if DEBUG {
+                println!("RX: {msg:?}");
             }
+            Ok(Some(msg))
+        } else {
+            Ok(None)
         }
     }
 }

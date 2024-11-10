@@ -110,7 +110,7 @@ impl FirewallConnection {
                 }
 
                 // Don't allow the user to manage the control port.
-                if port == conf.port() {
+                if port == conf.port().port {
                     // Whoops, letmeind should never send us a request for the
                     // control port. Did some other process write to the unix socket?
                     self.send_msg(&FirewallMessage::new_nack()).await?;
@@ -154,14 +154,17 @@ impl FirewallServer {
         // Get socket from systemd?
         if !no_systemd {
             let sockets = SystemdSocket::get_all()?;
-            if let Some(SystemdSocket::Unix(listener)) = sockets.into_iter().next() {
+            if let Some(SystemdSocket::Unix(socket)) = sockets.into_iter().next() {
                 println!("Using Unix socket from systemd.");
-                listener
+
+                socket
                     .set_nonblocking(true)
                     .context("Set socket non-blocking")?;
-                let listener = UnixListener::from_std(listener)
+                let listener = UnixListener::from_std(socket)
                     .context("Convert std UnixListener to tokio UnixListener")?;
+
                 systemd_notify_ready()?;
+
                 return Ok(Self {
                     listener,
                     rundir: opts.rundir.to_owned(),

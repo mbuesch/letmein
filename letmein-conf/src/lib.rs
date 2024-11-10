@@ -19,7 +19,7 @@ mod parse;
 mod parse_items;
 
 use crate::{
-    parse::{parse_bool, parse_duration, parse_hex, parse_u16},
+    parse::{is_number, parse_bool, parse_duration, parse_hex, parse_u16},
     parse_items::{Map, MapItem},
 };
 use anyhow::{self as ah, format_err as err, Context as _};
@@ -46,6 +46,40 @@ const CLIENT_CONF_PATH: &str = "letmein.conf";
 
 const DEFAULT_CONTROL_TIMEOUT: Duration = Duration::from_millis(5_000);
 const DEFAULT_NFT_TIMEOUT: Duration = Duration::from_millis(600_000);
+
+/// Configured control port.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ControlPort {
+    pub port: u16,
+    pub tcp: bool,
+    pub udp: bool,
+}
+
+impl Default for ControlPort {
+    fn default() -> Self {
+        Self {
+            port: PORT,
+            tcp: true,
+            udp: false,
+        }
+    }
+}
+
+impl std::fmt::Display for ControlPort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}(", self.port)?;
+        if self.tcp {
+            write!(f, "TCP")?;
+            if self.udp {
+                write!(f, "/")?;
+            }
+        }
+        if self.udp {
+            write!(f, "UDP")?;
+        }
+        write!(f, ")")
+    }
+}
 
 /// Configured resource.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -170,11 +204,43 @@ fn get_debug(ini: &Ini) -> ah::Result<bool> {
     Ok(false)
 }
 
-fn get_port(ini: &Ini) -> ah::Result<u16> {
+fn get_port(ini: &Ini) -> ah::Result<ControlPort> {
     if let Some(port) = ini.get("GENERAL", "port") {
-        return parse_u16(port);
+        let mut control_port = ControlPort {
+            port: PORT,
+            tcp: false,
+            udp: false,
+        };
+        let map = port.parse::<Map>().context("[GENERAL] port")?;
+        for item in map.items() {
+            match item {
+                MapItem::KeyValue(k, _) | MapItem::KeyValues(k, _) => {
+                    return Err(err!("[GENERAL] port: Unknown option: {k}"));
+                }
+                MapItem::Values(vs) => {
+                    if vs.len() == 1 && is_number(&vs[0]) {
+                        control_port.port = parse_u16(&vs[0])?;
+                    } else {
+                        for v in vs {
+                            match &v.to_lowercase()[..] {
+                                "tcp" => control_port.tcp = true,
+                                "udp" => control_port.udp = true,
+                                v => {
+                                    return Err(err!("[GENERAL] port: Unknown option: {v}"));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if !control_port.tcp && !control_port.udp {
+            // Default, if no tcp/udp option is given.
+            control_port.tcp = true;
+        }
+        return Ok(control_port);
     }
-    Ok(PORT)
+    Ok(Default::default())
 }
 
 fn get_control_timeout(ini: &Ini) -> ah::Result<Duration> {
@@ -382,7 +448,7 @@ pub struct Config {
     variant: ConfigVariant,
     path: Option<PathBuf>,
     debug: bool,
-    port: u16,
+    port: ControlPort,
     control_timeout: Duration,
     control_error_policy: ErrorPolicy,
     seccomp: Seccomp,
@@ -400,7 +466,6 @@ impl Config {
     pub fn new(variant: ConfigVariant) -> Self {
         Self {
             variant,
-            port: PORT,
             control_timeout: DEFAULT_CONTROL_TIMEOUT,
             nft_timeout: DEFAULT_NFT_TIMEOUT,
             ..Default::default()
@@ -497,7 +562,7 @@ impl Config {
     }
 
     /// Get the `port` option from `[GENERAL]` section.
-    pub fn port(&self) -> u16 {
+    pub fn port(&self) -> ControlPort {
         self.port
     }
 
@@ -585,7 +650,14 @@ mod tests {
         )
         .unwrap();
         assert!(get_debug(&ini).unwrap());
-        assert_eq!(get_port(&ini).unwrap(), 1234);
+        assert_eq!(
+            get_port(&ini).unwrap(),
+            ControlPort {
+                port: 1234,
+                tcp: true,
+                udp: false
+            }
+        );
         assert_eq!(
             get_control_timeout(&ini).unwrap(),
             Duration::from_millis(1500)
@@ -595,6 +667,56 @@ mod tests {
             ErrorPolicy::BasicAuth
         );
         assert_eq!(get_seccomp(&ini).unwrap(), Seccomp::Kill);
+    }
+
+    #[test]
+    fn test_port() {
+        let mut ini = Ini::new();
+        ini.parse_str("[GENERAL]\nport=1234").unwrap();
+        assert_eq!(
+            get_port(&ini).unwrap(),
+            ControlPort {
+                port: 1234,
+                tcp: true,
+                udp: false
+            }
+        );
+        ini.parse_str("[GENERAL]\nport=1234 / TCP ").unwrap();
+        assert_eq!(
+            get_port(&ini).unwrap(),
+            ControlPort {
+                port: 1234,
+                tcp: true,
+                udp: false
+            }
+        );
+        ini.parse_str("[GENERAL]\nport=1234/UDP").unwrap();
+        assert_eq!(
+            get_port(&ini).unwrap(),
+            ControlPort {
+                port: 1234,
+                tcp: false,
+                udp: true
+            }
+        );
+        ini.parse_str("[GENERAL]\nport=1234/ UDP , TCP").unwrap();
+        assert_eq!(
+            get_port(&ini).unwrap(),
+            ControlPort {
+                port: 1234,
+                tcp: true,
+                udp: true
+            }
+        );
+        ini.parse_str("[GENERAL]\nport=udp, tcp / 1234").unwrap();
+        assert_eq!(
+            get_port(&ini).unwrap(),
+            ControlPort {
+                port: 1234,
+                tcp: true,
+                udp: true
+            }
+        );
     }
 
     #[test]

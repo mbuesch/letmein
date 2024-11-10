@@ -8,13 +8,21 @@
 
 use crate::resolver::{resolve, ResMode};
 use anyhow::{self as ah, format_err as err, Context as _};
-use letmein_proto::{Message, Operation};
-use std::time::Duration;
-use tokio::{net::TcpStream, time::timeout};
+use letmein_conf::ControlPort;
+use letmein_proto::{Message, MsgNetSocket, MsgUdpDispatcher, Operation};
+use std::{
+    net::{Ipv4Addr, Ipv6Addr},
+    sync::Arc,
+    time::Duration,
+};
+use tokio::{
+    net::{TcpStream, UdpSocket},
+    time::timeout,
+};
 
 /// TCP control connection to the server.
 pub struct Client {
-    stream: TcpStream,
+    sock: MsgNetSocket,
     control_timeout: Duration,
 }
 
@@ -22,23 +30,50 @@ impl Client {
     /// Create a new letmein control connection.
     pub async fn new(
         host: &str,
-        port: u16,
+        control_port: ControlPort,
         control_timeout: Duration,
         mode: ResMode,
     ) -> ah::Result<Self> {
         let addr = resolve(host, mode).await.context("Resolve host name")?;
-        let stream = TcpStream::connect((addr, port))
-            .await
-            .context("Connect to server")?;
+
+        let sock = if control_port.tcp {
+            assert!(!control_port.udp);
+
+            let stream = TcpStream::connect((addr, control_port.port))
+                .await
+                .context("Connect to server")?;
+
+            MsgNetSocket::from_tcp(stream)
+        } else {
+            assert!(control_port.udp);
+
+            let socket = if addr.is_ipv4() {
+                UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await
+            } else if addr.is_ipv6() {
+                UdpSocket::bind((Ipv6Addr::UNSPECIFIED, 0)).await
+            } else {
+                unreachable!()
+            }
+            .context("Bind UDP socket")?;
+
+            socket
+                .connect((addr, control_port.port))
+                .await
+                .context("Connect to server")?;
+            let peer_addr = socket.peer_addr().context("Get peer address")?;
+
+            MsgNetSocket::from_udp(Arc::new(MsgUdpDispatcher::new(socket, 1)), peer_addr)
+        };
+
         Ok(Self {
-            stream,
+            sock,
             control_timeout,
         })
     }
 
     /// Receive a message from the TCP control connection.
     pub async fn recv_msg(&mut self) -> ah::Result<Option<Message>> {
-        timeout(self.control_timeout, Message::recv(&mut self.stream))
+        timeout(self.control_timeout, Message::recv(&self.sock))
             .await
             .map_err(|_| err!("RX communication with peer timed out"))?
     }
@@ -67,7 +102,7 @@ impl Client {
 
     /// Send a message to the TCP control connection.
     pub async fn send_msg(&mut self, msg: Message) -> ah::Result<()> {
-        timeout(self.control_timeout, msg.send(&mut self.stream))
+        timeout(self.control_timeout, msg.send(&self.sock))
             .await
             .map_err(|_| err!("TX communication with peer timed out"))?
     }

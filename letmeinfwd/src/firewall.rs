@@ -64,7 +64,7 @@ impl Lease {
     pub fn new(conf: &Config, addr: IpAddr, port: LeasePort) -> Self {
         // The upper layers must never give us a lease request for the control port.
         assert_ne!(
-            conf.port(),
+            conf.port().port,
             match port {
                 LeasePort::Tcp(p) => p,
                 LeasePort::Udp(p) => p,

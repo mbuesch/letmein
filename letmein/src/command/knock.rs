@@ -11,7 +11,7 @@ use crate::{
     resolver::{is_ipv4_addr, is_ipv6_addr, ResMode},
 };
 use anyhow::{self as ah, format_err as err, Context as _};
-use letmein_conf::Config;
+use letmein_conf::{Config, ControlPort};
 use letmein_proto::{Key, Message, Operation, ResourceId, UserId};
 use std::{path::Path, sync::Arc, time::Duration};
 
@@ -40,7 +40,7 @@ impl From<(bool, bool)> for AddrMode {
 struct KnockSeq<'a> {
     pub verbose: bool,
     pub addr: &'a str,
-    pub server_port: u16,
+    pub control_port: ControlPort,
     pub control_timeout: Duration,
     pub user: UserId,
     pub resource: ResourceId,
@@ -76,12 +76,12 @@ impl KnockSeq<'_> {
         if self.verbose {
             println!(
                 "Connecting to letmein server '{}:{}'.",
-                self.addr, self.server_port
+                self.addr, self.control_port
             );
         }
         let mut client = Client::new(
             self.addr,
-            self.server_port,
+            self.control_port,
             self.control_timeout,
             resolver_mode,
         )
@@ -125,6 +125,29 @@ pub struct KnockServer<'a> {
     pub addr: &'a str,
     pub addr_mode: AddrMode,
     pub port: Option<u16>,
+    pub port_tcp: bool,
+    pub port_udp: bool,
+}
+
+impl KnockServer<'_> {
+    pub fn to_control_port(&self, conf: &Config) -> ControlPort {
+        let mut control_port = conf.port();
+        if let Some(server_port) = self.port {
+            control_port.port = server_port;
+        }
+        if self.port_udp {
+            control_port.tcp = false;
+            control_port.udp = true;
+        }
+        if self.port_tcp {
+            control_port.tcp = true;
+            control_port.udp = false;
+        }
+        if control_port.tcp && control_port.udp {
+            control_port.udp = false; // prefer TCP
+        }
+        control_port
+    }
 }
 
 /// Run the `knock` command.
@@ -136,6 +159,7 @@ pub async fn run_knock(
     user: Option<UserId>,
 ) -> ah::Result<()> {
     let confpath = conf.get_path().unwrap_or(Path::new(""));
+
     let user = user.unwrap_or_else(|| conf.default_user());
     let Some(key) = conf.key(user) else {
         return Err(err!("No key found in {confpath:?} for user {user}"));
@@ -145,13 +169,15 @@ pub async fn run_knock(
             "Port {knock_port} is not mapped to a resource in {confpath:?}"
         ));
     };
-    let server_port = server.port.unwrap_or_else(|| conf.port());
+
+    let control_port = server.to_control_port(&conf);
+
     let control_timeout = conf.control_timeout();
 
     let seq = KnockSeq {
         verbose,
         addr: server.addr,
-        server_port,
+        control_port,
         control_timeout,
         user,
         resource,

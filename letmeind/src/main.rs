@@ -15,7 +15,10 @@ mod firewall_client;
 mod protocol;
 mod server;
 
-use crate::{protocol::Protocol, server::Server};
+use crate::{
+    protocol::Protocol,
+    server::{ConnectionOps as _, Server},
+};
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant, Seccomp};
@@ -194,7 +197,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     let (exit_sock_tx, mut exit_sock_rx) = sync::mpsc::channel(1);
 
     // Start the TCP control port listener.
-    let srv = Server::new(&*conf.read().await, opts.no_systemd)
+    let mut srv = Server::new(&*conf.read().await, opts.no_systemd, opts.num_connections)
         .await
         .context("Server init")?;
 
@@ -218,14 +221,24 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                 match srv.accept().await {
                     Ok(conn) => {
                         // Socket connection handler.
+                        let conn = Arc::new(conn);
                         if let Ok(_permit) = conn_semaphore.acquire().await {
+                            let conn = Arc::clone(&conn);
                             task::spawn(async move {
                                 let conf = conf.read().await;
-                                let mut proto = Protocol::new(conn, &conf, &opts.rundir);
+                                let mut proto = Protocol::new(&*conn, &conf, &opts.rundir);
                                 if let Err(e) = proto.run().await {
-                                    eprintln!("Client '{}' ERROR: {}", proto.peer_addr().ip(), e);
+                                    eprintln!(
+                                        "Client '{}/{}' ERROR: {}",
+                                        conn.peer_addr(),
+                                        conn.l4proto(),
+                                        e
+                                    );
                                 }
+                                conn.close().await;
                             });
+                        } else {
+                            conn.close().await;
                         }
                     }
                     Err(e) => {

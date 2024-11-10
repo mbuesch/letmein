@@ -13,7 +13,7 @@ use crate::{
 use anyhow::{self as ah, format_err as err};
 use letmein_conf::{Config, ErrorPolicy, Resource};
 use letmein_proto::{Message, Operation, ResourceId, UserId};
-use std::{net::SocketAddr, path::Path};
+use std::path::Path;
 use tokio::time::timeout;
 
 /// Protocol authentication state.
@@ -32,7 +32,7 @@ enum AuthState {
 
 /// Implementation of the wire protocol message sequence.
 pub struct Protocol<'a, C> {
-    conn: C,
+    conn: &'a C,
     conf: &'a Config,
     rundir: &'a Path,
     user_id: Option<UserId>,
@@ -41,7 +41,7 @@ pub struct Protocol<'a, C> {
 }
 
 impl<'a, C: ConnectionOps> Protocol<'a, C> {
-    pub fn new(conn: C, conf: &'a Config, rundir: &'a Path) -> Self {
+    pub fn new(conn: &'a C, conf: &'a Config, rundir: &'a Path) -> Self {
         Self {
             conn,
             conf,
@@ -50,10 +50,6 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
             resource_id: None,
             auth_state: AuthState::NotAuth,
         }
-    }
-
-    pub fn peer_addr(&self) -> SocketAddr {
-        self.conn.peer_addr()
     }
 
     async fn recv_msg(&mut self, expect_operation: Operation) -> ah::Result<Message> {
@@ -170,7 +166,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                     ));
                 }
                 // The control port is never allowed.
-                let control_port = self.conf.port();
+                let control_port = self.conf.port().port;
                 if *port == control_port {
                     let _ = self.send_go_away().await;
                     return Err(err!(
@@ -223,7 +219,10 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
                 // Send an open-port request to letmeinfwd.
                 assert_eq!(self.auth_state, AuthState::ChallengeResponseAuth);
-                if let Err(e) = fw.open_port(self.peer_addr().ip(), port_type, *port).await {
+                if let Err(e) = fw
+                    .open_port(self.conn.peer_addr().ip(), port_type, *port)
+                    .await
+                {
                     let _ = self.send_go_away().await;
                     return Err(err!("letmeinfwd firewall open: {e}"));
                 }
