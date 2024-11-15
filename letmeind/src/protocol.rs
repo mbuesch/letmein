@@ -52,8 +52,8 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         }
     }
 
-    pub fn addr(&self) -> SocketAddr {
-        self.conn.addr()
+    pub fn peer_addr(&self) -> SocketAddr {
+        self.conn.peer_addr()
     }
 
     async fn recv_msg(&mut self, expect_operation: Operation) -> ah::Result<Message> {
@@ -223,7 +223,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
                 // Send an open-port request to letmeinfwd.
                 assert_eq!(self.auth_state, AuthState::ChallengeResponseAuth);
-                if let Err(e) = fw.open_port(self.addr().ip(), port_type, *port).await {
+                if let Err(e) = fw.open_port(self.peer_addr().ip(), port_type, *port).await {
                     let _ = self.send_go_away().await;
                     return Err(err!("letmeinfwd firewall open: {e}"));
                 }

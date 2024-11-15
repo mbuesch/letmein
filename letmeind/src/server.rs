@@ -14,25 +14,25 @@ use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 
 pub trait ConnectionOps {
-    fn addr(&self) -> SocketAddr;
+    fn peer_addr(&self) -> SocketAddr;
     async fn recv_msg(&mut self) -> ah::Result<Option<Message>>;
     async fn send_msg(&mut self, msg: &Message) -> ah::Result<()>;
 }
 
 pub struct Connection {
     stream: TcpStream,
-    addr: SocketAddr,
+    peer_addr: SocketAddr,
 }
 
 impl Connection {
-    fn new(stream: TcpStream, addr: SocketAddr) -> ah::Result<Self> {
-        Ok(Self { stream, addr })
+    fn new(stream: TcpStream, peer_addr: SocketAddr) -> ah::Result<Self> {
+        Ok(Self { stream, peer_addr })
     }
 }
 
 impl ConnectionOps for Connection {
-    fn addr(&self) -> SocketAddr {
-        self.addr
+    fn peer_addr(&self) -> SocketAddr {
+        self.peer_addr
     }
 
     async fn recv_msg(&mut self) -> ah::Result<Option<Message>> {
