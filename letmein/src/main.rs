@@ -12,7 +12,10 @@ mod client;
 mod command;
 mod resolver;
 
-use crate::command::{genkey::run_genkey, knock::run_knock};
+use crate::command::{
+    genkey::run_genkey,
+    knock::{run_knock, KnockServer},
+};
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::{Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant};
@@ -199,12 +202,15 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
                 ipv4,
                 ipv6,
             } => {
+                let server = KnockServer {
+                    addr: &host,
+                    addr_mode: (ipv4, ipv6).into(),
+                    port: server_port,
+                };
                 run_knock(
                     conf,
                     opts.verbose,
-                    &host,
-                    (ipv4, ipv6).into(),
-                    server_port,
+                    server,
                     port,
                     user,
                 )
