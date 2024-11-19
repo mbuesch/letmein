@@ -13,7 +13,7 @@ use crate::{
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::Config;
 use letmein_fwproto::{FirewallMessage, FirewallOperation, PortType, SOCK_FILE};
-use letmein_systemd::{systemd_notify_ready, unix_from_systemd};
+use letmein_systemd::{systemd_notify_ready, SystemdSocket};
 use std::{
     fs::{metadata, remove_file, OpenOptions},
     io::Read as _,
@@ -153,8 +153,9 @@ impl FirewallServer {
     pub async fn new(no_systemd: bool, rundir: &Path) -> ah::Result<Self> {
         // Get socket from systemd?
         if !no_systemd {
-            if let Some(listener) = unix_from_systemd()? {
-                println!("Using socket from systemd.");
+            let sockets = SystemdSocket::get_all()?;
+            if let Some(SystemdSocket::Unix(listener)) = sockets.into_iter().next() {
+                println!("Using Unix socket from systemd.");
                 listener
                     .set_nonblocking(true)
                     .context("Set socket non-blocking")?;
@@ -165,6 +166,8 @@ impl FirewallServer {
                     listener,
                     rundir: rundir.to_owned(),
                 });
+            } else {
+                return Err(err!("Received an unusable socket from systemd."));
             }
         }
 

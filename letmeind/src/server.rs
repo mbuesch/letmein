@@ -6,10 +6,10 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use anyhow::{self as ah, Context as _};
+use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::Config;
 use letmein_proto::Message;
-use letmein_systemd::{systemd_notify_ready, tcp_from_systemd};
+use letmein_systemd::{systemd_notify_ready, SystemdSocket};
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 
@@ -52,8 +52,9 @@ impl Server {
     pub async fn new(conf: &Config, no_systemd: bool) -> ah::Result<Self> {
         // Get socket from systemd?
         if !no_systemd {
-            if let Some(listener) = tcp_from_systemd()? {
-                println!("Using socket from systemd.");
+            let sockets = SystemdSocket::get_all()?;
+            if let Some(SystemdSocket::Tcp(listener)) = sockets.into_iter().next() {
+                println!("Using TCP socket from systemd.");
                 listener
                     .set_nonblocking(true)
                     .context("Set socket non-blocking")?;
@@ -61,6 +62,8 @@ impl Server {
                     .context("Convert std TcpListener to tokio TcpListener")?;
                 systemd_notify_ready()?;
                 return Ok(Self { listener });
+            } else {
+                return Err(err!("Received an unusable socket from systemd."));
             }
         }
 
