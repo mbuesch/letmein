@@ -47,7 +47,7 @@ struct KnockSeq<'a> {
     pub key: &'a Key,
 }
 
-impl<'a> KnockSeq<'a> {
+impl KnockSeq<'_> {
     /// Check if the server replied with a valid message.
     fn check_reply(&self, msg: &Message) -> ah::Result<()> {
         if msg.user() != self.user {
