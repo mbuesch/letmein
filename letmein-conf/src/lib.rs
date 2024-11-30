@@ -19,7 +19,6 @@ mod parse;
 mod parse_items;
 
 use crate::{
-    ini::Ini,
     parse::{parse_bool, parse_duration, parse_hex, parse_u16},
     parse_items::{Map, MapItem},
 };
@@ -30,6 +29,8 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+
+pub use crate::ini::{Ini, IniSectionIter};
 
 /// The default server configuration path, relative to the install prefix.
 #[cfg(not(target_os = "windows"))]
@@ -451,7 +452,7 @@ impl Config {
     }
 
     /// (Re-)load a configuration from a parsed [Ini] instance.
-    fn load_ini(&mut self, ini: &Ini) -> ah::Result<()> {
+    pub fn load_ini(&mut self, ini: &Ini) -> ah::Result<()> {
         let mut default_user = Default::default();
         let mut nft_family = Default::default();
         let mut nft_table = Default::default();

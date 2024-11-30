@@ -13,6 +13,7 @@ use std::{
     path::Path,
 };
 
+/// An iterator over all option name-value tuples from a section.
 pub type IniSectionIter<'a> = hash_map::Iter<'a, String, String>;
 
 /// All options from a `.ini` file section.
@@ -40,24 +41,30 @@ impl IniSection {
     }
 }
 
-/// Simple `.ini` file parser.
+/// Simple `.ini`-style file parser.
 pub struct Ini {
     sections: HashMap<String, IniSection>,
 }
 
 impl Ini {
+    /// Create a new empty parser state.
     pub fn new() -> Self {
         Self {
             sections: HashMap::new(),
         }
     }
 
+    /// Create a new parser state and parse the specified `.ini`-style file.
     pub fn new_from_file(path: &Path) -> ah::Result<Self> {
         let mut this = Self::new();
         this.read_file(path)?;
         Ok(this)
     }
 
+    /// Read the specified `.ini`-style file into an existing parser.
+    ///
+    /// Note that the parser state will be cleared before adding new items
+    /// from the file.
     pub fn read_file(&mut self, path: &Path) -> ah::Result<()> {
         let mut file = std::fs::OpenOptions::new()
             .read(true)
@@ -66,16 +73,24 @@ impl Ini {
         let mut buf = vec![];
         file.read_to_end(&mut buf)
             .context("Read configuration file")?;
-        self.parse_bytes(buf)
+        self.parse_bytes(&buf)
     }
 
-    pub fn parse_bytes(&mut self, content: Vec<u8>) -> ah::Result<()> {
+    /// Read the `.ini`-style formatted byte stream into an existing parser.
+    ///
+    /// Note that the parser state will be cleared before adding new items
+    /// from the byte stream.
+    pub fn parse_bytes(&mut self, content: &[u8]) -> ah::Result<()> {
         self.parse_str(
-            &String::from_utf8(content)
+            std::str::from_utf8(content)
                 .context("Configuration content file to UTF-8 conversion")?,
         )
     }
 
+    /// Read the `.ini`-style formatted string into an existing parser.
+    ///
+    /// Note that the parser state will be cleared before adding new items
+    /// from the string.
     pub fn parse_str(&mut self, content: &str) -> ah::Result<()> {
         let mut sections = HashMap::new();
         let mut in_section = None;
@@ -144,9 +159,15 @@ impl Ini {
         None
     }
 
-    /// Get an iterator over all options from a section.
+    /// Get an iterator over all option name-value tuples from a section.
     pub fn options_iter(&self, section: &str) -> Option<IniSectionIter> {
         self.sections.get(section).map(|s| s.iter())
+    }
+}
+
+impl Default for Ini {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
