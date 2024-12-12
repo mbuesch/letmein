@@ -350,9 +350,8 @@ impl Filter {
                     //TODO restrict to op
                     add_sys(&mut map, sys!(SYS_ioctl));
                 }
-                Allow::Fcntl { op: _ } => {
-                    //TODO restrict to op
-                    add_sys(&mut map, sys!(SYS_fcntl));
+                Allow::Fcntl { op } => {
+                    add_sys_args_match(&mut map, sys!(SYS_fcntl), args!(1 == op));
                 }
                 Allow::Stat => {
                     add_sys(&mut map, sys!(SYS_fstat));

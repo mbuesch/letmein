@@ -24,6 +24,7 @@ tokio = { workspace = true, features = [ "rt", "net", "macros", "time", ] }
 
 [build-dependencies]
 build-target = { workspace = true }
+libc = { workspace = true }
 
 [target.'cfg(any(target_os="linux", target_os="android"))'.dependencies]
 letmein-seccomp = { workspace = true, features = [ "de", "install" ] }

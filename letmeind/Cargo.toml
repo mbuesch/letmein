@@ -28,5 +28,6 @@ tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync"
 [build-dependencies]
 build-target = { workspace = true }
 letmein-seccomp = { workspace = true, features = [ "compile", "ser" ] }
+libc = { workspace = true }
 
 # vim: ts=4 sw=4 expandtab
