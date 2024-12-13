@@ -75,23 +75,28 @@ pub fn set_owner_mode(path: &Path, uid: u32, gid: u32, mode: u32) -> ah::Result<
 }
 
 /// Create the /run subdirectory.
-fn make_run_subdir(rundir: &Path) -> ah::Result<()> {
-    let runsubdir = rundir.join("letmeinfwd");
+fn make_run_subdir(opts: &Opts) -> ah::Result<()> {
+    let runsubdir = opts.rundir.join("letmeinfwd");
     create_dir_if_not_exists(&runsubdir).context("Create /run subdirectory")?;
-    set_owner_mode(
-        &runsubdir,
-        0, /* root */
-        LETMEIND_GID.load(Relaxed),
-        0o750,
-    )
-    .context("Set /run subdirectory owner and mode")?;
+
+    if !opts.test_mode() {
+        set_owner_mode(
+            &runsubdir,
+            0, /* root */
+            LETMEIND_GID.load(Relaxed),
+            0o750,
+        )
+        .context("Set /run subdirectory owner and mode")?;
+    }
     Ok(())
 }
 
 /// Get UIDs and GIDs.
-fn read_etc_passwd() -> ah::Result<()> {
-    LETMEIND_UID.store(os_get_uid("letmeind")?, Relaxed);
-    LETMEIND_GID.store(os_get_gid("letmeind")?, Relaxed);
+fn read_etc_passwd(opts: &Opts) -> ah::Result<()> {
+    if !opts.test_mode() {
+        LETMEIND_UID.store(os_get_uid("letmeind")?, Relaxed);
+        LETMEIND_GID.store(os_get_gid("letmeind")?, Relaxed);
+    }
     Ok(())
 }
 
@@ -245,13 +250,11 @@ impl Opts {
 }
 
 async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
-    if !opts.test_mode() {
-        // Read and parse /etc/passwd and /etc/group.
-        read_etc_passwd()?;
+    // Read and parse /etc/passwd and /etc/group.
+    read_etc_passwd(&opts)?;
 
-        // Create directories in /run
-        make_run_subdir(&opts.rundir)?;
-    }
+    // Create directories in /run
+    make_run_subdir(&opts)?;
 
     // Read the letmeind.conf configuration file.
     let mut conf = Config::new(ConfigVariant::Server);
