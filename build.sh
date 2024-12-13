@@ -50,12 +50,16 @@ cd "$basedir" || die "cd basedir failed."
 export LETMEIN_CONF_PREFIX="/opt/letmein"
 cargo build || die "Cargo build (debug) failed."
 cargo test || die "Cargo test failed."
-cargo auditable build --release || die "Cargo build (release) failed."
-cargo audit --deny warnings bin \
-    target/release/letmein \
-    target/release/letmeind \
-    target/release/letmeinfwd \
-    || die "Cargo audit failed."
+if which cargo-auditable >/dev/null 2>&1; then
+    cargo auditable build --release || die "Cargo build (release) failed."
+    cargo audit --deny warnings bin \
+        target/release/letmein \
+        target/release/letmeind \
+        target/release/letmeinfwd \
+        || die "Cargo audit failed."
+else
+    cargo build --release || die "Cargo build (release) failed."
+fi
 check_dynlibs target/release/letmein
 check_dynlibs target/release/letmeind
 check_dynlibs target/release/letmeinfwd
