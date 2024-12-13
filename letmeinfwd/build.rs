@@ -16,17 +16,15 @@ const SECCOMP_ALLOW_LIST: [Allow; 28] = [
     Allow::Mmap,
     Allow::Mprotect,
     Allow::GetUidGid,
-    Allow::ArchPrctl { op: 0 }, //TODO
+    Allow::ArchPrctl { op: None }, //TODO
     Allow::Dup,
     Allow::Pipe,
     Allow::Access,
     Allow::Open,
     Allow::Read,
     Allow::Write,
-    Allow::Ioctl { op: 0 }, //TODO
-    Allow::Fcntl {
-        op: libc::F_GETFD as _,
-    },
+    Allow::Ioctl { op: None }, //TODO
+    Allow::Fcntl { op: None },
     Allow::Stat,
     Allow::Recv,
     Allow::Send,

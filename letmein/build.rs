@@ -25,7 +25,7 @@ const SECCOMP_ALLOW_LIST: [Allow; 13] = [
     Allow::Read,
     Allow::Write,
     Allow::Fcntl {
-        op: libc::F_GETFD as _,
+        op: Some(libc::F_GETFD as _),
     },
     Allow::Stat,
     Allow::Recv,

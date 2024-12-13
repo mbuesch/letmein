@@ -68,7 +68,7 @@ pub enum Allow {
     Mmap,
     Mprotect,
     GetUidGid,
-    ArchPrctl { op: u32 },
+    ArchPrctl { op: Option<u32> },
     Dup,
     Pipe,
     Listen,
@@ -82,8 +82,8 @@ pub enum Allow {
     Open,
     Read,
     Write,
-    Ioctl { op: u32 },
-    Fcntl { op: u32 },
+    Ioctl { op: Option<u32> },
+    Fcntl { op: Option<u32> },
     Stat,
     Recv,
     Send,
@@ -350,9 +350,14 @@ impl Filter {
                     //TODO restrict to op
                     add_sys(&mut map, sys!(SYS_ioctl));
                 }
-                Allow::Fcntl { op } => {
-                    add_sys_args_match(&mut map, sys!(SYS_fcntl), args!(1 == op));
-                }
+                Allow::Fcntl { op } => match op {
+                    Some(op) => {
+                        add_sys_args_match(&mut map, sys!(SYS_fcntl), args!(1 == op));
+                    }
+                    None => {
+                        add_sys(&mut map, sys!(SYS_fcntl));
+                    }
+                },
                 Allow::Stat => {
                     add_sys(&mut map, sys!(SYS_fstat));
                     add_sys(&mut map, sys!(SYS_statx));
