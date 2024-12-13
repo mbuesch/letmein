@@ -25,9 +25,17 @@ die()
     exit 1
 }
 
-entry_checks()
+build_project()
 {
-    [ -d "$target" ] || die "letmein is not built! Run ./build.sh"
+    info "Building project..."
+    cd "$basedir" || die "cd failed"
+    ./build.sh || die "Build failed"
+}
+
+cargo_clippy()
+{
+    cargo clippy -- --deny warnings || die "cargo clippy failed"
+    cargo clippy --tests -- --deny warnings || die "cargo clippy --tests failed"
 }
 
 build_stubs()
@@ -37,15 +45,6 @@ build_stubs()
         || die "Failed to create tmpbin directory"
     rustc --edition 2021 -o "$tmpbin/nft" "$stubdir/nft.rs" \
         || die "Failed to build nft stub"
-}
-
-run_cargo_tests()
-{
-    info "Running Cargo tests..."
-    cd "$basedir" || die "cd failed"
-    cargo clippy -- --deny warnings || die "cargo clippy failed"
-    cargo clippy --tests -- --deny warnings || die "cargo clippy --tests failed"
-    cargo test || die "cargo test failed"
 }
 
 run_tcp_tests()
@@ -164,10 +163,10 @@ export PATH="$tmpbin:$PATH"
 trap cleanup_and_exit INT TERM
 trap cleanup EXIT
 
-entry_checks
 info "Temporary directory is: $tmpdir"
+build_project
+cargo_clippy
 build_stubs
-run_cargo_tests
 run_tcp_tests
 info "All tests Ok."
 
