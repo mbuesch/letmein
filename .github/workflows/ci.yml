@@ -22,9 +22,7 @@ jobs:
       - run: rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
       - run: cargo build --verbose
-      - run: cargo clippy -- --deny warnings
-      - run: cargo clippy --tests -- --deny warnings
-      - run: cargo test
+      - run: sh ./tests/run-tests.sh
 
   client_only:
     name: Client only
