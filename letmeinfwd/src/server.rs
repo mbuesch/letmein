@@ -8,7 +8,7 @@
 
 use crate::{
     firewall::{FirewallOpen, LeasePort},
-    set_owner_mode, LETMEIND_GID, LETMEIND_UID,
+    set_owner_mode, Opts, LETMEIND_GID, LETMEIND_UID,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::Config;
@@ -150,7 +150,7 @@ pub struct FirewallServer {
 }
 
 impl FirewallServer {
-    pub async fn new(no_systemd: bool, rundir: &Path) -> ah::Result<Self> {
+    pub async fn new(no_systemd: bool, opts: &Opts) -> ah::Result<Self> {
         // Get socket from systemd?
         if !no_systemd {
             let sockets = SystemdSocket::get_all()?;
@@ -164,7 +164,7 @@ impl FirewallServer {
                 systemd_notify_ready()?;
                 return Ok(Self {
                     listener,
-                    rundir: rundir.to_owned(),
+                    rundir: opts.rundir.to_owned(),
                 });
             } else {
                 return Err(err!("Received an unusable socket from systemd."));
@@ -174,7 +174,7 @@ impl FirewallServer {
         // Without systemd.
 
         // Remove the socket, if it exists.
-        let runsubdir = rundir.join("letmeinfwd");
+        let runsubdir = opts.rundir.join("letmeinfwd");
         let sock_path = runsubdir.join(SOCK_FILE);
         if let Ok(meta) = metadata(&sock_path) {
             const S_IFMT: u32 = libc::S_IFMT as _;
@@ -186,22 +186,24 @@ impl FirewallServer {
 
         // Bind to the Unix socket.
         let listener = UnixListener::bind(&sock_path).context("Bind socket")?;
-        set_owner_mode(
-            &sock_path,
-            0, /* root */
-            LETMEIND_GID.load(Relaxed),
-            0o660,
-        )
-        .context("Set unix socket owner and mode")?;
+        if !opts.test_mode() {
+            set_owner_mode(
+                &sock_path,
+                0, /* root */
+                LETMEIND_GID.load(Relaxed),
+                0o660,
+            )
+            .context("Set unix socket owner and mode")?;
+        }
 
         Ok(Self {
             listener,
-            rundir: rundir.to_owned(),
+            rundir: opts.rundir.to_owned(),
         })
     }
 
     /// Accept a connection on the Unix socket.
-    pub async fn accept(&self) -> ah::Result<FirewallConnection> {
+    pub async fn accept(&self, opts: &Opts) -> ah::Result<FirewallConnection> {
         let (stream, _addr) = self.listener.accept().await?;
 
         // Get the credentials of the connected process.
@@ -224,24 +226,26 @@ impl FirewallServer {
             ));
         }
 
-        // Check if the connected process is letmeind user and group.
-        // This is an additional check that is not strictly needed for the security
-        // concept. The socket is only accessible by the `letmeind` group and user.
-        if cred.uid() != LETMEIND_UID.load(Relaxed) {
-            return Err(err!(
-                "The connected uid {} is not letmeind ({}). Rejecting. \
-                Please ensure that the 'letmeind' daemon is running as 'letmeind' user.",
-                cred.uid(),
-                LETMEIND_UID.load(Relaxed),
-            ));
-        }
-        if cred.gid() != LETMEIND_GID.load(Relaxed) {
-            return Err(err!(
-                "The connected gid {} is not letmeind ({}). Rejecting. \
-                Please ensure that the 'letmeind' daemon is running as 'letmeind' group.",
-                cred.gid(),
-                LETMEIND_GID.load(Relaxed),
-            ));
+        if !opts.test_mode() {
+            // Check if the connected process is letmeind user and group.
+            // This is an additional check that is not strictly needed for the security
+            // concept. The socket is only accessible by the `letmeind` group and user.
+            if cred.uid() != LETMEIND_UID.load(Relaxed) {
+                return Err(err!(
+                    "The connected uid {} is not letmeind ({}). Rejecting. \
+                    Please ensure that the 'letmeind' daemon is running as 'letmeind' user.",
+                    cred.uid(),
+                    LETMEIND_UID.load(Relaxed),
+                ));
+            }
+            if cred.gid() != LETMEIND_GID.load(Relaxed) {
+                return Err(err!(
+                    "The connected gid {} is not letmeind ({}). Rejecting. \
+                    Please ensure that the 'letmeind' daemon is running as 'letmeind' group.",
+                    cred.gid(),
+                    LETMEIND_GID.load(Relaxed),
+                ));
+            }
         }
 
         FirewallConnection::new(stream)

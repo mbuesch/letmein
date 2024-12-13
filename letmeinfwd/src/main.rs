@@ -213,6 +213,11 @@ struct Opts {
     /// Show version information and exit.
     #[arg(long, short = 'v')]
     version: bool,
+
+    /// Enable development test mode. Do not use this option. Ever.
+    #[cfg(debug_assertions)]
+    #[arg(long, hide = true)]
+    test_mode: bool,
 }
 
 impl Opts {
@@ -224,14 +229,29 @@ impl Opts {
             Config::get_default_path(ConfigVariant::Server)
         }
     }
+
+    /// Check if development test mode is enabled.
+    /// This always returns `false` for release builds and only ever
+    /// returns `true` if the option `--test-mode` is passed to a debug executable.
+    pub fn test_mode(&self) -> bool {
+        #[cfg(debug_assertions)]
+        let test_mode = self.test_mode;
+
+        #[cfg(not(debug_assertions))]
+        let test_mode = false;
+
+        test_mode
+    }
 }
 
 async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
-    // Read and parse /etc/passwd and /etc/group.
-    read_etc_passwd()?;
+    if !opts.test_mode() {
+        // Read and parse /etc/passwd and /etc/group.
+        read_etc_passwd()?;
 
-    // Create directories in /run
-    make_run_subdir(&opts.rundir)?;
+        // Create directories in /run
+        make_run_subdir(&opts.rundir)?;
+    }
 
     // Read the letmeind.conf configuration file.
     let mut conf = Config::new(ConfigVariant::Server);
@@ -252,7 +272,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     let (exit_fw_tx, mut exit_fw_rx) = sync::mpsc::channel(1);
 
     // Start the firewall unix domain socket listener.
-    let srv = FirewallServer::new(opts.no_systemd, &opts.rundir)
+    let srv = FirewallServer::new(opts.no_systemd, &opts)
         .await
         .context("Firewall server init")?;
 
@@ -274,7 +294,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
             loop {
                 let conf = Arc::clone(&conf);
                 let fw = Arc::clone(&fw);
-                match srv.accept().await {
+                match srv.accept(&opts).await {
                     Ok(mut conn) => {
                         // Socket connection handler.
                         if let Ok(_permit) = conn_semaphore.acquire().await {
