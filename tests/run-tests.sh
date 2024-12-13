@@ -53,8 +53,6 @@ run_tcp_tests()
     info "### Running test: TCP ###"
 
     rm -rf "$rundir"
-    mkdir -p "$rundir/letmeinfwd" || die "mkdir run"
-
     local conf="$testdir/conf/tcp.conf"
 
     info "Starting letmeinfwd..."
