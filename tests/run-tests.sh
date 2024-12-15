@@ -69,8 +69,8 @@ run_tcp_tests()
         --config "$conf" &
     pid_letmeind=$!
 
-    sleep 1
-    check_pidfiles
+    wait_for_pidfile letmeinfwd "$pid_letmeinfwd"
+    wait_for_pidfile letmeind "$pid_letmeind"
 
     info "Knocking..."
     "$target/letmein" \
@@ -83,24 +83,21 @@ run_tcp_tests()
     kill_all_and_wait
 }
 
-check_pidfile()
+wait_for_pidfile()
 {
     local name="$1"
     local pid="$2"
 
-    if [ -r "$rundir/$name/$name.pid" ]; then
-        if [ "$pid" != "$(cat "$rundir/$name/$name.pid")" ]; then
-            die "$name: Invalid PID-file."
+    for i in $(seq 0 29); do
+        if [ -r "$rundir/$name/$name.pid" ]; then
+            if [ "$pid" != "$(cat "$rundir/$name/$name.pid")" ]; then
+                die "$name: Invalid PID-file."
+            fi
+            return
         fi
-    else
-        die "$name PID-file is missing. Did $name fail to start?"
-    fi
-}
-
-check_pidfiles()
-{
-    check_pidfile letmeinfwd "$pid_letmeinfwd"
-    check_pidfile letmeind "$pid_letmeind"
+        sleep 0.1
+    done
+    die "$name PID-file is missing. Did $name fail to start?"
 }
 
 kill_all()
