@@ -101,7 +101,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
 
                 // Check if the RX queue is full
                 // and if not, then push the received datagram to the queue.
-                assert!(self.rx_queue.len() <= Q_SIZE);
+                assert!(conn.rx_queue.len() <= Q_SIZE);
                 if conn.rx_queue.len() == Q_SIZE {
                     self.conn.remove(&peer_addr); // Close connection.
                     return Err(err!("UDP socket read: RX queue overflow (max={}).", Q_SIZE));
