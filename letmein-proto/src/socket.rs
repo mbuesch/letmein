@@ -91,7 +91,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 }
 
                 // Add the received datagram to an existing connection
-                // of create a new connection, if there is none, yet.
+                // or create a new connection, if there is none, yet.
                 assert!(self.conn.len() <= self.max_nr_conn);
                 let conn = self.conn.entry(peer_addr).or_insert_with(|| UdpConn {
                     rx_queue: VecDeque::new(),
@@ -106,10 +106,10 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                     return Err(err!("UDP socket read: RX queue overflow (max={}).", Q_SIZE));
                 }
                 conn.rx_queue.push_back(buf);
-                self.nr_queued_dgrams += 1;
                 let accepted = conn.accepted;
 
-                // Check if we exceeded the maximum number of connections.
+                // Check if this was a new connection and
+                // we exceeded the maximum number of connections.
                 if self.conn.len() > self.max_nr_conn {
                     self.conn.remove(&peer_addr); // Close connection.
                     return Err(err!(
@@ -117,6 +117,9 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                         self.max_nr_conn
                     ));
                 }
+
+                self.nr_queued_dgrams += 1;
+                assert!(self.nr_queued_dgrams <= self.max_nr_conn * Q_SIZE);
 
                 if !accepted {
                     if DEBUG {
@@ -126,7 +129,6 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                     let _ = accept_notify.send(());
                     let _ = recv_notify.send(());
                 }
-                assert!(self.nr_queued_dgrams <= self.max_nr_conn * Q_SIZE);
 
                 Ok(())
             }
