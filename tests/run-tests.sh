@@ -47,12 +47,14 @@ build_stubs()
         || die "Failed to build nft stub"
 }
 
-run_tcp_tests()
+run_tests()
 {
-    info "### Running test: TCP ###"
+    local test_type="$1"
+
+    info "### Running test: $test_type ###"
 
     rm -rf "$rundir"
-    local conf="$testdir/conf/tcp.conf"
+    local conf="$testdir/conf/$test_type.conf"
 
     info "Starting letmeinfwd..."
     "$target/letmeinfwd" \
@@ -74,6 +76,7 @@ run_tcp_tests()
 
     info "Knocking..."
     "$target/letmein" \
+        --verbose \
         --config "$conf" \
         knock \
         --user 12345678 \
@@ -164,7 +167,8 @@ info "Temporary directory is: $tmpdir"
 build_project
 cargo_clippy
 build_stubs
-run_tcp_tests
+run_tests tcp
+run_tests udp
 info "All tests Ok."
 
 # vim: ts=4 sw=4 expandtab
