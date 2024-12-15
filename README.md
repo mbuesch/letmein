@@ -18,6 +18,9 @@ If you use an `iptables` based firewall, please convert to `nftables` before ins
 There are descriptions about how to do that on the Internet.
 It's not as hard and as much work as it sounds. :)
 
+The letmein control communication itself defaults to TCP port 5800, but it can be configured to any TCP or UDP port.
+If you choose a UDP port as control port and configure [control-error-policy=basic-auth](CONFIGURATION.md#control-error-policy), then the letmein service itself operates in stealth mode and doesn't respond to unauthenticated incoming messages.
+
 ## Typical letmein operation flow
 
 ![image](pic/letmein_overview.png)
