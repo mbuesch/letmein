@@ -65,7 +65,7 @@ If the port configuration explicitly specifies TDP,UDP such as `port=5800/udp,tc
 
 For the server this means it will listen on both TCP and UDP.
 
-For the client this means that it will connect to the server over TCP, unless there is a command line override via `--server_port_udp`.
+For the client this means that it will connect to the server over TCP, unless there is a command line override via `--server-port-udp`.
 
 ### `control-timeout`
 
