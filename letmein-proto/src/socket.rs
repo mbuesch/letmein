@@ -137,6 +137,17 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
         }
     }
 
+    /// Notify receivers based on whether more datagrams are queued.
+    fn recv_notify(&self, recv_notify: &Sender<()>) {
+        if self.nr_queued_dgrams > 0 {
+            // There is queued RX data for an accepted connection. Wake watcher.
+            if DEBUG {
+                println!("UDP-dispatcher: Notifying recv-watchers.");
+            }
+            let _ = recv_notify.send(());
+        }
+    }
+
     /// Get the first not-accepted connection, or None.
     fn try_accept(
         &mut self,
@@ -156,13 +167,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 return Some(conn.peer_addr);
             }
         }
-        if self.nr_queued_dgrams > 0 {
-            // There is queued RX data for an accepted connection. Wake watcher.
-            if DEBUG {
-                println!("UDP-dispatcher: Notifying recv-watchers (from accept).");
-            }
-            let _ = recv_notify.send(());
-        }
+        self.recv_notify(recv_notify);
         None
     }
 
@@ -182,13 +187,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
         if buf.is_some() {
             self.nr_queued_dgrams -= 1;
         }
-        if self.nr_queued_dgrams > 0 {
-            // There is queued RX data for an accepted connection. Wake watcher.
-            if DEBUG {
-                println!("UDP-dispatcher: Notifying recv-watchers (from recv).");
-            }
-            let _ = recv_notify.send(());
-        }
+        self.recv_notify(recv_notify);
         Ok(buf)
     }
 
