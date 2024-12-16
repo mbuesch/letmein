@@ -149,7 +149,8 @@ cleanup_and_exit()
 pid_letmeinfwd=
 pid_letmeind=
 
-tmpdir="$(mktemp -d --tmpdir=/tmp letmein-test.XXXXXXXXXX)"
+[ -n "$TMPDIR" ] || export TMPDIR=/tmp
+tmpdir="$(mktemp --tmpdir="$TMPDIR" -d letmein-test.XXXXXXXXXX)"
 [ -d "$tmpdir" ] || die "Failed to create temporary directory"
 tmpbin="$tmpdir/bin"
 rundir="$tmpdir/run"
