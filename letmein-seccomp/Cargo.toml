@@ -14,19 +14,12 @@ readme = "README.md"
 categories = { workspace = true }
 keywords = { workspace = true }
 
-[features]
-default = [ "compile", "install", "ser", "de" ]
-compile = []
-install = []
-ser = []
-de = []
-
 [dependencies]
 anyhow = { workspace = true }
 libc = { workspace = true }
 seccompiler = { workspace = true }
 
-[dev-dependencies]
-letmein-seccomp = { path = ".", features = [ "compile", "ser", "de" ] }
+[build-dependencies]
+build-target = { workspace = true }
 
 # vim: ts=4 sw=4 expandtab

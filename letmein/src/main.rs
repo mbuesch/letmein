@@ -11,52 +11,21 @@
 mod client;
 mod command;
 mod resolver;
+mod seccomp;
 
-use crate::command::{
-    genkey::run_genkey,
-    knock::{run_knock, KnockServer},
+use crate::{
+    command::{
+        genkey::run_genkey,
+        knock::{run_knock, KnockServer},
+    },
+    seccomp::install_seccomp_rules,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::{Parser, Subcommand};
-use letmein_conf::{Config, ConfigVariant};
+use letmein_conf::{Config, ConfigVariant, Seccomp};
 use letmein_proto::UserId;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::runtime;
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-use letmein_conf::Seccomp;
-#[cfg(any(target_os = "linux", target_os = "android"))]
-use letmein_seccomp::{include_precompiled_filters, seccomp_supported, Filter as SeccompFilter};
-
-/// Install the precompiled `seccomp` rules, if requested.
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
-    if seccomp == Seccomp::Off {
-        return Ok(());
-    }
-
-    // See build.rs for the filter definition.
-    include_precompiled_filters!(SECCOMP_FILTER_KILL, SECCOMP_FILTER_LOG);
-    let filter_bytes = match seccomp {
-        Seccomp::Log => SECCOMP_FILTER_LOG,
-        Seccomp::Kill => SECCOMP_FILTER_KILL,
-        Seccomp::Off => unreachable!(),
-    };
-
-    // Install seccomp filter.
-    if seccomp_supported() {
-        SeccompFilter::deserialize(filter_bytes)
-            .install()
-            .context("Install seccomp filter")?;
-    } else {
-        eprintln!(
-            "WARNING: Not using seccomp. \
-            Letmein does not support seccomp on this architecture, yet."
-        );
-    }
-
-    Ok(())
-}
 
 #[derive(Parser, Debug)]
 struct Opts {
@@ -75,7 +44,6 @@ struct Opts {
     ///
     /// If this option is not given, then the value
     /// from the configuration file is used instead.
-    #[cfg(any(target_os = "linux", target_os = "android"))]
     #[arg(long)]
     seccomp: Option<Seccomp>,
 
@@ -208,7 +176,6 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
     let conf = Arc::new(conf);
 
     // Install `seccomp` rules, if required.
-    #[cfg(any(target_os = "linux", target_os = "android"))]
     install_seccomp_rules(opts.seccomp.unwrap_or(conf.seccomp()))?;
 
     // Run the user specified command.

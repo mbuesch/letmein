@@ -521,7 +521,6 @@ name = "letmein"
 version = "8.0.0"
 dependencies = [
  "anyhow",
- "build-target",
  "clap",
  "hickory-resolver",
  "letmein-conf",
@@ -564,7 +563,7 @@ name = "letmein-seccomp"
 version = "8.0.0"
 dependencies = [
  "anyhow",
- "letmein-seccomp",
+ "build-target",
  "libc",
  "seccompiler",
 ]
@@ -583,7 +582,6 @@ name = "letmeind"
 version = "8.0.0"
 dependencies = [
  "anyhow",
- "build-target",
  "clap",
  "letmein-conf",
  "letmein-fwproto",
@@ -599,7 +597,6 @@ name = "letmeinfwd"
 version = "8.0.0"
 dependencies = [
  "anyhow",
- "build-target",
  "clap",
  "letmein-conf",
  "letmein-fwproto",

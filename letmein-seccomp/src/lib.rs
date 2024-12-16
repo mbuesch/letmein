@@ -7,29 +7,15 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 #![forbid(unsafe_code)]
-#![allow(unused_imports)]
 
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 std::compile_error!("letmeind server and letmein-seccomp do not support non-Linux platforms.");
 
 use anyhow::{self as ah, Context as _};
-use seccompiler::{
-    apply_filter_all_threads, sock_filter, BpfProgram, SeccompAction, SeccompCmpArgLen,
-    SeccompCmpOp, SeccompCondition, SeccompFilter, SeccompRule,
-};
-use std::{collections::BTreeMap, env::consts::ARCH, fs::OpenOptions, io::Write as _, path::Path};
+use seccompiler::{apply_filter_all_threads, BpfProgram};
+use std::env::consts::ARCH;
 
-/// Include the raw serialized bytes of the precompiled seccomp BPF code.
-#[cfg(all(feature = "install", feature = "de"))]
-#[macro_export]
-macro_rules! include_precompiled_filters {
-    ($kill:ident, $log:ident) => {
-        const $kill: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/seccomp_filter_kill.bpf"));
-        const $log: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/seccomp_filter_log.bpf"));
-    };
-}
-
-#[cfg(feature = "compile")]
+#[cfg(has_seccomp_support)]
 macro_rules! sys {
     ($ident:ident) => {{
         #[allow(clippy::useless_conversion)]
@@ -38,7 +24,7 @@ macro_rules! sys {
     }};
 }
 
-#[cfg(feature = "compile")]
+#[cfg(has_seccomp_support)]
 macro_rules! args {
     ($($arg:literal == $value:expr),*) => {
         SeccompRule::new(
@@ -58,8 +44,7 @@ macro_rules! args {
 
 /// Returns `true` if seccomp is supported on this platform.
 pub fn seccomp_supported() -> bool {
-    // This is what `seccompiler` currently supports:
-    cfg!(any(target_arch = "x86_64", target_arch = "aarch64"))
+    cfg!(any(has_seccomp_support))
 }
 
 /// Abstract allow-list features that map to one or more syscalls each.
@@ -108,100 +93,23 @@ pub enum Action {
     Log,
 }
 
-impl Action {
-    /// Get the file name of the precompiled BPF file for this action.
-    pub const fn get_bytecode_filename(&self) -> &'static str {
-        match self {
-            Action::Kill => "seccomp_filter_kill.bpf",
-            Action::Log => "seccomp_filter_log.bpf",
-        }
-    }
-}
-
 /// A compiled seccomp filter program.
-#[allow(dead_code)]
 pub struct Filter(BpfProgram);
 
 impl Filter {
-    /// Simple serialization, without serde.
-    #[cfg(feature = "ser")]
-    pub fn serialize(&self) -> Vec<u8> {
-        let mut raw = Vec::with_capacity(self.0.len() * 8);
-        for insn in &self.0 {
-            raw.extend_from_slice(&insn.code.to_le_bytes());
-            raw.push(insn.jt);
-            raw.push(insn.jf);
-            raw.extend_from_slice(&insn.k.to_le_bytes());
-        }
-        assert_eq!(raw.len(), self.0.len() * 8);
-        assert!(!raw.is_empty());
-        raw
-    }
-
-    /// Simple de-serialization, without serde.
-    #[cfg(feature = "de")]
-    pub fn deserialize(raw: &[u8]) -> Self {
-        assert!(!raw.is_empty());
-        assert_eq!(raw.len() % 8, 0);
-        let mut bpf = Vec::with_capacity(raw.len() / 8);
-        for i in (0..raw.len()).step_by(8) {
-            let code = u16::from_le_bytes(raw[i..i + 2].try_into().unwrap());
-            let jt = raw[i + 2];
-            let jf = raw[i + 3];
-            let k = u32::from_le_bytes(raw[i + 4..i + 8].try_into().unwrap());
-            bpf.push(sock_filter { code, jt, jf, k });
-        }
-        assert_eq!(bpf.len(), raw.len() / 8);
-        Self(bpf)
-    }
-
-    /// Pre-compile the given allow-list for the given `arch` for
-    /// [Action::Kill] and [Action::Log] actions
-    /// and put the BPF byte code into files in the `out_dir`.
-    ///
-    /// See [Action::get_bytecode_filename] for the file names used.
-    ///
-    /// If compilation fails, empty files will be written.
-    #[cfg(all(feature = "compile", feature = "ser"))]
-    pub fn precompile(allow: &[Allow], arch: &str, out_dir: &Path) -> ah::Result<()> {
-        Self::precompile_action(allow, Action::Kill, arch, out_dir)?;
-        Self::precompile_action(allow, Action::Log, arch, out_dir)?;
-        Ok(())
-    }
-
-    /// Pre-compile the given allow-list for the given `arch` and `deny_action`.
-    /// and put the BPF byte code into a file in the `out_dir`.
-    ///
-    /// See [Action::get_bytecode_filename] for the file name used.
-    ///
-    /// If compilation fails, an empty file will be written.
-    #[cfg(all(feature = "compile", feature = "ser"))]
-    pub fn precompile_action(
-        allow: &[Allow],
-        deny_action: Action,
-        arch: &str,
-        out_dir: &Path,
-    ) -> ah::Result<()> {
-        let filter = Self::compile_for_arch(allow, deny_action, arch)
-            .map(|filter| filter.serialize())
-            .unwrap_or_default();
-        OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(out_dir.join(deny_action.get_bytecode_filename()))?
-            .write_all(&filter)?;
-        Ok(())
-    }
-
-    #[cfg(feature = "compile")]
     pub fn compile(allow: &[Allow], deny_action: Action) -> ah::Result<Self> {
         Self::compile_for_arch(allow, deny_action, ARCH)
     }
 
-    #[cfg(feature = "compile")]
+    #[cfg(has_seccomp_support)]
     pub fn compile_for_arch(allow: &[Allow], deny_action: Action, arch: &str) -> ah::Result<Self> {
         assert!(!allow.is_empty());
+
+        use seccompiler::{
+            SeccompAction, SeccompCmpArgLen, SeccompCmpOp, SeccompCondition, SeccompFilter,
+            SeccompRule,
+        };
+        use std::collections::BTreeMap;
 
         type RulesMap = BTreeMap<i64, Vec<SeccompRule>>;
 
@@ -442,26 +350,17 @@ impl Filter {
         Ok(Self(filter))
     }
 
-    #[cfg(feature = "install")]
+    #[cfg(not(has_seccomp_support))]
+    pub fn compile_for_arch(
+        _allow: &[Allow],
+        _deny_action: Action,
+        _arch: &str,
+    ) -> ah::Result<Self> {
+        Err(ah::format_err!("seccomp is not supported on this platform"))
+    }
+
     pub fn install(&self) -> ah::Result<()> {
         apply_filter_all_threads(&self.0).context("Apply seccomp filter")
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_filter_serialize() {
-        if seccomp_supported() {
-            let filter = Filter::compile(&[Allow::Read], Action::Kill).unwrap();
-            let filter2 = Filter::deserialize(&filter.serialize());
-            assert_eq!(filter.0.len(), filter2.0.len());
-            for i in 0..filter.0.len() {
-                assert_eq!(filter.0[i], filter2.0[i]);
-            }
-        }
     }
 }
 

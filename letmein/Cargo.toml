@@ -20,16 +20,10 @@ clap = { workspace = true }
 hickory-resolver = { workspace = true }
 letmein-conf = { workspace = true }
 letmein-proto = { workspace = true }
+libc = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "net", "macros", "time", ] }
 
-[build-dependencies]
-build-target = { workspace = true }
-libc = { workspace = true }
-
 [target.'cfg(any(target_os="linux", target_os="android"))'.dependencies]
-letmein-seccomp = { workspace = true, features = [ "de", "install" ] }
-
-[target.'cfg(any(target_os="linux", target_os="android"))'.build-dependencies]
-letmein-seccomp = { workspace = true, features = [ "compile", "ser" ] }
+letmein-seccomp = { workspace = true }
 
 # vim: ts=4 sw=4 expandtab

@@ -12,18 +12,19 @@
 std::compile_error!("letmeind server and letmeinfwd do not support non-Linux platforms.");
 
 mod firewall;
+mod seccomp;
 mod server;
 mod uid_gid;
 
 use crate::{
     firewall::{nftables::NftFirewall, FirewallMaintain},
+    seccomp::install_seccomp_rules,
     server::FirewallServer,
     uid_gid::{os_get_gid, os_get_uid},
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant, Seccomp};
-use letmein_seccomp::{include_precompiled_filters, seccomp_supported, Filter as SeccompFilter};
 use std::{
     fs::{create_dir_all, metadata, set_permissions, OpenOptions},
     io::Write as _,
@@ -110,36 +111,6 @@ fn make_pidfile(rundir: &Path) -> ah::Result<()> {
         .context("Open PID-file")?
         .write_all(format!("{}\n", std::process::id()).as_bytes())
         .context("Write to PID-file")
-}
-
-/// Install the precompiled `seccomp` rules, if requested.
-fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
-    if seccomp == Seccomp::Off {
-        return Ok(());
-    }
-
-    // See build.rs for the filter definition.
-    include_precompiled_filters!(SECCOMP_FILTER_KILL, SECCOMP_FILTER_LOG);
-    let filter_bytes = match seccomp {
-        Seccomp::Log => SECCOMP_FILTER_LOG,
-        Seccomp::Kill => SECCOMP_FILTER_KILL,
-        Seccomp::Off => unreachable!(),
-    };
-
-    // Install seccomp filter.
-    if seccomp_supported() {
-        println!("Seccomp mode: {}", seccomp);
-        SeccompFilter::deserialize(filter_bytes)
-            .install()
-            .context("Install seccomp filter")?;
-    } else {
-        eprintln!(
-            "WARNING: Not using seccomp. \
-            Letmein does not support seccomp on this architecture, yet."
-        );
-    }
-
-    Ok(())
 }
 
 /// Handle SIGHUP:
