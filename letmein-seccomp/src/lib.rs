@@ -126,7 +126,7 @@ impl Filter {
 
         add_sys(&mut map, sys!(SYS_brk));
         add_sys(&mut map, sys!(SYS_close));
-        #[cfg(not(target_os = "android"))]
+        #[cfg(target_os = "linux")]
         add_sys(&mut map, sys!(SYS_close_range));
         add_sys(&mut map, sys!(SYS_exit));
         add_sys(&mut map, sys!(SYS_exit_group));
@@ -147,10 +147,12 @@ impl Filter {
             add_sys(map, sys!(SYS_epoll_create1));
             add_sys(map, sys!(SYS_epoll_ctl));
             add_sys(map, sys!(SYS_epoll_pwait));
-            #[cfg(all(any(target_arch = "x86_64", target_arch = "arm"), target_os = "linux"))]
+            #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
             add_sys(map, sys!(SYS_epoll_pwait2));
+            #[cfg(target_arch = "x86_64")]
             add_sys(map, sys!(SYS_epoll_wait));
             add_sys(map, sys!(SYS_lseek));
+            #[cfg(target_arch = "x86_64")]
             add_sys(map, sys!(SYS_poll));
             add_sys(map, sys!(SYS_ppoll));
             add_sys(map, sys!(SYS_pselect6));
@@ -159,14 +161,7 @@ impl Filter {
         for allow in allow {
             match *allow {
                 Allow::Mmap => {
-                    #[cfg(any(
-                        target_arch = "x86",
-                        target_arch = "x86_64",
-                        target_arch = "aarch64"
-                    ))]
                     add_sys(&mut map, sys!(SYS_mmap));
-                    #[cfg(any(target_arch = "x86", target_arch = "arm"))]
-                    add_sys(&mut map, sys!(SYS_mmap2));
                     add_sys(&mut map, sys!(SYS_mremap));
                     add_sys(&mut map, sys!(SYS_munmap));
                 }
@@ -186,10 +181,12 @@ impl Filter {
                 }
                 Allow::Dup => {
                     add_sys(&mut map, sys!(SYS_dup));
+                    #[cfg(target_arch = "x86_64")]
                     add_sys(&mut map, sys!(SYS_dup2));
                     add_sys(&mut map, sys!(SYS_dup3));
                 }
                 Allow::Pipe => {
+                    #[cfg(target_arch = "x86_64")]
                     add_sys(&mut map, sys!(SYS_pipe));
                     add_sys(&mut map, sys!(SYS_pipe2));
                 }
@@ -232,13 +229,15 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_setsockopt));
                 }
                 Allow::Access => {
+                    #[cfg(target_arch = "x86_64")]
                     add_sys(&mut map, sys!(SYS_access));
                     add_sys(&mut map, sys!(SYS_faccessat));
-                    #[cfg(not(target_os = "android"))]
+                    #[cfg(target_os = "linux")]
                     add_sys(&mut map, sys!(SYS_faccessat2));
                 }
                 Allow::Open => {
                     //TODO: This should be restricted
+                    #[cfg(target_arch = "x86_64")]
                     add_sys(&mut map, sys!(SYS_open));
                     add_sys(&mut map, sys!(SYS_openat));
                 }
@@ -273,7 +272,6 @@ impl Filter {
                 Allow::Stat => {
                     add_sys(&mut map, sys!(SYS_fstat));
                     add_sys(&mut map, sys!(SYS_statx));
-                    #[cfg(target_arch = "x86_64")]
                     add_sys(&mut map, sys!(SYS_newfstatat));
                 }
                 Allow::Recv => {
@@ -297,10 +295,7 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_futex));
                     add_sys(&mut map, sys!(SYS_get_robust_list));
                     add_sys(&mut map, sys!(SYS_set_robust_list));
-                    #[cfg(all(
-                        any(target_arch = "x86", target_arch = "x86_64", target_arch = "arm"),
-                        target_os = "linux"
-                    ))]
+                    #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
                     add_sys(&mut map, sys!(SYS_futex_waitv));
                     //add_sys(&mut map, sys!(SYS_futex_wake));
                     //add_sys(&mut map, sys!(SYS_futex_wait));
@@ -310,12 +305,14 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_set_tid_address));
                 }
                 Allow::Rseq => {
-                    #[cfg(not(target_os = "android"))]
+                    #[cfg(target_os = "linux")]
                     add_sys(&mut map, sys!(SYS_rseq));
                 }
                 Allow::Clone => {
-                    #[cfg(not(target_os = "android"))]
+                    #[cfg(target_os = "linux")]
                     add_sys(&mut map, sys!(SYS_clone3));
+                    #[cfg(target_arch = "aarch64")]
+                    add_sys(&mut map, sys!(SYS_clone));
                 }
                 Allow::Exec => {
                     //TODO restrict the path
