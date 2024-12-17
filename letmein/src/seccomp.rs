@@ -47,7 +47,6 @@ fn do_install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
 
     // Install seccomp filter.
     if seccomp_supported() {
-        println!("Seccomp mode: {}", seccomp);
         Filter::compile(&ALLOW_LIST, action)
             .context("Compile seccomp filter")?
             .install()
