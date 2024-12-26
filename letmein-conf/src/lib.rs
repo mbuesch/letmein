@@ -393,6 +393,13 @@ fn get_default_user(ini: &Ini) -> ah::Result<UserId> {
     Ok(Default::default())
 }
 
+fn get_nft_exe(ini: &Ini) -> ah::Result<PathBuf> {
+    if let Some(nft_exe) = ini.get("NFTABLES", "exe") {
+        return Ok(nft_exe.trim().into());
+    }
+    Ok("nft".into())
+}
+
 fn get_nft_family(ini: &Ini) -> ah::Result<String> {
     if let Some(nft_family) = ini.get("NFTABLES", "family") {
         let nft_family = nft_family.trim();
@@ -455,6 +462,7 @@ pub struct Config {
     keys: HashMap<UserId, Key>,
     resources: HashMap<ResourceId, Resource>,
     default_user: UserId,
+    nft_exe: PathBuf,
     nft_family: String,
     nft_table: String,
     nft_chain_input: String,
@@ -519,6 +527,7 @@ impl Config {
     /// (Re-)load a configuration from a parsed [Ini] instance.
     pub fn load_ini(&mut self, ini: &Ini) -> ah::Result<()> {
         let mut default_user = Default::default();
+        let mut nft_exe = Default::default();
         let mut nft_family = Default::default();
         let mut nft_table = Default::default();
         let mut nft_chain_input = Default::default();
@@ -535,6 +544,7 @@ impl Config {
             default_user = get_default_user(ini)?;
         }
         if self.variant == ConfigVariant::Server {
+            nft_exe = get_nft_exe(ini)?;
             nft_family = get_nft_family(ini)?;
             nft_table = get_nft_table(ini)?;
             nft_chain_input = get_nft_chain_input(ini)?;
@@ -549,6 +559,7 @@ impl Config {
         self.keys = keys;
         self.resources = resources;
         self.default_user = default_user;
+        self.nft_exe = nft_exe;
         self.nft_family = nft_family;
         self.nft_table = nft_table;
         self.nft_chain_input = nft_chain_input;
@@ -614,6 +625,11 @@ impl Config {
     /// Get the `default-user` option from `[CLIENT]` section.
     pub fn default_user(&self) -> UserId {
         self.default_user
+    }
+
+    /// Get the `exe` option from `[NFTABLES]` section.
+    pub fn nft_exe(&self) -> &Path {
+        &self.nft_exe
     }
 
     /// Get the `family` option from `[NFTABLES]` section.
@@ -808,16 +824,18 @@ mod tests {
     fn test_nft() {
         let mut ini = Ini::new();
         ini.parse_str(
-            "[NFTABLES]\nfamily = inet\ntable = filter\nchain-input = LETMEIN-INPUT\ntimeout = 50\n",
+            "[NFTABLES]\nexe = mynft \nfamily = ip6\ntable = myfilter\nchain-input = myLETMEIN-INPUT\ntimeout = 50\n",
         )
         .unwrap();
+        let nft_exe = get_nft_exe(&ini).unwrap();
         let nft_family = get_nft_family(&ini).unwrap();
         let nft_table = get_nft_table(&ini).unwrap();
         let nft_chain_input = get_nft_chain_input(&ini).unwrap();
         let nft_timeout = get_nft_timeout(&ini).unwrap();
-        assert_eq!(nft_family, "inet");
-        assert_eq!(nft_table, "filter");
-        assert_eq!(nft_chain_input, "LETMEIN-INPUT");
+        assert_eq!(nft_exe, Path::new("mynft"));
+        assert_eq!(nft_family, "ip6");
+        assert_eq!(nft_table, "myfilter");
+        assert_eq!(nft_chain_input, "myLETMEIN-INPUT");
         assert_eq!(nft_timeout, Duration::from_secs(50));
     }
 }

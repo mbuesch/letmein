@@ -234,6 +234,21 @@ Example resources:
 
 ## `[NFTABLES]`
 
+### `exe`
+
+Path to the `nft` nftables executable.
+
+If this is an absolute path (with leading slash), then `$PATH` will not be searched.
+If this is a relative path (no leading slash), then `$PATH` and/or the current working directory will be searched.
+
+This option can be used to either use an `nft` executable that cannot be found in `$PATH`.
+Or it can be used to harden against injection of forged a `nft` executable somewhere else in the `$PATH`.
+
+It is recommended to set this option to the abolute path of the `nft` executable of your Linux distribution.
+E.g.: `exe = /usr/sbin/nft`
+
+This option defaults to `exe=nft`, if it is absent from the configuration.
+
 ### `family`
 
 This is the nftables family of the table/chain that letmein should control.

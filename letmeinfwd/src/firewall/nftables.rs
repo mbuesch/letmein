@@ -187,10 +187,14 @@ struct ListedRuleset {
 
 impl ListedRuleset {
     /// Get the active ruleset from the kernel.
-    pub fn from_kernel() -> ah::Result<Self> {
+    pub fn from_kernel(conf: &Config) -> ah::Result<Self> {
+        let exe = conf
+            .nft_exe()
+            .to_str()
+            .context("letmeind.conf nftables exe")?;
         let ruleset = get_current_ruleset(
-            None, // program
-            None, // args
+            Some(exe), // program
+            None,      // args
         )?;
         Ok(Self {
             objs: ruleset.objects,
@@ -321,12 +325,16 @@ impl NftFirewall {
     }
 
     /// Apply a rules batch to the kernel.
-    fn nftables_apply_batch(&self, _conf: &Config, batch: Batch) -> ah::Result<()> {
+    fn nftables_apply_batch(&self, conf: &Config, batch: Batch) -> ah::Result<()> {
+        let exe = conf
+            .nft_exe()
+            .to_str()
+            .context("letmeind.conf nftables exe")?;
         let ruleset = batch.to_nftables();
         apply_ruleset(
-            &ruleset, // rules
-            None,     // program
-            None,     // args
+            &ruleset,  // rules
+            Some(exe), // program
+            None,      // args
         )
         .context("Apply nftables")?;
         Ok(())
@@ -397,7 +405,7 @@ impl NftFirewall {
     fn nftables_remove_leases(&mut self, conf: &Config, leases: &[Lease]) -> ah::Result<()> {
         if !leases.is_empty() {
             // Get the active ruleset from the kernel.
-            let ruleset = ListedRuleset::from_kernel()?;
+            let ruleset = ListedRuleset::from_kernel(conf)?;
 
             // Add delete commands to remove the lease ports.
             let mut batch = Batch::new();
