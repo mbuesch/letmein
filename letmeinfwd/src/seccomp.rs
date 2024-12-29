@@ -29,7 +29,9 @@ const ALLOW_LIST: [Allow; 28] = [
     Allow::Listen,
     Allow::UnixAccept,
     Allow::Netlink,
-    Allow::SetSockOpt,
+    Allow::SetSockOpt {
+        level_optname: None,
+    },
     Allow::Signal,
     Allow::SigAction,
     Allow::Futex,

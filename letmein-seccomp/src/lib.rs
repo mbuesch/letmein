@@ -62,7 +62,7 @@ pub enum Allow {
     TcpAccept,
     TcpConnect,
     Netlink,
-    SetSockOpt,
+    SetSockOpt { level_optname: Option<(i32, i32)> },
     Access,
     Open,
     Read,
@@ -225,8 +225,16 @@ impl Filter {
                     add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_NETLINK));
                     add_sys(&mut map, sys!(SYS_getsockopt));
                 }
-                Allow::SetSockOpt => {
-                    add_sys(&mut map, sys!(SYS_setsockopt));
+                Allow::SetSockOpt { level_optname } => {
+                    if let Some((level, optname)) = level_optname {
+                        add_sys_args_match(
+                            &mut map,
+                            sys!(SYS_setsockopt),
+                            args!(1 == level, 2 == optname),
+                        );
+                    } else {
+                        add_sys(&mut map, sys!(SYS_setsockopt));
+                    }
                 }
                 Allow::Access => {
                     #[cfg(target_arch = "x86_64")]

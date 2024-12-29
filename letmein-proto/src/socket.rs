@@ -360,21 +360,28 @@ pub enum NetSocket<const MSG_SIZE: usize, const Q_SIZE: usize> {
 
 impl<const MSG_SIZE: usize, const Q_SIZE: usize> NetSocket<MSG_SIZE, Q_SIZE> {
     /// Create a new [NetSocket] from a [TcpStream] connection.
-    pub fn from_tcp(stream: TcpStream) -> Self {
-        Self::Tcp(NetSocketTcp {
+    pub fn from_tcp(stream: TcpStream) -> ah::Result<Self> {
+        // Disable Nagle's algorithm.
+        // We want to send our small packets as quickly as possible.
+        stream.set_nodelay(true).context("Set TCP_NODELAY")?;
+
+        Ok(Self::Tcp(NetSocketTcp {
             stream,
             closed: AtomicBool::new(false),
-        })
+        }))
     }
 
     /// Create a new [NetSocket] from a [UdpDispatcher]
     /// and the specified connected `peer_addr`.
-    pub fn from_udp(disp: Arc<UdpDispatcher<MSG_SIZE, Q_SIZE>>, peer_addr: SocketAddr) -> Self {
-        Self::Udp(NetSocketUdp {
+    pub fn from_udp(
+        disp: Arc<UdpDispatcher<MSG_SIZE, Q_SIZE>>,
+        peer_addr: SocketAddr,
+    ) -> ah::Result<Self> {
+        Ok(Self::Udp(NetSocketUdp {
             disp,
             peer_addr,
             closed: AtomicBool::new(false),
-        })
+        }))
     }
 
     /// Send a message to the connected peer.

@@ -211,13 +211,13 @@ impl Server {
             result = &mut self.tcp_join => {
                 self.tcp_join = spawn_tcp_accept(Arc::clone(&self.tcp));
                 let (stream, peer_addr) = result??;
-                let ns = MsgNetSocket::from_tcp(stream);
+                let ns = MsgNetSocket::from_tcp(stream)?;
                 Ok(Connection::new(ns, peer_addr, "TCP")?)
             }
             result = &mut self.udp_join => {
                 self.udp_join = spawn_udp_accept(Arc::clone(&self.udp));
                 let (udp_disp, peer_addr) = result??;
-                let ns = MsgNetSocket::from_udp(udp_disp, peer_addr);
+                let ns = MsgNetSocket::from_udp(udp_disp, peer_addr)?;
                 Ok(Connection::new(ns, peer_addr, "UDP")?)
             }
         }

@@ -10,7 +10,7 @@ use anyhow::{self as ah, Context as _};
 use letmein_conf::Seccomp;
 use letmein_seccomp::{seccomp_supported, Action, Allow, Filter};
 
-const ALLOW_LIST: [Allow; 12] = [
+const ALLOW_LIST: [Allow; 13] = [
     Allow::Mmap,
     Allow::Mprotect,
     Allow::Read,
@@ -23,6 +23,9 @@ const ALLOW_LIST: [Allow; 12] = [
     Allow::Listen,
     Allow::TcpAccept,
     Allow::UnixConnect,
+    Allow::SetSockOpt {
+        level_optname: Some((libc::IPPROTO_TCP as _, libc::TCP_NODELAY as _)),
+    },
     Allow::Signal,
     Allow::Futex,
 ];

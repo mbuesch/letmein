@@ -43,7 +43,7 @@ impl Client {
                 .await
                 .context("Connect to server")?;
 
-            MsgNetSocket::from_tcp(stream)
+            MsgNetSocket::from_tcp(stream)?
         } else {
             assert!(control_port.udp);
 
@@ -62,7 +62,7 @@ impl Client {
                 .context("Connect to server")?;
             let peer_addr = socket.peer_addr().context("Get peer address")?;
 
-            MsgNetSocket::from_udp(Arc::new(MsgUdpDispatcher::new(socket, 1)), peer_addr)
+            MsgNetSocket::from_udp(Arc::new(MsgUdpDispatcher::new(socket, 1)), peer_addr)?
         };
 
         Ok(Self {
