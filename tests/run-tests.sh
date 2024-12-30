@@ -65,12 +65,32 @@ run_tests()
     wait_for_pidfile letmeinfwd "$pid_letmeinfwd"
     wait_for_pidfile letmeind "$pid_letmeind"
 
-    info "Knocking..."
+    info "Knocking IPv6 + IPv4..."
     "$target/letmein" \
         --verbose \
         --config "$conf" \
         knock \
         --user 12345678 \
+        localhost 42 \
+        || die "letmein knock failed"
+
+    info "Knocking IPv4..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        knock \
+        --user 12345678 \
+        --ipv4 \
+        localhost 42 \
+        || die "letmein knock failed"
+
+    info "Knocking IPv6..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        knock \
+        --user 12345678 \
+        --ipv6 \
         localhost 42 \
         || die "letmein knock failed"
 
