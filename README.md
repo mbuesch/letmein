@@ -142,6 +142,8 @@ Make sure the user identifiers and resource identifiers do **not** include any p
 
 These identifiers are merely meant to be an abstract identification for managing different `letmein` keys, installations and setups.
 
+See the documentation about [keys](CONFIGURATION.md#keys) and [resources](CONFIGURATION.md#resources) for detailled information.
+
 ## Internals and design goals
 
 The main design goals of letmein are:
