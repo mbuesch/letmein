@@ -96,7 +96,18 @@ Setting the policy to `basic-auth` or `full-auth` means that unauthenticated cli
 This helps to not reveal what service is running on the control port to malicious scanner clients.
 This enables a more stealth operation of the server.
 
-The disadvantage of setting this to anything but `always` is that legitimate clients might not always receive a proper error message and end up in a network timeout instead.
+The disadvantage of setting this to `basic-auth` or `full-auth` is that legitimate clients might not always receive a proper error message and end up in a network timeout instead.
+
+What is `basic-auth` and what is `full-auth`?
+
+All messages during the control communication are authenticated with a secret key and an authentication algorithm.
+However, the first control messages before the full challenge-response handshake has been completed are not replay-safe.
+That is what `basic-auth` is.
+
+`full-auth` is everything after the challenge-response handshake between server and client has completed successfully.
+
+For the purpose of enabling a stealth operation with `control-error-policy` the `basic-auth` is enough.
+During the challenge-response handshake the presence of the server has been revealed anyway.
 
 Possible values: `always`, `basic-auth`, `full-auth`
 
