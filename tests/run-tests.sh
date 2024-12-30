@@ -38,11 +38,25 @@ cargo_clippy()
     cargo clippy --tests -- --deny warnings || die "cargo clippy --tests failed"
 }
 
-run_tests()
+run_tests_genkey()
+{
+    info "### Running test: gen-key ###"
+
+    local conf="$testdir/conf/udp.conf"
+
+    local res="$("$target/letmein" --config "$conf"  gen-key  --user 12345678)"
+
+    local user="$(echo "$res" | cut -d'=' -f1 | cut -d' ' -f1)"
+    local key="$(echo "$res" | cut -d'=' -f2 | cut -d' ' -f2)"
+
+    [ "$user" = "12345678" ] || die "Got invalid user"
+}
+
+run_tests_knock()
 {
     local test_type="$1"
 
-    info "### Running test: $test_type ###"
+    info "### Running test: knock $test_type ###"
 
     rm -rf "$rundir"
     local conf="$testdir/conf/$test_type.conf"
@@ -177,8 +191,9 @@ trap cleanup EXIT
 info "Temporary directory is: $tmpdir"
 build_project
 cargo_clippy
-run_tests tcp
-run_tests udp
+run_tests_genkey
+run_tests_knock tcp
+run_tests_knock udp
 info "All tests Ok."
 
 # vim: ts=4 sw=4 expandtab
