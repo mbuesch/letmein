@@ -10,6 +10,7 @@ members = [
     "letmein-systemd",
     "letmeind",
     "letmeinfwd",
+    "tests/stubs/nft",
 ]
 resolver = "2"
 

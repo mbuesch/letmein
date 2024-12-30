@@ -1,0 +1,20 @@
+# -*- coding: utf-8 -*-
+
+[package]
+name = "nft-stub"
+description = "letmein: nft stub for testing"
+version = "0.0.0"
+publish = false
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[[bin]]
+name = "nft"
+
+[dependencies]
+
+# vim: ts=4 sw=4 expandtab

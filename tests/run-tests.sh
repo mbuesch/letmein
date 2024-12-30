@@ -38,15 +38,6 @@ cargo_clippy()
     cargo clippy --tests -- --deny warnings || die "cargo clippy --tests failed"
 }
 
-build_stubs()
-{
-    info "Building stubs..."
-    mkdir -p "$tmpbin" \
-        || die "Failed to create tmpbin directory"
-    rustc --edition 2021 -o "$tmpbin/nft" "$stubdir/nft.rs" \
-        || die "Failed to build nft stub"
-}
-
 run_tests()
 {
     local test_type="$1"
@@ -152,14 +143,13 @@ pid_letmeind=
 [ -n "$TMPDIR" ] || export TMPDIR=/tmp
 tmpdir="$(mktemp --tmpdir="$TMPDIR" -d letmein-test.XXXXXXXXXX)"
 [ -d "$tmpdir" ] || die "Failed to create temporary directory"
-tmpbin="$tmpdir/bin"
 rundir="$tmpdir/run"
 
 target="$basedir/target/debug"
 testdir="$basedir/tests"
 stubdir="$testdir/stubs"
 
-export PATH="$tmpbin:$PATH"
+export PATH="$target:$PATH"
 
 trap cleanup_and_exit INT TERM
 trap cleanup EXIT
@@ -167,7 +157,6 @@ trap cleanup EXIT
 info "Temporary directory is: $tmpdir"
 build_project
 cargo_clippy
-build_stubs
 run_tests tcp
 run_tests udp
 info "All tests Ok."
