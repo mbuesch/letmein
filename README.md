@@ -25,6 +25,8 @@ If you choose a UDP port as control port and configure [control-error-policy=bas
 
 ![image](pic/letmein_overview.png)
 
+A detailed description of the wire protocol and the cryptography used can be found in the [protocol documentation](PROTOCOL.md)
+
 ## Project links
 
 [Homepage](https://bues.ch/h/letmein)
@@ -169,6 +171,6 @@ For more information about security and reporting vulnerabilities, please see th
 
 # License
 
-Copyright (c) 2024 Michael Büsch <m@bues.ch>
+Copyright (c) 2024-2025 Michael Büsch <m@bues.ch>
 
 Licensed under the Apache License version 2.0 or the MIT license, at your option.
