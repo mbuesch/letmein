@@ -76,30 +76,112 @@ Successful knocking:
 | RESPONSE -> |              |                      |
 |             | <- COMEIN    | Firewall port opened |
 
+A communication flow always starts with a `KNOCK` message from the client to the server.
+
+A `CHALLENGE` from the server can only follow a `KNOCK` from the client.
+
+A `RESPONSE` from the client can only follow a `CHALLENGE` from the server.
+
+A `COMEIN` from the server can only follow a `RESPONSE` from the client.
+
+A successful knocking always ends with a `COMEIN` message from the server to the client.
+
 If something goes wrong the server can send the `GOAWAY` message to the client at any time.
 Whether and when that actually happens depends on the
 [error policy configuration](CONFIGURATION.md#control-error-policy).
+
+All other message flow combinations are invalid and shall result in an immediate stop of the communication and authentication.
+Invalid combinations may or may not trigger a `GOAWAY`, depending on the error policy configuration.
+
+The `USER` and `RESOURCE` values in all messages shall always be equal to what the client requested in the first `KNOCK` message.
 
 # Cryptography
 
 ## Message: KNOCK
 
-TODO
+The `OPERATION` field of this message shall be `KNOCK`.
+
+The `USER` and `RESOURCE` fields of this message shall be what the user requested.
+
+The `SALT` field in this message shall be a cryptographically secure nonce.
+
+Use a 32 byte long all-zeros `CHALLENGE_TOKEN`,
+[generate a new AUTH token](PROTOCOL.md#generate-auth-token)
+and use the result as the `AUTH` field of this `KNOCK` message.
 
 ## Message: CHALLENGE
 
-TODO
+The `OPERATION` field of this message shall be `CHALLENGE`.
+
+The `USER` and `RESOURCE` fields of this message are set to the same values used in the `KNOCK` message.
+
+The `SALT` field of this message is ignored.
+
+The `AUTH` field in this message shall be a securely generated random 32 byte long nonce.
+This is the `CHALLENGE_TOKEN`.
 
 ## Message: RESPONSE
 
-TODO
+The `OPERATION` field of this message shall be `RESPONSE`.
+
+The `USER` and `RESOURCE` fields of this message are set to the same values used in the `KNOCK` message.
+
+The `SALT` field in this message shall be a cryptographically secure nonce.
+
+Use the `AUTH` field of the `CHALLENGE` message that we are answering to as the `CHALLENGE_TOKEN`.
+Then
+[generate a new AUTH token](PROTOCOL.md#generate-auth-token)
+and use the result as the `AUTH` field of this `RESPONSE` message.
 
 ## Message: COMEIN
 
 The `COMEIN` message is not cryptographically secured.
+
+The `OPERATION` field of this message shall be `COMEIN`.
+
+The `USER` and `RESOURCE` fields of this message are set to the same values used in the `KNOCK` message.
+
 The `SALT` and `AUTH` fields of this message are ignored.
 
 ## Message: GOAWAY
 
 The `GOAWAY` message is not cryptographically secured.
+
+The `OPERATION` field of this message shall be `GOAWAY`.
+
+The `USER` and `RESOURCE` fields of this message are always set to the same values used in the `KNOCK` message.
+
 The `SALT` and `AUTH` fields of this message are ignored.
+
+## Generate AUTH token
+
+The inputs for generating an `AUTH` token are:
+
+- The pre-shared `KEY` (length 32 bytes).
+- The `CHALLENGE_TOKEN` (length 32 bytes).
+- The `OPERATION` field of the message that this `AUTH` token is generated for.
+- The `USER` field of the message that this `AUTH` token is generated for.
+- The `RESOURCE` field of the message that this `AUTH` token is generated for.
+- The `SALT` field of the message that this `AUTH` token is generated for.
+
+The output is the `AUTH` token with length 32 bytes.
+
+Compute the `AUTH` token as follows:
+
+```
+AUTH := HMAC_SHA3_256(KEY)(
+    message.OPERATION ||
+    message.USER      ||
+    message.RESOURCE  ||
+    message.SALT      ||
+    CHALLENGE_TOKEN
+)
+```
+
+This is the core cryptographic algorithm of letmein.
+
+It uses
+[HMAC](https://en.wikipedia.org/wiki/HMAC)
+together with a
+[SHA3-256](https://en.wikipedia.org/wiki/SHA-3)
+algorithm.
