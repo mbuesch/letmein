@@ -109,6 +109,12 @@ Use a 32 byte long all-zeros `CHALLENGE_TOKEN`,
 [generate a new AUTH token](PROTOCOL.md#generate-auth-token)
 and use the result as the `AUTH` field of this `KNOCK` message.
 
+The server must
+[validate the received AUTH token](PROTOCOL.md#validate-auth-token)
+of this `KNOCK` message before continuing in the communication flow.
+It is valid but not mandatory to send a `GOAWAY` message from server to client, if the validation failed.
+The communication must not continue beyond that, if validation failed.
+
 ## Message: CHALLENGE
 
 The `OPERATION` field of this message shall be `CHALLENGE`.
@@ -132,6 +138,12 @@ Use the `AUTH` field of the `CHALLENGE` message that we are answering to as the 
 Then
 [generate a new AUTH token](PROTOCOL.md#generate-auth-token)
 and use the result as the `AUTH` field of this `RESPONSE` message.
+
+The server must
+[validate the received AUTH token](PROTOCOL.md#validate-auth-token)
+of this `RESPONSE` message before continuing in the communication flow.
+It is valid but not mandatory to send a `GOAWAY` message from server to client, if the validation failed.
+The communication must not continue beyond that, if validation failed.
 
 ## Message: COMEIN
 
@@ -185,3 +197,14 @@ It uses
 together with a
 [SHA3-256](https://en.wikipedia.org/wiki/SHA-3)
 algorithm.
+
+## Validate AUTH token
+
+Validation always only happens on the server side.
+
+Generate the [EXPECTED_AUTH token](PROTOCOL.md#generate-auth-token) for the received message using the expected `CHALLENGE_TOKEN`.
+For a `KNOCK` message the expected `CHALLENGE_TOKEN` is 32 bytes of zeros.
+For a `RESPONSE` message the expected `CHALLENGE_TOKEN` is the `AUTH` field of the `CHALLENGE` message that the server sent to the client.
+
+Compare the `EXPECTED_AUTH` token to the actual `AUTH` token of the `RESPONSE` message using a Constant Time Comparison Function.
+The result of the validation is Ok, if the tokens are equal.
