@@ -25,6 +25,8 @@ If you choose a UDP port as control port and configure [control-error-policy=bas
 
 ![image](doc/pic/letmein_overview.png)
 
+## Network protocol and cryptography
+
 A detailed description of the wire protocol and the cryptography used can be found in the [protocol documentation](doc/PROTOCOL.md)
 
 ## Project links
