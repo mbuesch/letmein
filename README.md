@@ -9,7 +9,7 @@ In case of a successful knock, the letmeind server will only open the knocked po
 Machines with different IP addresses still won't have access to the protected service.
 
 Machines that can't successfully authenticate the knock sequence won't be able to access the protected service.
-They will receive a ICMP `reject` on the protected service port with the provided example `nftables.conf`.
+They will receive a ICMP `reject` on the protected service port with the provided example [nftables.conf](doc/nftables.conf).
 (You can also decide to `drop` the packets in your `nftables.conf` instead).
 
 Letmein requires an `nftables` based firewall.
@@ -43,7 +43,7 @@ On the server install the letmein server software (see sections below).
 
 On the client install the letmein client software (see sections below).
 
-Please read the [nftables.conf](nftables.conf) example configuration file provided with this project.
+Please read the [nftables.conf](doc/nftables.conf) example configuration file provided with this project.
 Adding a letmein specific input chain to your existing `nftables` configuration is required.
 Modify your `nftables.conf` accordingly.
 
