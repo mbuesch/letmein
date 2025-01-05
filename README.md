@@ -19,13 +19,13 @@ There are descriptions about how to do that on the Internet.
 It's not as hard and as much work as it sounds. :)
 
 The letmein control communication itself defaults to TCP port 5800, but it can be configured to any TCP or UDP port.
-If you choose a UDP port as control port and configure [control-error-policy=basic-auth](CONFIGURATION.md#control-error-policy), then the letmein service itself operates in stealth mode and doesn't respond to unauthenticated incoming messages.
+If you choose a UDP port as control port and configure [control-error-policy=basic-auth](doc/CONFIGURATION.md#control-error-policy), then the letmein service itself operates in stealth mode and doesn't respond to unauthenticated incoming messages.
 
 ## Typical letmein operation flow
 
-![image](pic/letmein_overview.png)
+![image](doc/pic/letmein_overview.png)
 
-A detailed description of the wire protocol and the cryptography used can be found in the [protocol documentation](PROTOCOL.md)
+A detailed description of the wire protocol and the cryptography used can be found in the [protocol documentation](doc/PROTOCOL.md)
 
 ## Project links
 
@@ -110,11 +110,11 @@ Match host your-server.com exec "letmein knock -u 00000000 your-server.com 22"
 
 ## Installing
 
-See the [installation instructions](INSTALL.md) for more information about how to build and install letmein.
+See the [installation instructions](doc/INSTALL.md) for more information about how to build and install letmein.
 
 ## Uninstalling
 
-If you want to completely remove letmein from your system, see the [uninstall instructions](INSTALL.md#uninstalling).
+If you want to completely remove letmein from your system, see the [uninstall instructions](doc/INSTALL.md#uninstalling).
 
 ## Platform support
 
@@ -134,7 +134,7 @@ The server application `letmeind` is Linux-only, because it only supports `nftab
 
 ## Configuration
 
-See the [configuration documentation](CONFIGURATION.md) for detailled information about how to configure the letmein server and client.
+See the [configuration documentation](doc/CONFIGURATION.md) for detailled information about how to configure the letmein server and client.
 
 ## Security notice: User identifiers and resource identifiers
 
@@ -144,7 +144,7 @@ Make sure the user identifiers and resource identifiers do **not** include any p
 
 These identifiers are merely meant to be an abstract identification for managing different `letmein` keys, installations and setups.
 
-See the documentation about [keys](CONFIGURATION.md#keys) and [resources](CONFIGURATION.md#resources) for detailled information.
+See the documentation about [keys](doc/CONFIGURATION.md#keys) and [resources](doc/CONFIGURATION.md#resources) for detailled information.
 
 ## Internals and design goals
 

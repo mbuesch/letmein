@@ -111,7 +111,7 @@ and use the result as the `AUTH` field of this `KNOCK` message.
 
 The server must
 [validate the received AUTH token](PROTOCOL.md#validate-auth-token)
-of this `KNOCK` message before continuing in the communication flow.
+of this `KNOCK` message before continuing with the communication flow.
 It is valid but not mandatory to send a `GOAWAY` message from server to client, if the validation failed.
 The communication must not continue beyond that, if validation failed.
 
@@ -141,7 +141,7 @@ and use the result as the `AUTH` field of this `RESPONSE` message.
 
 The server must
 [validate the received AUTH token](PROTOCOL.md#validate-auth-token)
-of this `RESPONSE` message before continuing in the communication flow.
+of this `RESPONSE` message before continuing with the communication flow.
 It is valid but not mandatory to send a `GOAWAY` message from server to client, if the validation failed.
 The communication must not continue beyond that, if validation failed.
 
