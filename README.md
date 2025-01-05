@@ -171,6 +171,11 @@ The main design goals of letmein are:
 
 For more information about security and reporting vulnerabilities, please see the [security documentation](SECURITY.md) of letmein.
 
+
+# Distribution packaging
+
+If you want to package the software for distribution, please see the [distribution packaging hints](doc/DISTRO_PACKAGING.md).
+
 # License
 
 Copyright (c) 2024-2025 Michael Büsch <m@bues.ch>
