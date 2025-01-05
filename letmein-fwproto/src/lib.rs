@@ -18,8 +18,14 @@
 std::compile_error!("letmeind server and letmein-fwproto do not support non-Linux platforms.");
 
 use anyhow::{self as ah, format_err as err, Context as _};
-use std::net::{IpAddr, Ipv4Addr};
-use tokio::{io::ErrorKind, net::UnixStream};
+use std::{
+    future::Future,
+    net::{IpAddr, Ipv4Addr},
+};
+use tokio::io::ErrorKind;
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use tokio::net::UnixStream;
 
 /// Firewall daemon Unix socket file name.
 pub const SOCK_FILE: &str = "letmeinfwd.sock";
@@ -277,8 +283,8 @@ impl FirewallMessage {
         })
     }
 
-    /// Send this message over a [UnixStream].
-    pub async fn send(&self, stream: &mut UnixStream) -> ah::Result<()> {
+    /// Send this message over a [Stream].
+    pub async fn send(&self, stream: &mut impl Stream) -> ah::Result<()> {
         let txbuf = self.msg_serialize()?;
         let mut txcount = 0;
         loop {
@@ -299,8 +305,8 @@ impl FirewallMessage {
         }
     }
 
-    /// Try to receive a message from a [UnixStream].
-    pub async fn recv(stream: &mut UnixStream) -> ah::Result<Option<Self>> {
+    /// Try to receive a message from a [Stream].
+    pub async fn recv(stream: &mut impl Stream) -> ah::Result<Option<Self>> {
         let mut rxbuf = [0; FWMSG_SIZE];
         let mut rxcount = 0;
         loop {
@@ -322,6 +328,33 @@ impl FirewallMessage {
                 }
             }
         }
+    }
+}
+
+/// Communication stream abstraction.
+pub trait Stream {
+    fn readable(&self) -> impl Future<Output = std::io::Result<()>> + Send;
+    fn try_read(&self, buf: &mut [u8]) -> std::io::Result<usize>;
+    fn writable(&self) -> impl Future<Output = std::io::Result<()>> + Send;
+    fn try_write(&self, buf: &[u8]) -> std::io::Result<usize>;
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+impl Stream for UnixStream {
+    fn readable(&self) -> impl Future<Output = std::io::Result<()>> + Send {
+        self.readable()
+    }
+
+    fn try_read(&self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.try_read(buf)
+    }
+
+    fn writable(&self) -> impl Future<Output = std::io::Result<()>> + Send {
+        self.writable()
+    }
+
+    fn try_write(&self, buf: &[u8]) -> std::io::Result<usize> {
+        self.try_write(buf)
     }
 }
 
