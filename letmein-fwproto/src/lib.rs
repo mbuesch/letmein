@@ -14,9 +14,6 @@
 
 #![forbid(unsafe_code)]
 
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
-std::compile_error!("letmeind server and letmein-fwproto do not support non-Linux platforms.");
-
 use anyhow::{self as ah, format_err as err, Context as _};
 use std::{
     future::Future,
@@ -26,6 +23,9 @@ use tokio::io::ErrorKind;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use tokio::net::UnixStream;
+
+#[cfg(target_os = "windows")]
+use tokio::net::windows::named_pipe::{NamedPipeClient, NamedPipeServer};
 
 /// Firewall daemon Unix socket file name.
 pub const SOCK_FILE: &str = "letmeinfwd.sock";
@@ -339,24 +339,31 @@ pub trait Stream {
     fn try_write(&self, buf: &[u8]) -> std::io::Result<usize>;
 }
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-impl Stream for UnixStream {
-    fn readable(&self) -> impl Future<Output = std::io::Result<()>> + Send {
-        self.readable()
-    }
-
-    fn try_read(&self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.try_read(buf)
-    }
-
-    fn writable(&self) -> impl Future<Output = std::io::Result<()>> + Send {
-        self.writable()
-    }
-
-    fn try_write(&self, buf: &[u8]) -> std::io::Result<usize> {
-        self.try_write(buf)
-    }
+macro_rules! impl_stream_for {
+    ($ty:ty) => {
+        impl Stream for $ty {
+            fn readable(&self) -> impl Future<Output = std::io::Result<()>> + Send {
+                self.readable()
+            }
+            fn try_read(&self, buf: &mut [u8]) -> std::io::Result<usize> {
+                self.try_read(buf)
+            }
+            fn writable(&self) -> impl Future<Output = std::io::Result<()>> + Send {
+                self.writable()
+            }
+            fn try_write(&self, buf: &[u8]) -> std::io::Result<usize> {
+                self.try_write(buf)
+            }
+        }
+    };
 }
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+impl_stream_for!(UnixStream);
+#[cfg(target_os = "windows")]
+impl_stream_for!(NamedPipeClient);
+#[cfg(target_os = "windows")]
+impl_stream_for!(NamedPipeServer);
 
 #[cfg(test)]
 mod tests {
