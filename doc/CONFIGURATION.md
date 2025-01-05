@@ -258,6 +258,14 @@ Or it can be used to harden against injection of forged a `nft` executable somew
 It is recommended to set this option to the abolute path of the `nft` executable of your Linux distribution.
 E.g.: `exe = /usr/sbin/nft`
 
+There are a couple of minor restrictions for what the `exe` path can be.
+These restrictions are believed to be non-critical in actual real world use cases, but are listed here for completeness:
+
+- The path can't start or end with white space. White space at the start or at the end will be trimmed.
+- The path can't end with a backslash.
+- The path can't contain a newline character.
+- The path can't contain a non-UTF8 character.
+
 This option defaults to `exe=nft`, if it is absent from the configuration.
 
 ### `family`
