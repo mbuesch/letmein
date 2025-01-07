@@ -198,6 +198,9 @@ together with a
 [SHA3-256](https://en.wikipedia.org/wiki/SHA-3)
 algorithm.
 
+All integer elements shall be serialized in 32-bit big-endian byte order before passing them to HMAC function.
+The `||`-operator in the algorithm description above is a concatenation of the serialized bytes.
+
 ## Validate AUTH token
 
 Validation always only happens on the server side.
