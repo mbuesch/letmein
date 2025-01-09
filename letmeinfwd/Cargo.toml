@@ -19,7 +19,7 @@ clap = { workspace = true }
 letmein-conf = { workspace = true }
 letmein-fwproto = { workspace = true }
 libc = { workspace = true }
-nftables = { workspace = true }
+nftables = { workspace = true, features = [ "tokio" ] }
 tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync", "time" ] }
 
 [target.'cfg(any(target_os="linux", target_os="android"))'.dependencies]

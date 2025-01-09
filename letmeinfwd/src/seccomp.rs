@@ -10,7 +10,7 @@ use anyhow::{self as ah, Context as _};
 use letmein_conf::Seccomp;
 use letmein_seccomp::{seccomp_supported, Action, Allow, Filter};
 
-const ALLOW_LIST: [Allow; 28] = [
+const ALLOW_LIST: [Allow; 29] = [
     Allow::Mmap,
     Allow::Mprotect,
     Allow::GetUidGid,
@@ -41,6 +41,7 @@ const ALLOW_LIST: [Allow; 28] = [
     Allow::Exec,
     Allow::Wait,
     Allow::Rlimit,
+    Allow::Pidfd,
 ];
 
 /// Install the `seccomp` rules, if requested.

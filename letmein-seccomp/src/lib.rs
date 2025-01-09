@@ -82,6 +82,7 @@ pub enum Allow {
     Wait,
     Rlimit,
     Uname,
+    Pidfd,
 }
 
 /// Action to be performed, if a syscall is executed that is not in the allow-list.
@@ -335,6 +336,9 @@ impl Filter {
                 }
                 Allow::Uname => {
                     add_sys(&mut map, sys!(SYS_uname));
+                }
+                Allow::Pidfd => {
+                    add_sys(&mut map, sys!(SYS_pidfd_open));
                 }
             }
         }
