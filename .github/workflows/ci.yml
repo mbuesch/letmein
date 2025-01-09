@@ -14,7 +14,7 @@ jobs:
       matrix:
         toolchain:
           - 1.75.0 # MSRV
-          - 1.83.0
+          - 1.84.0
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +30,7 @@ jobs:
       matrix:
         toolchain:
           - 1.75.0 # MSRV
-          - 1.83.0
+          - 1.84.0
         os:
           - windows-latest
           - macos-latest
