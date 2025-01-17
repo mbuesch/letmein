@@ -3,26 +3,7 @@
 
 basedir="$(realpath "$0" | xargs dirname)"
 
-info()
-{
-    echo "--- $*"
-}
-
-error()
-{
-    echo "=== ERROR: $*" >&2
-}
-
-warning()
-{
-    echo "=== WARNING: $*" >&2
-}
-
-die()
-{
-    error "$*"
-    exit 1
-}
+. "$basedir/scripts/lib.sh"
 
 check_dynlibs()
 {

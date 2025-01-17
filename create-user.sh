@@ -1,26 +1,9 @@
 #!/bin/sh
 # -*- coding: utf-8 -*-
 
-info()
-{
-    echo "--- $*"
-}
+basedir="$(realpath "$0" | xargs dirname)"
 
-error()
-{
-    echo "=== ERROR: $*" >&2
-}
-
-warning()
-{
-    echo "=== WARNING: $*" >&2
-}
-
-die()
-{
-    error "$*"
-    exit 1
-}
+. "$basedir/scripts/lib.sh"
 
 entry_checks()
 {
