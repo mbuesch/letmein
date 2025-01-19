@@ -35,7 +35,7 @@ use std::{
 use tokio::{
     runtime,
     signal::unix::{signal, SignalKind},
-    sync::{self, RwLock, Semaphore},
+    sync::{self, Semaphore},
     task,
 };
 
@@ -73,36 +73,6 @@ fn make_pidfile(rundir: &Path) -> ah::Result<()> {
         .context("Open PID-file")?
         .write_all(format!("{}\n", std::process::id()).as_bytes())
         .context("Write to PID-file")
-}
-
-/// Handle SIGHUP:
-/// Try to reload the configuration.
-async fn handle_sighup(conf: Arc<RwLock<Config>>, opts: &Opts, seccomp: Seccomp) {
-    match seccomp {
-        Seccomp::Log | Seccomp::Kill => {
-            // Can't open the config file. The open() syscall is disabled.
-            eprintln!(
-                "SIGHUP: Error: Reloading not possible with --seccomp enabled. \
-                Please restart letmeind instead."
-            );
-        }
-        Seccomp::Off => {
-            println!("SIGHUP: Reloading.");
-            // Reload the configuration.
-            let mut conf = conf.write().await;
-            if let Err(e) = conf.load(&opts.get_config()) {
-                eprintln!("Failed to load configuration file: {e}");
-            }
-            if conf.seccomp() != Seccomp::Off {
-                eprintln!(
-                    "WARNING: Seccomp has been turned ON in \
-                    the configuration file, but SIGHUP reloading \
-                    does not actually enable seccomp. \
-                    Please restart letmeind."
-                );
-            }
-        }
-    }
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -157,7 +127,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     let mut conf = Config::new(ConfigVariant::Server);
     conf.load(&opts.get_config())
         .context("Configuration file")?;
-    let conf = Arc::new(RwLock::new(conf));
+    let conf = Arc::new(conf);
 
     // Register unix signal handlers.
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
@@ -168,7 +138,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     let (exit_sock_tx, mut exit_sock_rx) = sync::mpsc::channel(1);
 
     // Start the TCP control port listener.
-    let mut srv = Server::new(&*conf.read().await, opts.no_systemd, opts.num_connections)
+    let mut srv = Server::new(&conf, opts.no_systemd, opts.num_connections)
         .await
         .context("Server init")?;
 
@@ -176,7 +146,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     make_pidfile(&opts.rundir)?;
 
     // Install `seccomp` rules, if required.
-    let seccomp = opts.seccomp.unwrap_or(conf.read().await.seccomp());
+    let seccomp = opts.seccomp.unwrap_or(conf.seccomp());
     install_seccomp_rules(seccomp)?;
 
     // Spawn task: Socket handler.
@@ -196,7 +166,6 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                         if let Ok(_permit) = conn_semaphore.acquire().await {
                             let conn = Arc::clone(&conn);
                             task::spawn(async move {
-                                let conf = conf.read().await;
                                 let mut proto = Protocol::new(&*conn, &conf, &opts.rundir);
                                 if let Err(e) = proto.run().await {
                                     eprintln!(
@@ -235,7 +204,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                 break;
             }
             _ = sighup.recv() => {
-                handle_sighup(Arc::clone(&conf), &opts, seccomp).await;
+                eprintln!("SIGHUP: Reloading is not supported. Please restart letmeind instead.");
             }
             code = exit_sock_rx.recv() => {
                 exitcode = code.unwrap_or_else(|| Err(err!("Unknown error code.")));

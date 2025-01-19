@@ -448,16 +448,6 @@ impl FirewallMaintain for NftFirewall {
         }
         Ok(())
     }
-
-    /// Perform a reload (SIGHUP) of the firewall.
-    /// This will always re-apply the rules to the kernel.
-    async fn reload(&mut self, conf: &Config) -> ah::Result<()> {
-        assert!(!self.shutdown);
-        let _pruned = prune_all_lease_timeouts(conf, &mut self.leases);
-        self.nftables_full_rebuild(conf)?;
-        self.print_total_rule_count(conf);
-        Ok(())
-    }
 }
 
 impl FirewallOpen for NftFirewall {

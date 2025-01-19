@@ -39,7 +39,7 @@ use std::{
 use tokio::{
     runtime,
     signal::unix::{signal, SignalKind},
-    sync::{self, Mutex, RwLock, Semaphore},
+    sync::{self, Mutex, Semaphore},
     task, time,
 };
 
@@ -111,51 +111,6 @@ fn make_pidfile(rundir: &Path) -> ah::Result<()> {
         .context("Open PID-file")?
         .write_all(format!("{}\n", std::process::id()).as_bytes())
         .context("Write to PID-file")
-}
-
-/// Handle SIGHUP:
-/// Try to reload the configuration and try to re-apply the firewall rules.
-async fn handle_sighup(
-    conf: Arc<RwLock<Config>>,
-    opts: &Opts,
-    fw: Arc<Mutex<impl FirewallMaintain>>,
-    seccomp: Seccomp,
-) {
-    match seccomp {
-        Seccomp::Log | Seccomp::Kill => {
-            // Can't open the config file. The open() syscall is restricted.
-            eprintln!(
-                "SIGHUP: Error: Reloading not possible with --seccomp enabled. \
-                Please restart letmeinfwd instead."
-            );
-        }
-        Seccomp::Off => {
-            println!("SIGHUP: Reloading.");
-            {
-                // Reload the configuration.
-                let mut conf = conf.write().await;
-                if let Err(e) = conf.load(&opts.get_config()) {
-                    eprintln!("Failed to load configuration file: {e}");
-                }
-            }
-            {
-                // Re-apply the firewall rules.
-                let conf = conf.read().await;
-                let mut fw = fw.lock().await;
-                if let Err(e) = fw.reload(&conf).await {
-                    eprintln!("Failed to reload filewall rules: {e}");
-                }
-                if conf.seccomp() != Seccomp::Off {
-                    eprintln!(
-                        "WARNING: Seccomp has been turned ON in \
-                        the configuration file, but SIGHUP reloading \
-                        does not actually enable seccomp. \
-                        Please restart letmeinfwd."
-                    );
-                }
-            }
-        }
-    }
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -231,10 +186,10 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     let mut conf = Config::new(ConfigVariant::Server);
     conf.load(&opts.get_config())
         .context("Configuration file")?;
-    let conf = Arc::new(RwLock::new(conf));
+    let conf = Arc::new(conf);
 
     // Initialize access to the firewall.
-    let fw = Arc::new(Mutex::new(NftFirewall::new(&*conf.read().await).await?));
+    let fw = Arc::new(Mutex::new(NftFirewall::new(&conf).await?));
 
     // Register unix signal handlers.
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
@@ -254,7 +209,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     make_pidfile(&opts.rundir)?;
 
     // Install `seccomp` rules, if required.
-    let seccomp = opts.seccomp.unwrap_or(conf.read().await.seccomp());
+    let seccomp = opts.seccomp.unwrap_or(conf.seccomp());
     install_seccomp_rules(seccomp)?;
 
     // Spawn task: Unix socket handler.
@@ -273,7 +228,6 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                         // Socket connection handler.
                         if let Ok(_permit) = conn_semaphore.acquire().await {
                             task::spawn(async move {
-                                let conf = conf.read().await;
                                 if let Err(e) = conn.handle_message(&conf, fw).await {
                                     eprintln!("Client error: {e}");
                                 }
@@ -298,7 +252,6 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
             let mut interval = time::interval(FW_MAINTAIN_PERIOD);
             loop {
                 interval.tick().await;
-                let conf = conf.read().await;
                 let mut fw = fw.lock().await;
                 if let Err(e) = fw.maintain(&conf).await {
                     let _ = exit_fw_tx.send(Err(e)).await;
@@ -322,7 +275,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                 break;
             }
             _ = sighup.recv() => {
-                handle_sighup(Arc::clone(&conf), &opts, Arc::clone(&fw), seccomp).await;
+                eprintln!("SIGHUP: Reloading is not supported. Please restart letmeinfwd instead.");
             }
             code = exit_sock_rx.recv() => {
                 exitcode = code.unwrap_or_else(|| Err(err!("Unknown error code.")));
@@ -338,7 +291,6 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     // Exiting...
     // Try to remove all firewall rules.
     {
-        let conf = conf.read().await;
         let mut fw = fw.lock().await;
         if let Err(e) = fw.shutdown(&conf).await {
             eprintln!("WARNING: Failed to remove firewall rules: {e}");

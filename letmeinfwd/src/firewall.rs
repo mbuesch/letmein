@@ -142,10 +142,6 @@ pub trait FirewallMaintain {
     /// This shall be called in regular intervals every couple of seconds.
     /// This operation shall remove all timed-out leases.
     async fn maintain(&mut self, conf: &Config) -> ah::Result<()>;
-
-    /// Re-apply all rules to the underlying firewall.
-    /// This operation shall remove all timed-out leases.
-    async fn reload(&mut self, conf: &Config) -> ah::Result<()>;
 }
 
 /// Firewall knock-open operations.
