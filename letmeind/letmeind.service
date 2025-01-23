@@ -9,7 +9,6 @@ StartLimitIntervalSec=0
 Type=notify
 NotifyAccess=main
 ExecStart=/opt/letmein/bin/letmeind
-ExecReload=/bin/kill -HUP $MAINPID
 RuntimeDirectory=letmeind
 RuntimeDirectoryMode=0750
 StandardOutput=journal
