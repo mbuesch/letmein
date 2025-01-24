@@ -16,6 +16,11 @@ use seccompiler::{apply_filter_all_threads, BpfProgram};
 use std::env::consts::ARCH;
 
 #[cfg(has_seccomp_support)]
+const NULL: u64 = 0;
+#[cfg(has_seccomp_support)]
+const PTR: u8 = 0xFF;
+
+#[cfg(has_seccomp_support)]
 macro_rules! sys {
     ($ident:ident) => {{
         #[allow(clippy::useless_conversion)]
@@ -25,17 +30,41 @@ macro_rules! sys {
 }
 
 #[cfg(has_seccomp_support)]
+fn seccomp_cond(idx: u8, value: u64, bit_width: u8) -> ah::Result<seccompiler::SeccompCondition> {
+    use seccompiler::{SeccompCmpArgLen, SeccompCmpOp, SeccompCondition};
+
+    let bit_width = match bit_width {
+        PTR => {
+            #[cfg(target_pointer_width = "32")]
+            let bit_width = 32;
+
+            #[cfg(target_pointer_width = "64")]
+            let bit_width = 64;
+
+            bit_width
+        }
+        bit_width => bit_width,
+    };
+
+    let arglen = match bit_width {
+        32 => {
+            assert_eq!(value & 0xFFFF_FFFF_0000_0000, 0);
+            SeccompCmpArgLen::Dword
+        }
+        64 => SeccompCmpArgLen::Qword,
+        _ => unreachable!(),
+    };
+
+    Ok(SeccompCondition::new(idx, arglen, SeccompCmpOp::Eq, value)?)
+}
+
+#[cfg(has_seccomp_support)]
 macro_rules! args {
-    ($($arg:literal == $value:expr),*) => {
+    ($([ $arg:literal ] ($bit_width:expr) == $value:expr),*) => {
         SeccompRule::new(
             vec![
                 $(
-                    SeccompCondition::new(
-                        $arg,
-                        SeccompCmpArgLen::Dword,
-                        SeccompCmpOp::Eq,
-                        ($value) as _,
-                    )?,
+                    seccomp_cond($arg, ($value) as _, $bit_width)?,
                 )*
             ]
         )?
@@ -80,7 +109,7 @@ pub enum Allow {
     Clone,
     Exec,
     Wait,
-    Rlimit,
+    GetRlimit,
     Uname,
     Pidfd,
 }
@@ -106,10 +135,7 @@ impl Filter {
     pub fn compile_for_arch(allow: &[Allow], deny_action: Action, arch: &str) -> ah::Result<Self> {
         assert!(!allow.is_empty());
 
-        use seccompiler::{
-            SeccompAction, SeccompCmpArgLen, SeccompCmpOp, SeccompCondition, SeccompFilter,
-            SeccompRule,
-        };
+        use seccompiler::{SeccompAction, SeccompFilter, SeccompRule};
         use std::collections::BTreeMap;
 
         type RulesMap = BTreeMap<i64, Vec<SeccompRule>>;
@@ -197,33 +223,45 @@ impl Filter {
                 }
                 Allow::UnixAccept => {
                     add_sys(&mut map, sys!(SYS_accept4));
-                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_UNIX));
+                    add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == libc::AF_UNIX));
                     add_sys(&mut map, sys!(SYS_getsockopt));
                     add_sys(&mut map, sys!(SYS_getpeername));
                 }
                 Allow::UnixConnect => {
                     add_sys(&mut map, sys!(SYS_connect));
-                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_UNIX));
+                    add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == libc::AF_UNIX));
                     add_sys(&mut map, sys!(SYS_getsockopt));
                     add_sys(&mut map, sys!(SYS_getpeername));
                 }
                 Allow::TcpAccept => {
                     add_sys(&mut map, sys!(SYS_accept4));
-                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_INET));
-                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_INET6));
+                    add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == libc::AF_INET));
+                    add_sys_args_match(
+                        &mut map,
+                        sys!(SYS_socket),
+                        args!([0](32) == libc::AF_INET6),
+                    );
                     add_sys(&mut map, sys!(SYS_getsockopt));
                     add_sys(&mut map, sys!(SYS_getpeername));
                 }
                 Allow::TcpConnect => {
                     add_sys(&mut map, sys!(SYS_connect));
-                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_INET));
-                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_INET6));
+                    add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == libc::AF_INET));
+                    add_sys_args_match(
+                        &mut map,
+                        sys!(SYS_socket),
+                        args!([0](32) == libc::AF_INET6),
+                    );
                     add_sys(&mut map, sys!(SYS_getsockopt));
                     add_sys(&mut map, sys!(SYS_getpeername));
                 }
                 Allow::Netlink => {
                     add_sys(&mut map, sys!(SYS_connect));
-                    add_sys_args_match(&mut map, sys!(SYS_socket), args!(0 == libc::AF_NETLINK));
+                    add_sys_args_match(
+                        &mut map,
+                        sys!(SYS_socket),
+                        args!([0](32) == libc::AF_NETLINK),
+                    );
                     add_sys(&mut map, sys!(SYS_getsockopt));
                 }
                 Allow::SetSockOpt { level_optname } => {
@@ -231,7 +269,7 @@ impl Filter {
                         add_sys_args_match(
                             &mut map,
                             sys!(SYS_setsockopt),
-                            args!(1 == level, 2 == optname),
+                            args!([1](32) == level, [2](32) == optname),
                         );
                     } else {
                         add_sys(&mut map, sys!(SYS_setsockopt));
@@ -272,7 +310,7 @@ impl Filter {
                 }
                 Allow::Fcntl { op } => match op {
                     Some(op) => {
-                        add_sys_args_match(&mut map, sys!(SYS_fcntl), args!(1 == op));
+                        add_sys_args_match(&mut map, sys!(SYS_fcntl), args!([1](32) == op));
                     }
                     None => {
                         add_sys(&mut map, sys!(SYS_fcntl));
@@ -330,9 +368,12 @@ impl Filter {
                 Allow::Wait => {
                     add_sys(&mut map, sys!(SYS_wait4));
                 }
-                Allow::Rlimit => {
-                    //TODO do we only need `get`?
-                    add_sys(&mut map, sys!(SYS_prlimit64));
+                Allow::GetRlimit => {
+                    add_sys_args_match(
+                        &mut map,
+                        sys!(SYS_prlimit64),
+                        args!([0](32) == 0, [2](PTR) == NULL),
+                    );
                 }
                 Allow::Uname => {
                     add_sys(&mut map, sys!(SYS_uname));

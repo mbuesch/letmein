@@ -40,7 +40,7 @@ const ALLOW_LIST: [Allow; 29] = [
     Allow::Clone,
     Allow::Exec,
     Allow::Wait,
-    Allow::Rlimit,
+    Allow::GetRlimit,
     Allow::Pidfd,
 ];
 
