@@ -17,7 +17,7 @@ resolver = "2"
 [workspace.package]
 version = "9.0.0"
 edition = "2021"
-rust-version = "1.75.0"
+rust-version = "1.76.0"
 license = "MIT OR Apache-2.0"
 authors = [ "Michael Büsch <m@bues.ch>" ]
 homepage = "https://bues.ch/h/letmein"
