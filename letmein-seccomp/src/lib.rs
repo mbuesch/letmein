@@ -52,7 +52,7 @@ fn seccomp_cond(idx: u8, value: u64, bit_width: u8) -> ah::Result<seccompiler::S
             SeccompCmpArgLen::Dword
         }
         64 => SeccompCmpArgLen::Qword,
-        _ => unreachable!(),
+        bit_width => panic!("seccomp_cond: Invalid bit_width: {bit_width}"),
     };
 
     Ok(SeccompCondition::new(idx, arglen, SeccompCmpOp::Eq, value)?)
