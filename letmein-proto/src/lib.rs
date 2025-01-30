@@ -18,7 +18,6 @@
 mod socket;
 
 use anyhow::{self as ah, format_err as err};
-use getrandom::getrandom;
 use hmac::{Hmac, Mac as _};
 use sha3::Sha3_256;
 use subtle::ConstantTimeEq as _;
@@ -120,7 +119,7 @@ pub fn secure_random<const SZ: usize>() -> [u8; SZ] {
 
     // Get secure random bytes from the operating system.
     let mut buf: [u8; SZ] = [0; SZ];
-    if getrandom(&mut buf).is_err() {
+    if getrandom::fill(&mut buf).is_err() {
         panic!("Failed to read secure random bytes from the operating system. (getrandom failed)");
     }
 
