@@ -289,7 +289,10 @@ impl NftFirewall {
     /// This will also remove all rules from the kernel.
     pub async fn new(conf: &Config) -> ah::Result<Self> {
         // Test if the `nft` binary is available.
-        if let Err(e) = std::process::Command::new("nft").args(["--help"]).output() {
+        if let Err(e) = std::process::Command::new(conf.nft_exe())
+            .args(["--help"])
+            .output()
+        {
             return Err(err!(
                 "Failed to execute the 'nft' program.\n\
                 Did you install the 'nftables' support package in your distribution's package manager?\n\
