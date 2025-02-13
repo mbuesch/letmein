@@ -1,3 +1,5 @@
+# shellcheck shell=sh
+
 info()
 {
     echo "--- $*"
@@ -47,18 +49,6 @@ try_systemctl()
 {
     info "systemctl $*"
     systemctl "$@" 2>/dev/null
-}
-
-do_chown()
-{
-    info "chown $*"
-    chown "$@" || die "Failed to chown $*"
-}
-
-do_chmod()
-{
-    info "chmod $*"
-    chmod "$@" || die "Failed to chmod $*"
 }
 
 stop_services()

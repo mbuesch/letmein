@@ -7,12 +7,15 @@ basedir="$(realpath "$0" | xargs dirname)"
 
 check_dynlibs()
 {
-    local bin="$1"
+    local bin
+    local ldd_out
 
-    local ldd_out="$(ldd "$bin")"
+    bin="$1"
+
+    ldd_out="$(ldd "$bin")"
     [ -z "$ldd_out" ] && die "ldd failed"
 
-    printf '%s' "$ldd_out" | while read line; do
+    printf '%s' "$ldd_out" | while read -r line; do
         printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'linux-vdso\.so' && continue
         printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libgcc_s\.so' && continue
         printf '%s' "$line" | awk '{ print $1; }' | grep -qe 'libm\.so' && continue
