@@ -17,6 +17,7 @@ use crate::{
     command::{
         genkey::run_genkey,
         knock::{run_knock, KnockServer},
+        close::{run_close, CloseServer},
     },
     seccomp::install_seccomp_rules,
 };
@@ -70,6 +71,90 @@ fn parse_user(s: &str) -> ah::Result<UserId> {
 
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Close a previously opened port on a server.
+    Close {
+        /// The host name, IPv4 or IPv6 address that you want to close the port on.
+        host: String,
+
+        /// The port on the remote host that you want to close.
+        port: u16,
+
+        /// The user identifier for authenticating the close request.
+        ///
+        /// The user identifier is a 8 digits hex number.
+        ///
+        /// The authentication key associated with this user identifier
+        /// will be fetched from the letmein.conf configuration file.
+        ///
+        /// If not given, then the `[CLIENT] default_user` from the
+        /// configuration file will be used instead.
+        /// If the configuration is not available, user 00000000 will
+        /// be used instead.
+        #[arg(short, long, value_parser = parse_user)]
+        user: Option<UserId>,
+
+        /// letmein server port number.
+        ///
+        /// You normally don't have to use this option.
+        ///
+        /// Set the letmein server port number to use when contacting the letmein server.
+        ///
+        /// If not given, then the `[GENERAL] port` from the
+        /// letmein.conf configuration file will be used instead.
+        /// If the configuration is not available, port 5800 will
+        /// be used instead.
+        #[arg(short = 'P', long)]
+        server_port: Option<u16>,
+
+        /// Enforce TCP connection to letmein server port.
+        ///
+        /// You normally don't have to use this option.
+        ///
+        /// If not given, then the `[GENERAL] port` from the
+        /// letmein.conf configuration file will be used instead.
+        /// TCP will be preferred, if both TCP and UDP are specified.
+        #[arg(short = 'T', long)]
+        server_port_tcp: bool,
+
+        /// Enforce UDP connection to letmein server port.
+        ///
+        /// You normally don't have to use this option.
+        ///
+        /// If not given, then the `[GENERAL] port` from the
+        /// letmein.conf configuration file will be used instead.
+        /// TCP will be preferred, if both TCP and UDP are specified.
+        #[arg(short = 'U', long)]
+        server_port_udp: bool,
+
+        /// Resolve HOST into an IPv4 address.
+        ///
+        /// Resolve the HOST into an IPv4 address and close the port on that address.
+        ///
+        /// If none of the --ipv4 and --ipv6 options are given,
+        /// then closing on both IPv4 and IPv6 is tried, but no error is
+        /// shown, if one of them failed.
+        ///
+        /// If both of the --ipv4 and --ipv6 options are given,
+        /// then closing on both IPv4 and IPv6 is done and an error is shown,
+        /// if any one fails.
+        #[arg(short = '4', long)]
+        ipv4: bool,
+
+        /// Resolve HOST into an IPv6 address.
+        ///
+        /// Resolve the HOST into an IPv6 address and close the port on that address.
+        ///
+        /// If none of the --ipv4 and --ipv6 options are given,
+        /// then closing on both IPv4 and IPv6 is tried, but no error is
+        /// shown, if one of them failed.
+        ///
+        /// If both of the --ipv4 and --ipv6 options are given,
+        /// then closing on both IPv4 and IPv6 is done and an error is shown,
+        /// if any one fails.
+        #[arg(short = '6', long)]
+        ipv6: bool,
+    },
+
     /// Knock a port open on a server.
     Knock {
         /// The host name, IPv4 or IPv6 address that you want to knock on.
@@ -199,6 +284,32 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
                     port_udp: server_port_udp,
                 };
                 run_knock(
+                    conf,
+                    opts.verbose,
+                    server,
+                    port,
+                    user,
+                )
+                .await
+            }
+            Command::Close {
+                host,
+                port,
+                user,
+                server_port,
+                server_port_tcp,
+                server_port_udp,
+                ipv4,
+                ipv6,
+            } => {
+                let server = CloseServer {
+                    addr: &host,
+                    addr_mode: (ipv4, ipv6).into(),
+                    port: server_port,
+                    port_tcp: server_port_tcp,
+                    port_udp: server_port_udp,
+                };
+                run_close(
                     conf,
                     opts.verbose,
                     server,

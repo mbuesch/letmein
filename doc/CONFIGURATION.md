@@ -209,18 +209,19 @@ The `port` is the TCP/UDP port number that this resource represents.
 It can be any port number between 0 and 65535.
 When this resource is successfully authenticated from a knocking client, the port number will be opened in the firewall.
 Only ports for which a resource has been configured here are knock-able.
+Similarly, any opened port can be explicitly closed using the `letmein close` command with the same resource information.
 
 By default the port will only be opened for TCP.
 If you want TCP+UDP or UDP only, then specify this as flags in the resource.
 See examples below.
 
 A resource can optionally be restricted to one or multiple `users`.
-If the `users` list is not given, then the resource is unrestricted and any successfully authenticated user can knock it open.
-If a `users` list is given, then only these users can knock the port open.
+If the `users` list is not given, then the resource is unrestricted and any successfully authenticated user can knock it open or close it.
+If a `users` list is given, then only these users can knock the port open or close it.
 The `users` list is just a comma separated list of user identifiers.
 See `[KEYS]` section above for more information about user identifiers.
 
-If a client wants to knock a port open on a server, the client and the server must share a compatible resource entry for the port.
+If a client wants to knock a port open or close a previously opened port on a server, the client and the server must share a compatible resource entry for the port.
 
 Example resources:
 
@@ -308,6 +309,8 @@ This option has no default and must be specified in the server configuration.
 
 The `timeout` option specifies the knock-open firewall rule timeout, in seconds.
 Knocked-open ports will be closed again this many seconds after the knocking.
+
+Alternatively, you can manually close a port before the timeout expires using the `letmein close` command with the same resource information that was used to open it.
 
 This is the time you have to connect to the opened port.
 

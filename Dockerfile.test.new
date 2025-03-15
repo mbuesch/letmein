@@ -1,0 +1,97 @@
+FROM rust:alpine
+
+# Installation des dépendances nécessaires
+RUN apk add --no-cache \
+    build-base \
+    curl \
+    git \
+    nftables \
+    iptables \
+    sudo \
+    libcap \
+    strace \
+    procps \
+    shadow \
+    && echo "Installation des dépendances terminée"
+
+# Installation de clippy pour l'analyse du code
+RUN rustup component add clippy
+
+# Configurer sudoers pour permettre l'exécution de plusieurs commandes sans mot de passe
+RUN echo "ALL ALL=(ALL) NOPASSWD: /sbin/nft, /usr/bin/strace" >> /etc/sudoers
+
+# Préparation des répertoires pour nftables et letmein
+RUN mkdir -p /etc/nftables /run/letmeinfwd /run/letmeind /var/run/letmeind /var/run/letmeinfwd \
+    && chmod 777 /run/letmeinfwd /run/letmeind /var/run/letmeind /var/run/letmeinfwd
+
+# Créer un fichier de configuration nftables minimal
+RUN cat > /etc/nftables/basic.conf << 'EOF'
+#!/usr/sbin/nft -f
+flush ruleset
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy accept;
+  }
+  chain forward {
+    type filter hook forward priority 0; policy accept;
+  }
+  chain output {
+    type filter hook output priority 0; policy accept;
+  }
+  chain LETMEIN-INPUT {
+    type filter hook input priority 100; policy accept;
+  }
+  chain LETMEIN-OUTPUT {
+    type filter hook output priority 100; policy accept;
+  }
+}
+EOF
+RUN chmod +x /etc/nftables/basic.conf
+
+# Créer un script d'initialisation pour configurer l'environnement
+RUN cat > /init-env.sh << 'EOF'
+#!/bin/sh
+
+# Configurer l'environnement si MOCK_NFTABLES n'est pas activé
+if [ "$MOCK_NFTABLES" != "1" ]; then
+  echo "Tentative d'initialisation de nftables..."
+  nft -f /etc/nftables/basic.conf || echo "Avertissement: Impossible d'initialiser nftables. Mode MOCK_NFTABLES recommandé."
+fi
+
+# Créer un fichier de configuration avec seccomp=off pour les tests
+mkdir -p /app/tests/conf
+for conf in /app/tests/conf/*.conf; do
+  if [ -f "$conf" ]; then
+    # Vérifier si la configuration seccomp est déjà présente
+    if grep -q "seccomp" "$conf"; then
+      # Remplacer la configuration existante
+      sed -i 's/seccomp=.*/seccomp=off/' "$conf"
+    else
+      # Ajouter la configuration si elle n'existe pas
+      echo "seccomp=off" >> "$conf"
+    fi
+  fi
+done
+
+# Afficher l'état de l'environnement
+echo "=== Configuration de l'environnement ==="
+echo "MOCK_NFTABLES: $MOCK_NFTABLES"
+echo "LETMEIN_DISABLE_SECCOMP: $LETMEIN_DISABLE_SECCOMP"
+echo "==============================="
+
+# Exécuter la commande fournie
+exec "$@"
+EOF
+RUN chmod +x /init-env.sh
+
+# Créer un utilisateur et groupe letmeind pour les tests
+RUN groupadd -r letmeind && useradd -r -g letmeind -d /var/run/letmeind letmeind
+
+# Définir le répertoire de travail
+WORKDIR /app
+
+# Exportons les variables d'environnement pour les tests
+ENV RUST_BACKTRACE=1
+
+# Définir le point d'entrée pour exécuter les tests via notre script d'initialisation
+ENTRYPOINT ["/init-env.sh", "./tests/run-tests.sh"]

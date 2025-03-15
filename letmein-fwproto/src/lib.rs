@@ -41,6 +41,8 @@ pub enum FirewallOperation {
     Ack,
     /// Open a port.
     Open,
+    /// Close a port.
+    Close,
 }
 
 impl TryFrom<u16> for FirewallOperation {
@@ -50,10 +52,12 @@ impl TryFrom<u16> for FirewallOperation {
         const OPERATION_OPEN: u16 = FirewallOperation::Open as u16;
         const OPERATION_ACK: u16 = FirewallOperation::Ack as u16;
         const OPERATION_NACK: u16 = FirewallOperation::Nack as u16;
+        const OPERATION_CLOSE: u16 = FirewallOperation::Close as u16;
         match value {
             OPERATION_OPEN => Ok(Self::Open),
             OPERATION_ACK => Ok(Self::Ack),
             OPERATION_NACK => Ok(Self::Nack),
+            OPERATION_CLOSE => Ok(Self::Close),
             _ => Err(err!("Invalid FirewallMessage/Operation value")),
         }
     }
@@ -197,6 +201,18 @@ impl FirewallMessage {
         }
     }
 
+    /// Construct a new message that requests removing a firewall-port-open rule.
+    pub fn new_close(addr: IpAddr, port_type: PortType, port: u16) -> Self {
+        let (addr_type, addr) = addr_to_octets(addr);
+        Self {
+            operation: FirewallOperation::Close,
+            port_type,
+            port,
+            addr_type,
+            addr,
+        }
+    }
+
     /// Construct a new acknowledge message.
     pub fn new_ack() -> Self {
         Self {
@@ -221,7 +237,7 @@ impl FirewallMessage {
     /// Get the port number from this message.
     pub fn port(&self) -> Option<(PortType, u16)> {
         match self.operation {
-            FirewallOperation::Open => Some((self.port_type, self.port)),
+            FirewallOperation::Open | FirewallOperation::Close => Some((self.port_type, self.port)),
             FirewallOperation::Ack | FirewallOperation::Nack => None,
         }
     }
@@ -229,7 +245,7 @@ impl FirewallMessage {
     /// Get the `IpAddr` from this message.
     pub fn addr(&self) -> Option<IpAddr> {
         match self.operation {
-            FirewallOperation::Open => Some(octets_to_addr(self.addr_type, &self.addr)),
+            FirewallOperation::Open | FirewallOperation::Close => Some(octets_to_addr(self.addr_type, &self.addr)),
             FirewallOperation::Ack | FirewallOperation::Nack => None,
         }
     }
