@@ -166,6 +166,12 @@ pub enum Operation {
     ///
     /// This message is not MiM-safe and not replay-safe by design.
     GoAway,
+
+    /// The `Close` message is sent by the client to request closing
+    /// a previously opened port.
+    ///
+    /// This message follows the same authentication sequence as Knock.
+    Close,
 }
 
 impl TryFrom<u32> for Operation {
@@ -177,12 +183,14 @@ impl TryFrom<u32> for Operation {
         const OPERATION_RESPONSE: u32 = Operation::Response as u32;
         const OPERATION_COMEIN: u32 = Operation::ComeIn as u32;
         const OPERATION_GOAWAY: u32 = Operation::GoAway as u32;
+        const OPERATION_CLOSE: u32 = Operation::Close as u32;
         match value {
             OPERATION_KNOCK => Ok(Self::Knock),
             OPERATION_CHALLENGE => Ok(Self::Challenge),
             OPERATION_RESPONSE => Ok(Self::Response),
             OPERATION_COMEIN => Ok(Self::ComeIn),
             OPERATION_GOAWAY => Ok(Self::GoAway),
+            OPERATION_CLOSE => Ok(Self::Close),
             _ => Err(err!("Invalid Message/Operation value")),
         }
     }
@@ -303,7 +311,7 @@ impl Message {
     #[must_use]
     pub fn check_auth_ok_no_challenge(&self, shared_key: &[u8]) -> bool {
         #[cfg(not(test))]
-        assert_eq!(self.operation(), Operation::Knock);
+        assert!(self.operation() == Operation::Knock || self.operation() == Operation::Close, "Operation must be Knock or Close, got {:?}", self.operation());
         self.auth
             .ct_eq(&self.authenticate_no_challenge(shared_key))
             .into()
@@ -322,7 +330,7 @@ impl Message {
     /// with the provided `shared_key`
     /// and store it in this message.
     pub fn generate_auth_no_challenge(&mut self, shared_key: &[u8]) {
-        assert_eq!(self.operation(), Operation::Knock);
+        assert!(self.operation() == Operation::Knock || self.operation() == Operation::Close, "Operation must be Knock or Close, got {:?}", self.operation());
         self.auth = self.authenticate_no_challenge(shared_key);
     }
 
@@ -676,7 +684,7 @@ mod tests {
     fn test_msg_raw_invalid_operation() {
         let bytes = [
             0x3B, 0x1B, 0xB7, 0x19, // magic
-            0x00, 0x00, 0x00, 0x05, // operation
+            0x00, 0x00, 0x00, 0x06, // operation (6 - valeur invalide, Close est maintenant 5)
             0xF9, 0x02, 0x01, 0xB2, // user
             0xB3, 0xE4, 0x6B, 0x6C, // resource
             0x9A, 0x9A, 0x9A, 0x9A, 0x9A, 0x9A, 0x9A, 0x9A, // salt

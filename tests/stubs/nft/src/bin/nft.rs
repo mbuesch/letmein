@@ -14,30 +14,30 @@ use std::{
 };
 
 fn main() {
-    // Récupérer tous les arguments
+    // Get all arguments
     let args: Vec<String> = env::args().collect();
     
-    // Journaliser tous les appels pour débogage
+    // Log all calls for debugging
     eprintln!("nft stub: appel avec arguments: {:?}", args);
     
-    // Vérifier si MOCK_NFTABLES est défini
+    // Check if MOCK_NFTABLES is defined
     if env::var("MOCK_NFTABLES").is_ok() {
-        eprintln!("nft stub: MOCK_NFTABLES=1 détecté, utilisation du mode stub");
+        eprintln!("nft stub: MOCK_NFTABLES=1 detected, using stub mode");
         
-        // Mode mock - accepter différents types de commandes
+        // Mock mode - handle different types of commands
         if args == ["nft", "-j", "-f", "-"] {
-            // Traiter l'entrée JSON
+            // Process JSON input
             let mut json_raw: Vec<u8> = vec![];
             stdin().read_to_end(&mut json_raw).unwrap();
             let json = std::str::from_utf8(&json_raw).unwrap();
             
-            eprintln!("nft stub: json reçu: {}", json);
-            let _ = json; // Nous pourrions analyser le JSON ici
+            eprintln!("nft stub: json received: {}", json);
+            let _ = json; // We could parse the JSON here
             
-            // Simuler une application réussie
-            eprintln!("nft stub: Commande JSON traitée avec succès");
+            // Simulate successful application
+            eprintln!("nft stub: JSON command processed successfully");
         } else if args.len() >= 2 && args[1] == "list" && args.len() >= 3 && args[2] == "ruleset" {
-            // Simuler une liste de règles vide
+            // Simulate an empty ruleset
             println!("table inet filter {{
   chain input {{
     type filter hook input priority 0; policy accept;
@@ -49,41 +49,41 @@ fn main() {
     type filter hook output priority 0; policy accept;
   }}
 }}");
-            eprintln!("nft stub: Commande list ruleset simulée");
+            eprintln!("nft stub: Command list ruleset simulated");
         } else {
-            // Gérer d'autres types de commandes
-            eprintln!("nft stub: simulation d'exécution de: {:?}", args);
-            // Par défaut, simuler un succès pour la plupart des commandes
+            // Handle other types of commands
+            eprintln!("nft stub: simulating execution of: {:?}", args);
+            // By default, simulate success for most commands
         }
     } else {
-        eprintln!("nft stub: MOCK_NFTABLES non défini, utilisation du vrai nft");
+        eprintln!("nft stub: MOCK_NFTABLES not defined, using real nft");
         
-        // MOCK_NFTABLES n'est pas défini, initialiser les tables nécessaires avant de rediriger
+        // MOCK_NFTABLES is not defined, initialize necessary tables before redirecting
         use std::process::Command;
         
-        // Créer les tables de base si c'est une commande d'initialisation
+        // Create base tables if this is an initialization command
         if args.len() > 1 && args[1] == "-j" && args[2] == "-f" && args[3] == "-" {
-            // Lire l'entrée JSON pour voir ce qu'on essaie de faire
+            // Read JSON input to see what we're trying to do
             let mut json_raw: Vec<u8> = vec![];
             stdin().read_to_end(&mut json_raw).unwrap();
             let json = std::str::from_utf8(&json_raw).unwrap();
-            eprintln!("nft stub: Contenu JSON pour le vrai nft: {}", json);
+            eprintln!("nft stub: JSON content for real nft: {}", json);
             
-            // Créer la table inet filter si elle n'existe pas déjà
-            // Cela assure que les opérations ultérieures auront une table sur laquelle travailler
-            eprintln!("nft stub: Création de la table inet filter");
+            // Create the inet filter table if it doesn't already exist
+            // This ensures that subsequent operations will have a table to work with
+            eprintln!("nft stub: Creating inet filter table");
             let _init_status = Command::new("/usr/sbin/nft")
                 .args(["-e", "add", "table", "inet", "filter"])
                 .status();
             
-            // Créer les chaînes de base si nécessaire
+            // Create base chains if necessary
             let _chains = [
                 "add chain inet filter input { type filter hook input priority 0; policy accept; }",
                 "add chain inet filter forward { type filter hook forward priority 0; policy accept; }",
                 "add chain inet filter output { type filter hook output priority 0; policy accept; }",
-                // Ajouter la chaîne spécifique LETMEIN-INPUT qui est utilisée par le code
+                // Add the specific LETMEIN-INPUT chain that is used by the code
                 "add chain inet filter LETMEIN-INPUT { type filter hook input priority 100; policy accept; }",
-                // Autres chaînes potentiellement utilisées
+                // Other potentially used chains
                 "add chain inet filter LETMEIN-OUTPUT { type filter hook output priority 100; policy accept; }"
             ];
             
@@ -91,10 +91,10 @@ fn main() {
                 let _chain_status = Command::new("/usr/sbin/nft")
                     .args(["-e", chain_cmd])
                     .status();
-                // -e pour ignorer les erreurs si la chaîne existe déjà
+                // -e to ignore errors if the chain already exists
             }
             
-            // Appliquer la commande JSON originale
+            // Apply the original JSON command
             let status = Command::new("/usr/sbin/nft")
                 .args(["-j", "-f", "-"])
                 .stdin(std::process::Stdio::piped())
@@ -106,24 +106,24 @@ fn main() {
                     }
                     child.wait()
                 })
-                .expect("Impossible d'exécuter le vrai nft avec JSON");
+                .expect("Failed to execute the real nft with JSON");
             
             std::process::exit(status.code().unwrap_or(1));
         } else {
-            // Pour les autres commandes, simplement les exécuter
+            // For other commands, simply execute them
             let real_nft = "/usr/sbin/nft";
             let nft_args = &args[1..];
             
-            eprintln!("nft stub: exécution de la commande réelle: {} {:?}", real_nft, nft_args);
+            eprintln!("nft stub: executing real command: {} {:?}", real_nft, nft_args);
             
             let status = Command::new(real_nft)
                 .args(nft_args)
                 .status()
-                .expect("Impossible d'exécuter le vrai nft");
+                .expect("Failed to execute the real nft");
             
-            eprintln!("nft stub: commande réelle terminée avec code: {:?}", status.code());
+            eprintln!("nft stub: real command completed with code: {:?}", status.code());
             
-            // Propager le code de sortie
+            // Propagate the exit code
             std::process::exit(status.code().unwrap_or(1));
         }
     }

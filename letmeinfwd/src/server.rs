@@ -136,6 +136,60 @@ impl FirewallConnection {
                     self.send_msg(&FirewallMessage::new_nack()).await?;
                 }
             }
+            FirewallOperation::Close => {
+                // Get the address from the socket message.
+                let Some(addr) = msg.addr() else {
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
+                    return Err(err!("No addr."));
+                };
+
+                // Check if addr is valid.
+                if !addr_check(&addr) {
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
+                    return Err(err!("Invalid addr."));
+                }
+
+                // Get the port from the socket message.
+                let Some((port_type, port)) = msg.port() else {
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
+                    return Err(err!("No port."));
+                };
+
+                // Check if the port is actually configured.
+                if conf.resource_id_by_port(port, None).is_none() {
+                    // Whoops, letmeind should never send us a request for an
+                    // unconfigured port. Did some other process write to the unix socket?
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
+                    return Err(err!("The port {port} is not configured in letmeind.conf."));
+                }
+
+                // Don't allow the user to manage the control port.
+                if port == conf.port().port {
+                    // Whoops, letmeind should never send us a request for the
+                    // control port. Did some other process write to the unix socket?
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
+                    return Err(err!("The port {port} is the letmein control port."));
+                }
+
+                // Convert from protocol port type to lease port type.
+                let lease_port = match port_type {
+                    PortType::Tcp => LeasePort::Tcp(port),
+                    PortType::Udp => LeasePort::Udp(port),
+                    PortType::TcpUdp => LeasePort::TcpUdp(port),
+                };
+
+                // Close the firewall port.
+                let ok = {
+                    let mut fw = fw.lock().await;
+                    fw.close_port(conf, addr, lease_port).await.is_ok()
+                };
+
+                if ok {
+                    self.send_msg(&FirewallMessage::new_ack()).await?;
+                } else {
+                    self.send_msg(&FirewallMessage::new_nack()).await?;
+                }
+            }
             FirewallOperation::Ack | FirewallOperation::Nack => {
                 return Err(err!("Received invalid message"));
             }

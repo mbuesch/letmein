@@ -9,22 +9,22 @@ info()
     echo "--- $*"
 }
 
-# Configuration de strace
-# Si DISABLE_STRACE est défini, n'utilise pas strace pour éviter les conflits avec seccomp
+# strace configuration
+# If DISABLE_STRACE is defined, don't use strace to avoid conflicts with seccomp
 if [ "$DISABLE_STRACE" = "1" ]; then
-    info "Désactivation de strace pour éviter les conflits avec seccomp"
+    info "Disabling strace to avoid conflicts with seccomp"
     STRACE_CMD=""
     export STRACE_DISABLED=1
 else
-    # Configuration normale de strace
+    # Normal strace configuration
     STRACE_CMD="strace -f"
     export STRACE_DISABLED=0
 fi
 
-# Configuration de seccomp
-# Si LETMEIN_DISABLE_SECCOMP est défini, désactiver seccomp pour tous les composants
+# seccomp configuration
+# If LETMEIN_DISABLE_SECCOMP is defined, disable seccomp for all components
 if [ "$LETMEIN_DISABLE_SECCOMP" = "1" ]; then
-    info "Désactivation de seccomp pour tous les composants (letmeind, letmeinfwd, letmein)"
+    info "Disabling seccomp for all components (letmeind, letmeinfwd, letmein)"
     SECCOMP_OPT="--seccomp off"
 else
     SECCOMP_OPT=""
@@ -59,58 +59,58 @@ cargo_clippy()
     cargo clippy --tests -- --deny warnings || die "cargo clippy --tests failed"
 }
 
-# Vérifie si nftables est disponible et opérationnel sur le système
+# Check if nftables is available and operational on the system
 check_nftables()
 {
-    info "Vérification de la disponibilité de nftables..."
+    info "Checking nftables availability..."
     
-    # Vérifier si on est dans un environnement WSL (où nftables peut ne pas fonctionner correctement)
+    # Check if we're in a WSL environment (where nftables may not work correctly)
     if grep -qi 'microsoft\|WSL' /proc/version; then
-        warning "Environnement WSL détecté. Les tests de vérification de règles seront désactivés dans WSL."
+        warning "WSL environment detected. Rule verification tests will be disabled in WSL."
         return 1
     fi
     
-    # Vérifier si la commande système nft est accessible
-    # Ignorer la version du projet qui pourrait être dans le PATH
+    # Check if the system nft command is accessible
+    # Ignore the project version that might be in the PATH
     if [ ! -x "/sbin/nft" ] && [ ! -x "/usr/sbin/nft" ]; then
-        warning "La commande système 'nft' (nftables) n'est pas installée ou accessible. Les tests de vérification de règles seront désactivés."
+        warning "The system command 'nft' (nftables) is not installed or accessible. Rule verification tests will be disabled."
         return 1
     fi
     
-    # Vérifier si on peut exécuter la commande système nft avec sudo
-    echo "=== Détails de la commande nft ===="
+    # Check if we can execute the system nft command with sudo
+    echo "=== nft command details ===="
     which nft
-    ls -l $(which nft 2>/dev/null || echo "nft non trouvé")
+    ls -l $(which nft 2>/dev/null || echo "nft not found")
     
-    echo "=== Détails du système ===="
+    echo "=== System details ===="
     uname -a
     cat /proc/version
     
-    echo "=== Essai d'exécution de nft list ruleset ===="
+    echo "=== Trying to execute nft list ruleset ===="
     if command -v sudo > /dev/null; then
-        echo "Tentative avec sudo /sbin/nft list ruleset:"
-        sudo /sbin/nft list ruleset 2>&1 || echo "Commande échouée avec code: $?"
+        echo "Attempting with sudo /sbin/nft list ruleset:"
+        sudo /sbin/nft list ruleset 2>&1 || echo "Command failed with code: $?"
         
         if [ -x "/usr/sbin/nft" ]; then
-            echo "Tentative avec sudo /usr/sbin/nft list ruleset:"
-            sudo /usr/sbin/nft list ruleset 2>&1 || echo "Commande échouée avec code: $?"
+            echo "Attempting with sudo /usr/sbin/nft list ruleset:"
+            sudo /usr/sbin/nft list ruleset 2>&1 || echo "Command failed with code: $?"
         fi
     else
-        echo "sudo n'est pas installé"
-        echo "Tentative sans sudo:"
-        /sbin/nft list ruleset 2>&1 || echo "Commande échouée avec code: $?"
+        echo "sudo is not installed"
+        echo "Attempting without sudo:"
+        /sbin/nft list ruleset 2>&1 || echo "Command failed with code: $?"
     fi
     
     if ! sudo /sbin/nft list ruleset &> /dev/null && ! sudo /usr/sbin/nft list ruleset &> /dev/null; then
-        warning "Impossible d'exécuter 'sudo nft list ruleset' avec la commande système. Vérifiez les permissions sudo."
+        warning "Unable to execute 'sudo nft list ruleset' with the system command. Check sudo permissions."
         return 1
     fi
     
-    info "nftables système est disponible et opérationnel!"
+    info "System nftables is available and operational!"
     return 0
 }
 
-# Vérifie la présence d'une règle nftables pour une adresse et un port spécifiques
+# Check for the presence of an nftables rule for a specific address and port
 verify_nft_rule_exists()
 {
     local addr="$1"
@@ -118,19 +118,19 @@ verify_nft_rule_exists()
     local proto="$3"
     local comment="letmein_${addr}-${port}/${proto}"
     
-    info "Vérification de la présence de la règle nftables pour $addr port $port/$proto..."
+    info "Checking for the presence of nftables rule for $addr port $port/$proto..."
     if sudo nft list ruleset | grep -q "comment \"$comment\""; then
-        info "OK: Règle nftables trouvée pour $addr port $port/$proto"
+        info "OK: nftables rule found for $addr port $port/$proto"
         return 0
     else
-        info "Ruleset nftables actuel:"
+        info "Current nftables ruleset:"
         sudo nft list ruleset
-        die "ERREUR: Règle nftables non trouvée pour $addr port $port/$proto"
+        die "ERROR: nftables rule not found for $addr port $port/$proto"
         return 1
     fi
 }
 
-# Vérifie l'absence d'une règle nftables pour une adresse et un port spécifiques
+# Check for the absence of an nftables rule for a specific address and port
 verify_nft_rule_missing()
 {
     local addr="$1"
@@ -138,14 +138,14 @@ verify_nft_rule_missing()
     local proto="$3"
     local comment="letmein_${addr}-${port}/${proto}"
     
-    info "Vérification de l'absence de règle nftables pour $addr port $port/$proto..."
+    info "Checking for the absence of nftables rule for $addr port $port/$proto..."
     if sudo nft list ruleset | grep -q "comment \"$comment\""; then
-        info "Ruleset nftables actuel:"
+        info "Current nftables ruleset:"
         sudo nft list ruleset
-        die "ERREUR: Règle nftables encore présente pour $addr port $port/$proto"
+        die "ERROR: nftables rule still present for $addr port $port/$proto"
         return 1
     else
-        info "OK: Règle nftables bien supprimée pour $addr port $port/$proto"
+        info "OK: nftables rule successfully removed for $addr port $port/$proto"
         return 0
     fi
 }

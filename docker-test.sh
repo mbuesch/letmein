@@ -1,49 +1,49 @@
 #!/bin/bash
 
-# Couleurs pour l'affichage
+# Colors for display
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
-# Détection des options
+# Options detection
 DEBUG_MODE=""
 REAL_NFTABLES=""
 WITH_GEN_KEY=""
 SPECIFIC_TESTS=""
 
-# Message d'aide
+# Help message
 usage() {
     echo -e "Usage: $0 [OPTIONS] [TESTS]"
     echo -e "Options:"
-    echo -e "  --debug           Lance un shell interactif pour le débogage"
-    echo -e "  --real-nftables   Utilise le vrai nftables au lieu du stub"
-    echo -e "  --with-gen-key    Inclut le test gen-key (désactivé par défaut)"
-    echo -e "  --help            Affiche ce message d'aide"
-    echo -e "Tests disponibles:"
-    echo -e "  knock             Exécute uniquement les tests knock"
-    echo -e "  close             Exécute uniquement les tests close"
-    echo -e "  gen-key           Exécute uniquement le test gen-key (nécessite --with-gen-key)"
-    echo -e "Si aucun test n'est spécifié et --with-gen-key n'est pas utilisé,"
-    echo -e "les tests knock et close seront exécutés par défaut."
+    echo -e "  --debug           Launch an interactive shell for debugging"
+    echo -e "  --real-nftables   Use real nftables instead of the stub"
+    echo -e "  --with-gen-key    Include the gen-key test (disabled by default)"
+    echo -e "  --help            Display this help message"
+    echo -e "Available tests:"
+    echo -e "  knock             Run only knock tests"
+    echo -e "  close             Run only close tests"
+    echo -e "  gen-key           Run only the gen-key test (requires --with-gen-key)"
+    echo -e "If no test is specified and --with-gen-key is not used,"
+    echo -e "the knock and close tests will be run by default."
     exit 0
 }
 
-# Analyse des options en ligne de commande
+# Parse command line options
 TESTS=()
 for arg in "$@"; do
     case $arg in
         --debug)
             DEBUG_MODE="1"
-            echo -e "${YELLOW}Mode débogage activé${NC}"
+            echo -e "${YELLOW}Debug mode enabled${NC}"
             ;;
         --real-nftables)
             REAL_NFTABLES="1"
-            echo -e "${YELLOW}Mode nftables réel activé${NC}"
+            echo -e "${YELLOW}Real nftables mode enabled${NC}"
             ;;
         --with-gen-key)
             WITH_GEN_KEY="1"
-            echo -e "${YELLOW}Test gen-key inclus${NC}"
+            echo -e "${YELLOW}Gen-key test included${NC}"
             ;;
         --help)
             usage
@@ -52,19 +52,19 @@ for arg in "$@"; do
             TESTS+=("$arg")
             ;;
         -*)
-            echo -e "${RED}Option inconnue: $arg${NC}"
+            echo -e "${RED}Unknown option: $arg${NC}"
             usage
             ;;
     esac
 done
 
-echo -e "${YELLOW}Création de l'image Docker pour les tests...${NC}"
+echo -e "${YELLOW}Creating Docker image for tests...${NC}"
 docker build -t letmein-test -f Dockerfile.test .
 
 # Exécuter les tests dans Docker
 if [ "$DEBUG_MODE" = "1" ]; then
-    # Mode débogage - lancer un shell interactif
-    echo -e "${YELLOW}Démarrage du conteneur en mode interactif pour le débogage...${NC}"
+    # Debug mode - launch an interactive shell
+    echo -e "${YELLOW}Starting container in interactive mode for debugging...${NC}"
     docker run --rm -it \
         --privileged \
         --cap-add=NET_ADMIN \
@@ -77,42 +77,42 @@ if [ "$DEBUG_MODE" = "1" ]; then
         letmein-test
     exit $?
 else
-    # Déterminer si on utilise le stub ou le vrai nftables
+    # Determine whether to use the stub or real nftables
     if [ "$MOCK_NFTABLES" = "1" ]; then
-        echo -e "${YELLOW}Exécution des tests avec le stub nftables (MOCK_NFTABLES=1)...${NC}"
+        echo -e "${YELLOW}Running tests with nftables stub (MOCK_NFTABLES=1)...${NC}"
     else
-        echo -e "${YELLOW}Exécution des tests avec le vrai nftables...${NC}"
+        echo -e "${YELLOW}Running tests with real nftables...${NC}"
     fi
 
-    # Déterminer quels tests exécuter
+    # Determine which tests to run
     if [ ${#TESTS[@]} -gt 0 ]; then
-        # Utiliser les tests spécifiés en ligne de commande
+        # Use tests specified on the command line
         TEST_ARGS="${TESTS[*]}"
-        echo -e "${YELLOW}Exécution des tests spécifiés: ${TEST_ARGS}${NC}"
+        echo -e "${YELLOW}Running specified tests: ${TEST_ARGS}${NC}"
     elif [ "$WITH_GEN_KEY" = "1" ]; then
-        # Exécuter tous les tests y compris gen-key
+        # Run all tests including gen-key
         TEST_ARGS=""
-        echo -e "${YELLOW}Tous les tests seront exécutés, y compris gen-key${NC}"
+        echo -e "${YELLOW}All tests will be run, including gen-key${NC}"
     else
-        # Par défaut, exécuter knock et close seulement
+        # By default, run only knock and close
         TEST_ARGS="knock close"
-        echo -e "${YELLOW}Exécution des tests par défaut (knock et close)${NC}"
+        echo -e "${YELLOW}Running default tests (knock and close)${NC}"
     fi
     
-    # Vérifie si gen-key est demandé sans l'option --with-gen-key
+    # Check if gen-key is requested without the --with-gen-key option
     if [[ " ${TESTS[*]} " =~ " gen-key " ]] && [ "$WITH_GEN_KEY" != "1" ]; then
-        echo -e "${RED}Le test gen-key a été spécifié mais --with-gen-key n'est pas activé${NC}"
-        echo -e "${YELLOW}Utilisez --with-gen-key pour exécuter le test gen-key${NC}"
+        echo -e "${RED}The gen-key test was specified but --with-gen-key is not enabled${NC}"
+        echo -e "${YELLOW}Use --with-gen-key to run the gen-key test${NC}"
         exit 1
     fi
 
-    # Préparer les variables d'environnement
-    # Désactiver strace quand seccomp est désactivé pour éviter les conflits
+    # Prepare environment variables
+    # Disable strace when seccomp is disabled to avoid conflicts
     DISABLE_STRACE="1"
     
-    # Exécuter les tests
+    # Run the tests
     if [ "$MOCK_NFTABLES" = "1" ]; then
-        # Mode mock: passer la variable MOCK_NFTABLES
+        # Mock mode: pass the MOCK_NFTABLES variable
         docker run --rm \
             --privileged \
             --cap-add=NET_ADMIN \
@@ -127,7 +127,7 @@ else
             --entrypoint ./tests/run-tests.sh \
             letmein-test $TEST_ARGS
     else
-        # Mode réel: ne pas passer la variable MOCK_NFTABLES
+        # Real mode: do not pass the MOCK_NFTABLES variable
         docker run --rm \
             --privileged \
             --cap-add=NET_ADMIN \
@@ -142,18 +142,18 @@ else
             letmein-test $TEST_ARGS
     fi
     
-    # Vérifier le code de sortie
+    # Check exit code
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Tous les tests ont réussi!${NC}"
+        echo -e "${GREEN}All tests passed!${NC}"
     else
-        echo -e "${RED}Certains tests ont échoué!${NC}"
-        echo -e "${YELLOW}Conseils:${NC}"
-        echo -e "${YELLOW}1. Lancez './docker-test.sh --debug' pour entrer dans un shell interactif et déboguer.${NC}"
+        echo -e "${RED}Some tests failed!${NC}"
+        echo -e "${YELLOW}Tips:${NC}"
+        echo -e "${YELLOW}1. Run './docker-test.sh --debug' to enter an interactive shell for debugging.${NC}"
         
         if [ "$REAL_NFTABLES" = "1" ]; then
-            echo -e "${YELLOW}2. Essayez sans l'option --real-nftables pour utiliser le stub.${NC}"
+            echo -e "${YELLOW}2. Try without the --real-nftables option to use the stub.${NC}"
         else
-            echo -e "${YELLOW}2. Assurez-vous que la variable MOCK_NFTABLES est correctement définie dans les tests.${NC}"
+            echo -e "${YELLOW}2. Make sure the MOCK_NFTABLES variable is properly defined in the tests.${NC}"
         fi
         
         exit 1
