@@ -102,12 +102,24 @@ letmein knock -u 00000000 your-server.com 22
 
 # Now you should be able to ssh into your server successfully:
 ssh your-server.com
+
+# When you're done, you can close the port manually for increased security:
+letmein close -u 00000000 your-server.com 22
 ```
 
 To automatically knock the port before connecting with ssh, you can add a `Match exec` rule to your `~/.ssh/config` file:
 
 ```
 Match host your-server.com exec "letmein knock -u 00000000 your-server.com 22"
+```
+
+You can also add automation to close the port after your SSH session ends by using a SSH configuration like this:
+
+```
+Match host your-server.com
+    ExitOnForwardFailure yes
+    PermitLocalCommand yes
+    RemoteCommand bash -c "trap 'sleep 1; letmein close -u 00000000 localhost 22 &' EXIT; bash -l"
 ```
 
 ## Installing
@@ -175,6 +187,13 @@ For more information about security and reporting vulnerabilities, please see th
 # Distribution packaging
 
 If you want to package the software for distribution, please see the [distribution packaging hints](doc/DISTRO_PACKAGING.md).
+
+# Development
+
+## Contribution guidelines
+
+- All code comments and documentation should be written in English for consistency and accessibility.
+- If you find any non-English content in the codebase, please consider translating it to English before submitting a pull request.
 
 # License
 
