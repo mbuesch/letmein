@@ -15,6 +15,7 @@ mod firewall;
 mod seccomp;
 mod server;
 mod uid_gid;
+mod verify;
 
 use crate::{
     firewall::{nftables::NftFirewall, FirewallMaintain},
@@ -23,7 +24,7 @@ use crate::{
     uid_gid::{os_get_gid, os_get_uid},
 };
 use anyhow::{self as ah, format_err as err, Context as _};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant, Seccomp};
 use std::{
     fs::{create_dir_all, metadata, set_permissions, OpenOptions},
@@ -149,6 +150,33 @@ struct Opts {
     #[cfg(debug_assertions)]
     #[arg(long, hide = true)]
     test_mode: bool,
+
+    /// Subcommands for additional functionality
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+/// Subcommands for letmeinfwd
+#[derive(Debug, Clone, Subcommand)]
+enum Commands {
+    /// Verify if a firewall rule exists for testing
+    Verify {
+        /// IP address to check
+        #[arg(long)]
+        address: String,
+        
+        /// Port to check
+        #[arg(long)]
+        port: u16,
+        
+        /// Protocol (tcp/udp)
+        #[arg(long, default_value = "tcp")]
+        protocol: String,
+        
+        /// Check if rule should exist (true) or be missing (false)
+        #[arg(long)]
+        should_exist: bool,
+    }
 }
 
 impl Opts {
@@ -310,7 +338,48 @@ fn main() -> ah::Result<()> {
         println!("letmeinfwd version {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
+    
+    // Process verify command if specified
+    if let Some(Commands::Verify { address, port, protocol, should_exist }) = &opts.command {
+        // Read the configuration file
+        let mut conf = Config::new(ConfigVariant::Server);
+        conf.load(&opts.get_config())
+            .context("Configuration file")?;
+        
+        // Call the verification function
+        let result = runtime::Builder::new_current_thread()
+            .thread_keep_alive(Duration::from_millis(0))
+            .max_blocking_threads(1)
+            .enable_all()
+            .build()
+            .context("Tokio runtime builder")?
+            .block_on(crate::verify::verify_nft_rule(
+                &conf,
+                address,
+                *port,
+                protocol,
+                *should_exist
+            ));
+            
+        match result {
+            Ok(true) => {
+                println!("Verification successful: rule {} found as expected", 
+                    if *should_exist { "was" } else { "was not" });
+                return Ok(());
+            },
+            Ok(false) => {
+                eprintln!("Verification failed: rule {} found, which was not expected", 
+                    if *should_exist { "was not" } else { "was" });
+                std::process::exit(1);
+            },
+            Err(e) => {
+                eprintln!("Error during verification: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
 
+    // For other commands, proceed with normal server operation
     runtime::Builder::new_current_thread()
         .thread_keep_alive(Duration::from_millis(0))
         .max_blocking_threads(1)

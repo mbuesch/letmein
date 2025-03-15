@@ -116,15 +116,13 @@ verify_nft_rule_exists()
     local addr="$1"
     local port="$2"
     local proto="$3"
-    local comment="letmein_${addr}-${port}/${proto}"
     
     info "Checking for the presence of nftables rule for $addr port $port/$proto..."
-    if sudo nft list ruleset | grep -q "comment \"$comment\""; then
-        info "OK: nftables rule found for $addr port $port/$proto"
+
+    # Use the letmeinfwd verify command that directly uses the nftables crate
+    if "$target/letmeinfwd" --config "$conf" verify --address "$addr" --port "$port" --protocol "$proto" --should-exist true; then
         return 0
     else
-        info "Current nftables ruleset:"
-        sudo nft list ruleset
         die "ERROR: nftables rule not found for $addr port $port/$proto"
         return 1
     fi
@@ -136,17 +134,15 @@ verify_nft_rule_missing()
     local addr="$1"
     local port="$2"
     local proto="$3"
-    local comment="letmein_${addr}-${port}/${proto}"
     
     info "Checking for the absence of nftables rule for $addr port $port/$proto..."
-    if sudo nft list ruleset | grep -q "comment \"$comment\""; then
-        info "Current nftables ruleset:"
-        sudo nft list ruleset
+
+    # Use the letmeinfwd verify command that directly uses the nftables crate
+    if "$target/letmeinfwd" --config "$conf" verify --address "$addr" --port "$port" --protocol "$proto" --should-exist false; then
+        return 0
+    else
         die "ERROR: nftables rule still present for $addr port $port/$proto"
         return 1
-    else
-        info "OK: nftables rule successfully removed for $addr port $port/$proto"
-        return 0
     fi
 }
 
