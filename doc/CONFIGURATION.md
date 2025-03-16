@@ -133,9 +133,6 @@ If there are no warning messages, it is recommended to set the option to `seccom
 
 If you see seccomp warning messages or seccomp kills, please open an [issue](https://github.com/mbuesch/letmein/issues).
 
-Currently this is a server-only option that only affects the network facing daemon `letmeind`.
-In future seccomp support could be added to `letmeinfwd` and the client, too.
-
 This option defaults to `seccomp=off`, if it is absent from the configuration.
 
 ## `[KEYS]`
