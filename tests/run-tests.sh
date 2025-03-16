@@ -111,6 +111,98 @@ run_tests_knock()
     kill_all_and_wait
 }
 
+run_tests_close()
+{
+    local test_type="$1"
+
+    info "### Running test: close $test_type ###"
+
+    rm -rf "$rundir"
+    local conf="$testdir/conf/$test_type.conf"
+
+    info "Starting letmeinfwd..."
+    "$target/letmeinfwd" \
+        --test-mode \
+        --no-systemd \
+        --rundir "$rundir" \
+        --config "$conf" &
+    pid_letmeinfwd=$!
+
+    info "Starting letmeind..."
+    "$target/letmeind" \
+        --no-systemd \
+        --rundir "$rundir" \
+        --config "$conf" &
+    pid_letmeind=$!
+
+    wait_for_pidfile letmeinfwd "$pid_letmeinfwd"
+    wait_for_pidfile letmeind "$pid_letmeind"
+
+    # First knock to open the port
+    info "First knocking to open the port (IPv4)..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        knock \
+        --user 12345678 \
+        --ipv4 \
+        localhost 42 \
+        || die "letmein knock failed"
+
+    # Then close the port we just opened
+    info "Now closing the port (IPv4)..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        close \
+        --user 12345678 \
+        --ipv4 \
+        localhost 42 \
+        || die "letmein close failed"
+
+    # Test close for both IPv4 and IPv6
+    info "Testing close for IPv6 + IPv4..."
+    # First open the port
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        knock \
+        --user 12345678 \
+        localhost 42 \
+        || die "letmein knock failed"
+    # Then close it
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        close \
+        --user 12345678 \
+        localhost 42 \
+        || die "letmein close failed"
+    
+    # Test close for IPv6
+    info "Testing close for IPv6..."
+    # First open the port
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        knock \
+        --user 12345678 \
+        --ipv6 \
+        localhost 42 \
+        || die "letmein knock failed"
+    # Then close it
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        close \
+        --user 12345678 \
+        --ipv6 \
+        localhost 42 \
+        || die "letmein close failed"
+    
+    kill_all_and_wait
+}
+
 wait_for_pidfile()
 {
     local name="$1"
@@ -194,6 +286,8 @@ cargo_clippy
 run_tests_genkey
 run_tests_knock tcp
 run_tests_knock udp
+run_tests_close tcp
+run_tests_close udp
 info "All tests Ok."
 
 # vim: ts=4 sw=4 expandtab
