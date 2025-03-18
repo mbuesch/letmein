@@ -9,8 +9,9 @@
 use anyhow::{self as ah, format_err as err};
 use hickory_resolver::{
     config::ResolverConfig,
+    name_server::TokioConnectionProvider,
     proto::rr::{record_data::RData, record_type::RecordType},
-    TokioAsyncResolver,
+    TokioResolver,
 };
 use std::net::IpAddr;
 
@@ -54,16 +55,19 @@ pub async fn resolve(host: &str, mode: ResMode) -> ah::Result<IpAddr> {
     }
 
     // Create a DNS resolver.
-    let resolver;
-    if let Ok(r) = TokioAsyncResolver::tokio_from_system_conf() {
-        resolver = r;
+    let resolver = if let Ok(builder) = TokioResolver::builder_tokio() {
+        builder.build()
     } else {
         eprintln!(
             "Warning: Could not create DNS resolver from system configuration. \
              Is /etc/resolv.conf present? Falling back to Google DNS."
         );
-        resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), Default::default());
-    }
+        TokioResolver::builder_with_config(
+            ResolverConfig::google(),
+            TokioConnectionProvider::default(),
+        )
+        .build()
+    };
 
     // Determine the DNS record type from the address resolution mode.
     let (record_type, record_type_str) = match mode {
