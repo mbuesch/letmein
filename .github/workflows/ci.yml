@@ -30,7 +30,7 @@ jobs:
       matrix:
         toolchain:
           - 1.81.0 # MSRV
-          - 1.84.0
+          - 1.85.1
         os:
           - windows-latest
           - macos-latest
