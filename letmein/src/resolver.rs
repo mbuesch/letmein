@@ -58,10 +58,12 @@ pub async fn resolve(host: &str, mode: ResMode) -> ah::Result<IpAddr> {
     let resolver = if let Ok(builder) = TokioResolver::builder_tokio() {
         builder.build()
     } else {
+        #[cfg(not(target_os = "android"))]
         eprintln!(
             "Warning: Could not create DNS resolver from system configuration. \
              Is /etc/resolv.conf present? Falling back to Google DNS."
         );
+
         TokioResolver::builder_with_config(
             ResolverConfig::google(),
             TokioConnectionProvider::default(),
