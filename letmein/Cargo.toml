@@ -17,7 +17,7 @@ keywords = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
-hickory-resolver = { workspace = true }
+hickory-resolver = { workspace = true, features = [ "system-config", "tokio", "tls-ring", "https-ring", "quic-ring", "webpki-roots", "dnssec-ring" ] }
 letmein-conf = { workspace = true }
 letmein-proto = { workspace = true }
 libc = { workspace = true }

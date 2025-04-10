@@ -18,6 +18,7 @@ use crate::{
         genkey::run_genkey,
         knock::{run_knock, KnockServer},
     },
+    resolver::{ResCrypt, ResSrv},
     seccomp::install_seccomp_rules,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
@@ -26,6 +27,49 @@ use letmein_conf::{Config, ConfigVariant, Seccomp};
 use letmein_proto::UserId;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::runtime;
+
+/// Parse `UserId` helper for command line argument parsing.
+fn parse_user(s: &str) -> ah::Result<UserId> {
+    s.parse()
+}
+
+/// Parse `ResSrv` helper for command line argument parsing.
+fn parse_dns(dns: &str) -> ah::Result<ResSrv> {
+    let mut srv = ResSrv {
+        system: false,
+        quad9: false,
+        google: false,
+        cloudflare: false,
+    };
+    for dns in dns.split(',') {
+        match &dns.trim().to_lowercase()[..] {
+            "system" => srv.system = true,
+            "quad9" => srv.quad9 = true,
+            "google" => srv.google = true,
+            "cloudflare" => srv.cloudflare = true,
+            _ => return Err(err!("Unknown DNS resolver: {dns}")),
+        }
+    }
+    Ok(srv)
+}
+
+/// Parse `ResCrypt` helper for command line argument parsing.
+fn parse_dns_crypt(dns_crypt: &str) -> ah::Result<ResCrypt> {
+    let mut crypt = ResCrypt {
+        tls: false,
+        https: false,
+        unencrypted: false,
+    };
+    for dns_crypt in dns_crypt.split(',') {
+        match &dns_crypt.trim().to_lowercase()[..] {
+            "tls" => crypt.tls = true,
+            "https" => crypt.https = true,
+            "unencrypted" => crypt.unencrypted = true,
+            _ => return Err(err!("Unknown DNS transport encryption: {dns_crypt}")),
+        }
+    }
+    Ok(crypt)
+}
 
 #[derive(Parser, Debug)]
 struct Opts {
@@ -39,6 +83,37 @@ struct Opts {
 
     #[command(subcommand)]
     command: Option<Command>,
+
+    /// DNS resolver service.
+    ///
+    /// The DNS resolver service to be used to resolve host names to IP addresses.
+    /// A comma separated list with any of the following fields can be given:
+    ///
+    /// - system: Try the operating system resolver.
+    ///   This will be tried first, if specified.
+    ///
+    /// - quad9: Try the Quad9 DNS service.
+    ///
+    /// - google: Try the Google DNS service.
+    ///
+    /// - cloudflare: Try the Cloudflare DNS service.
+    #[arg(long, default_value = "system,quad9,google,cloudflare", value_parser = parse_dns)]
+    dns: ResSrv,
+
+    /// DNS resolver transport encryption.
+    ///
+    /// For all but the system resolver it may be chosen which transport
+    /// encryptions to use for DNS lookup.
+    /// A comma separated list with any of the following fields can be given:
+    ///
+    /// - tls: Use TLS encryption.
+    ///
+    /// - https: Use HTTPS encryption.
+    ///
+    /// - unencrypted: Use plain DNS lookup without encryption.
+    ///   This will be tried last, if specified.
+    #[arg(long, default_value = "tls,https,unencrypted", value_parser = parse_dns_crypt)]
+    dns_crypt: ResCrypt,
 
     /// Override the `seccomp` setting from the configuration file.
     ///
@@ -61,11 +136,6 @@ impl Opts {
             Config::get_default_path(ConfigVariant::Client)
         }
     }
-}
-
-/// Parse `UserId` helper for command line argument parsing.
-fn parse_user(s: &str) -> ah::Result<UserId> {
-    s.parse()
 }
 
 #[derive(Subcommand, Debug)]
@@ -204,6 +274,8 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
                     server,
                     port,
                     user,
+                    &opts.dns,
+                    &opts.dns_crypt,
                 )
                 .await
             }

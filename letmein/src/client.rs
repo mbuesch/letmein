@@ -6,7 +6,7 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::resolver::{resolve, ResMode};
+use crate::resolver::{resolve, ResConf};
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::ControlPort;
 use letmein_proto::{Message, MsgNetSocket, MsgUdpDispatcher, Operation};
@@ -32,9 +32,11 @@ impl Client {
         host: &str,
         control_port: ControlPort,
         control_timeout: Duration,
-        mode: ResMode,
+        resolve_conf: &ResConf,
     ) -> ah::Result<Self> {
-        let addr = resolve(host, mode).await.context("Resolve host name")?;
+        let addr = resolve(host, resolve_conf)
+            .await
+            .context("Resolve host name")?;
 
         let sock = if control_port.tcp {
             assert!(!control_port.udp);

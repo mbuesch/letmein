@@ -8,7 +8,7 @@
 
 use crate::{
     client::Client,
-    resolver::{is_ipv4_addr, is_ipv6_addr, ResMode},
+    resolver::{is_ipv4_addr, is_ipv6_addr, ResConf, ResCrypt, ResMode, ResSrv},
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::{Config, ControlPort};
@@ -40,6 +40,8 @@ impl From<(bool, bool)> for AddrMode {
 struct KnockSeq<'a> {
     pub verbose: bool,
     pub addr: &'a str,
+    pub resolve_srv: &'a ResSrv,
+    pub resolve_crypt: &'a ResCrypt,
     pub control_port: ControlPort,
     pub control_timeout: Duration,
     pub user: UserId,
@@ -72,7 +74,7 @@ impl KnockSeq<'_> {
     }
 
     /// Run the knock protocol sequence.
-    pub async fn knock_sequence(&self, resolver_mode: ResMode) -> ah::Result<()> {
+    pub async fn knock_sequence(&self, resolve_mode: ResMode) -> ah::Result<()> {
         if self.verbose {
             println!(
                 "Connecting to letmein server '{}:{}'.",
@@ -83,7 +85,11 @@ impl KnockSeq<'_> {
             self.addr,
             self.control_port,
             self.control_timeout,
-            resolver_mode,
+            &ResConf {
+                mode: resolve_mode,
+                srv: self.resolve_srv.clone(),
+                crypt: self.resolve_crypt.clone(),
+            },
         )
         .await
         .context("Client init")?;
@@ -157,6 +163,8 @@ pub async fn run_knock(
     server: KnockServer<'_>,
     knock_port: u16,
     user: Option<UserId>,
+    resolve_srv: &ResSrv,
+    resolve_crypt: &ResCrypt,
 ) -> ah::Result<()> {
     let confpath = conf.get_path().unwrap_or(Path::new(""));
 
@@ -177,6 +185,8 @@ pub async fn run_knock(
     let seq = KnockSeq {
         verbose,
         addr: server.addr,
+        resolve_srv,
+        resolve_crypt,
         control_port,
         control_timeout,
         user,
