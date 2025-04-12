@@ -24,9 +24,13 @@ jobs:
       - run: rustup component add clippy
       - run: cargo build --verbose
       - run: sh ./tests/run-tests.sh
-      - run: if [ "${{ matrix.toolchain }}" = nightly ]; then rustup component add rust-src; fi
-      - run: if [ "${{ matrix.toolchain }}" = nightly ]; then rustup component add miri; fi
-      - run: if [ "${{ matrix.toolchain }}" = nightly ]; then cargo miri test; fi
+      - run: |
+        if [ "${{ matrix.toolchain }}" = nightly ]; then
+          rustup component add rust-src
+          rustup component add miri
+          export MIRIFLAGS=-Zmiri-disable-isolation
+          cargo miri test
+        fi
 
   client_only:
     name: Client only

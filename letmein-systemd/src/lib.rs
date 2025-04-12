@@ -187,4 +187,16 @@ pub fn systemd_notify_ready() -> ah::Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_systemd() {
+        assert!(SystemdSocket::get_all().unwrap().is_empty());
+
+        systemd_notify_ready().unwrap();
+    }
+}
+
 // vim: ts=4 sw=4 expandtab
