@@ -731,7 +731,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "letmein"
-version = "10.0.1"
+version = "10.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -745,7 +745,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-conf"
-version = "10.0.1"
+version = "10.1.0"
 dependencies = [
  "anyhow",
  "letmein-proto",
@@ -753,7 +753,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-fwproto"
-version = "10.0.1"
+version = "10.1.0"
 dependencies = [
  "anyhow",
  "tokio",
@@ -761,7 +761,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-proto"
-version = "10.0.1"
+version = "10.1.0"
 dependencies = [
  "anyhow",
  "getrandom 0.3.2",
@@ -773,7 +773,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-seccomp"
-version = "10.0.1"
+version = "10.1.0"
 dependencies = [
  "anyhow",
  "build-target",
@@ -783,7 +783,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-systemd"
-version = "10.0.1"
+version = "10.1.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -792,7 +792,7 @@ dependencies = [
 
 [[package]]
 name = "letmeind"
-version = "10.0.1"
+version = "10.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -807,7 +807,7 @@ dependencies = [
 
 [[package]]
 name = "letmeinfwd"
-version = "10.0.1"
+version = "10.1.0"
 dependencies = [
  "anyhow",
  "clap",
