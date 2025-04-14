@@ -121,8 +121,28 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         self.resource_id = None;
         self.auth_state = AuthState::NotAuth;
 
-        // Receive the initial knock message.
-        let knock = self.recv_msg(Operation::Knock).await?;
+        // Receive the initial message (Knock or Close).
+        let initial_msg = match timeout(self.conf.control_timeout(), self.conn.recv_msg())
+            .await
+            .map_err(|_| err!("RX communication with peer timed out"))?
+        {
+            Ok(Some(msg)) => msg,
+            Ok(None) => return Err(err!("Disconnected.")),
+            Err(e) => return Err(err!("Failed to receive message: {}", e)),
+        };
+
+        // Check if it's a Close or Knock operation
+        if initial_msg.operation() != Operation::Knock && initial_msg.operation() != Operation::Close {
+            let _ = self.send_go_away().await;
+            return Err(err!(
+                "Invalid initial message operation. Expected Knock or Close, got {:?}",
+                initial_msg.operation()
+            ));
+        }
+        
+        // Store the operation type before moving initial_msg
+        let operation = initial_msg.operation();
+        let knock = initial_msg;
 
         let user_id = knock.user();
         self.user_id = Some(user_id);
@@ -217,14 +237,26 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                     Ok(fw) => fw,
                 };
 
-                // Send an open-port request to letmeinfwd.
+                // Send an open-port or close-port request to letmeinfwd based on the operation type.
                 assert_eq!(self.auth_state, AuthState::ChallengeResponseAuth);
-                if let Err(e) = fw
-                    .open_port(self.conn.peer_addr().ip(), port_type, *port)
-                    .await
-                {
-                    let _ = self.send_go_away().await;
-                    return Err(err!("letmeinfwd firewall open: {e}"));
+                if operation == Operation::Close {
+                    // Close port operation
+                    if let Err(e) = fw
+                        .close_port(self.conn.peer_addr().ip(), port_type, *port)
+                        .await
+                    {
+                        let _ = self.send_go_away().await;
+                        return Err(err!("letmeinfwd firewall close: {e}"));
+                    }
+                } else {
+                    // Open port operation (Knock)
+                    if let Err(e) = fw
+                        .open_port(self.conn.peer_addr().ip(), port_type, *port)
+                        .await
+                    {
+                        let _ = self.send_go_away().await;
+                        return Err(err!("letmeinfwd firewall open: {e}"));
+                    }
                 }
             }
         }

@@ -34,7 +34,7 @@ impl std::fmt::Display for LeasePort {
 }
 
 /// TCP or UDP port number.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum SingleLeasePort {
     /// TCP port.
     Tcp(u16),
@@ -150,6 +150,15 @@ pub trait FirewallOpen {
     /// This operation shall handle the case where there already is such
     /// a rule present gracefully.
     async fn open_port(
+        &mut self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        port: LeasePort,
+    ) -> ah::Result<()>;
+
+    /// Remove a rule that opens the specified `port` for the specified `remote_addr`.
+    /// This operation shall handle the case where there is no such rule present gracefully.
+    async fn close_port(
         &mut self,
         conf: &Config,
         remote_addr: IpAddr,

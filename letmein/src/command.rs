@@ -8,5 +8,6 @@
 
 pub mod genkey;
 pub mod knock;
+pub mod close;
 
 // vim: ts=4 sw=4 expandtab
