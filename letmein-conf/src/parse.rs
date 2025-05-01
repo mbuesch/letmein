@@ -60,7 +60,7 @@ pub fn parse_hex<const SIZE: usize>(s: &str) -> ah::Result<[u8; SIZE]> {
     let len = s.len();
     if len != SIZE * 2 {
         return Err(err!(
-            "Hex string is too short: Expected {}, got {} chars",
+            "Hex string is not correct: Expected {}, got {} chars",
             SIZE * 2,
             len,
         ));
