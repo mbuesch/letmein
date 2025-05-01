@@ -695,7 +695,7 @@ mod tests {
         assert_eq!(a, UserId(0x12345678));
         let b: u32 = a.into();
         assert_eq!(b, 0x12345678);
-        assert_eq!(format!("{}", a), "12345678");
+        assert_eq!(format!("{a}"), "12345678");
         let c: UserId = Default::default();
         assert_eq!(c.0, 0);
     }
@@ -707,7 +707,7 @@ mod tests {
         assert_eq!(a, ResourceId(0x12345678));
         let b: u32 = a.into();
         assert_eq!(b, 0x12345678);
-        assert_eq!(format!("{}", a), "12345678");
+        assert_eq!(format!("{a}"), "12345678");
     }
 }
 
