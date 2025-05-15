@@ -229,7 +229,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                         if let Ok(_permit) = conn_semaphore.acquire().await {
                             task::spawn(async move {
                                 if let Err(e) = conn.handle_message(&conf, fw).await {
-                                    eprintln!("Client error: {e}");
+                                    eprintln!("Client error: {e:?}");
                                 }
                             });
                         }
@@ -293,7 +293,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     {
         let mut fw = fw.lock().await;
         if let Err(e) = fw.shutdown(&conf).await {
-            eprintln!("WARNING: Failed to remove firewall rules: {e}");
+            eprintln!("WARNING: Failed to remove firewall rules: {e:?}");
             if exitcode.is_ok() {
                 exitcode = Err(err!("Failed to remove firewall rules"));
             }

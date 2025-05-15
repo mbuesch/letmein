@@ -158,7 +158,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
     ) -> Option<SocketAddr> {
         if let Err(e) = self.try_recv(socket, accept_notify, recv_notify) {
             if DEBUG {
-                eprintln!("UDP-dispatcher: try_recv error during try_accept: {e}");
+                eprintln!("UDP-dispatcher: try_recv error during try_accept: {e:?}");
             }
             return None;
         };

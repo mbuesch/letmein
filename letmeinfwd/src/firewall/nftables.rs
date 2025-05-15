@@ -297,7 +297,7 @@ impl NftFirewall {
                 "Failed to execute the 'nft' program.\n\
                 Did you install the 'nftables' support package in your distribution's package manager?\n\
                 Is the 'nft' binary available in the $PATH?\n\
-                The execution error was: {e}"
+                The execution error was: {e:?}"
             ));
         }
 
@@ -442,7 +442,7 @@ impl FirewallMaintain for NftFirewall {
         let pruned = prune_all_lease_timeouts(conf, &mut self.leases);
         if !pruned.is_empty() {
             if let Err(e) = self.nftables_remove_leases(conf, &pruned).await {
-                eprintln!("WARNING: Failed to remove lease(s): '{e}'.");
+                eprintln!("WARNING: Failed to remove lease(s): {e:?}");
                 eprintln!("Trying full rebuild.");
                 self.nftables_full_rebuild(conf).await?;
             }
