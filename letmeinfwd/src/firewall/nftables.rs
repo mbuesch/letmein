@@ -139,7 +139,7 @@ fn gen_add_lease_cmd(
     conf: &Config,
     addr: Option<IpAddr>,
     port: SingleLeasePort,
-) -> ah::Result<NfCmd> {
+) -> ah::Result<NfCmd<'_>> {
     let names = NftNames::get(conf).context("Read configuration")?;
     let mut expr = Vec::with_capacity(3);
     if let Some(addr) = addr {

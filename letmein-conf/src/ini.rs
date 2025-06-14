@@ -36,7 +36,7 @@ impl IniSection {
         &mut self.options
     }
 
-    fn iter(&self) -> IniSectionIter {
+    fn iter(&self) -> IniSectionIter<'_> {
         self.options.iter()
     }
 }
@@ -160,7 +160,7 @@ impl Ini {
     }
 
     /// Get an iterator over all option name-value tuples from a section.
-    pub fn options_iter(&self, section: &str) -> Option<IniSectionIter> {
+    pub fn options_iter(&self, section: &str) -> Option<IniSectionIter<'_>> {
         self.sections.get(section).map(|s| s.iter())
     }
 }
