@@ -67,6 +67,9 @@ pub struct ResConf {
 
     /// Resolution encryption.
     pub crypt: ResCrypt,
+
+    /// Suppress warnings.
+    pub suppress_warnings: bool,
 }
 
 /// Check if a string can be parsed into an IPv4 address.
@@ -80,10 +83,10 @@ pub fn is_ipv6_addr(host: &str) -> bool {
 }
 
 /// Determine the DNS record type from the address resolution mode.
-fn get_record_type(mode: ResMode) -> (RecordType, &'static str) {
+fn get_record_type(mode: ResMode) -> (RecordType, &'static str, &'static str) {
     match mode {
-        ResMode::Ipv6 => (RecordType::AAAA, "AAAA"),
-        ResMode::Ipv4 => (RecordType::A, "A"),
+        ResMode::Ipv6 => (RecordType::AAAA, "AAAA", "IPv6"),
+        ResMode::Ipv4 => (RecordType::A, "A", "IPv4"),
     }
 }
 
@@ -96,7 +99,7 @@ fn get_first_result(lookup: Lookup, host: &str, mode: ResMode) -> ah::Result<IpA
             _ => (),
         }
     }
-    let (_, record_type_str) = get_record_type(mode);
+    let (_, record_type_str, _) = get_record_type(mode);
     Err(err!(
         "No IP address found for host '{host}'. No '{record_type_str}' record found."
     ))
@@ -123,7 +126,7 @@ pub async fn resolve(host: &str, cfg: &ResConf) -> ah::Result<IpAddr> {
         return Ok(addr);
     }
 
-    let (record_type, record_type_str) = get_record_type(cfg.mode);
+    let (record_type, record_type_str, addr_type_str) = get_record_type(cfg.mode);
 
     macro_rules! lookup_and_return {
         ($conf:expr) => {
@@ -144,11 +147,21 @@ pub async fn resolve(host: &str, cfg: &ResConf) -> ah::Result<IpAddr> {
                 return get_first_result(lookup, host, cfg.mode);
             }
         }
+
         #[cfg(not(target_os = "android"))]
-        eprintln!(
-            "Warning: Could not create DNS resolver from system configuration. \
-             Is /etc/resolv.conf present? Falling back to other DNS servers."
-        );
+        if !cfg.suppress_warnings {
+            #[cfg(target_os = "windows")]
+            let os_info = "Is your DNS resolver configured correctly in network settings?";
+
+            #[cfg(not(target_os = "windows"))]
+            let os_info = "Is /etc/resolv.conf present and configured correctly?";
+
+            eprintln!(
+                "Warning: Could not resolve {addr_type_str} address with the system DNS resolver. \
+                 {os_info} \
+                 Falling back to other DNS servers."
+            );
+        }
     }
 
     if cfg.crypt.tls {

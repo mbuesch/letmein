@@ -74,7 +74,11 @@ impl KnockSeq<'_> {
     }
 
     /// Run the knock protocol sequence.
-    pub async fn knock_sequence(&self, resolve_mode: ResMode) -> ah::Result<()> {
+    pub async fn knock_sequence(
+        &self,
+        resolve_mode: ResMode,
+        suppress_warnings: bool,
+    ) -> ah::Result<()> {
         if self.verbose {
             println!(
                 "Connecting to letmein server '{}:{}'.",
@@ -89,6 +93,7 @@ impl KnockSeq<'_> {
                 mode: resolve_mode,
                 srv: self.resolve_srv.clone(),
                 crypt: self.resolve_crypt.clone(),
+                suppress_warnings,
             },
         )
         .await
@@ -204,14 +209,14 @@ pub async fn run_knock(
             }
             if is_ipv4_addr(server.addr) {
                 // For a raw IPv4 address only knock IPv4.
-                seq.knock_sequence(ResMode::Ipv4).await?;
+                seq.knock_sequence(ResMode::Ipv4, false).await?;
             } else if is_ipv6_addr(server.addr) {
                 // For a raw IPv6 address only knock IPv6.
-                seq.knock_sequence(ResMode::Ipv6).await?;
+                seq.knock_sequence(ResMode::Ipv6, false).await?;
             } else {
                 // For host names try both.
-                let res6 = seq.knock_sequence(ResMode::Ipv6).await;
-                let res4 = seq.knock_sequence(ResMode::Ipv4).await;
+                let res6 = seq.knock_sequence(ResMode::Ipv6, true).await;
+                let res4 = seq.knock_sequence(ResMode::Ipv4, res6.is_ok()).await;
                 if res6.is_err() && res4.is_err() {
                     return res6;
                 }
@@ -221,20 +226,20 @@ pub async fn run_knock(
             if verbose {
                 println!("Knocking on '{}:{knock_port}' IPv6 and IPv4.", server.addr);
             }
-            seq.knock_sequence(ResMode::Ipv6).await?;
-            seq.knock_sequence(ResMode::Ipv4).await?;
+            seq.knock_sequence(ResMode::Ipv6, false).await?;
+            seq.knock_sequence(ResMode::Ipv4, false).await?;
         }
         AddrMode::Ipv6 => {
             if verbose {
                 println!("Knocking on '{}:{knock_port}' IPv6.", server.addr);
             }
-            seq.knock_sequence(ResMode::Ipv6).await?;
+            seq.knock_sequence(ResMode::Ipv6, false).await?;
         }
         AddrMode::Ipv4 => {
             if verbose {
                 println!("Knocking on '{}:{knock_port}' IPv4.", server.addr);
             }
-            seq.knock_sequence(ResMode::Ipv4).await?;
+            seq.knock_sequence(ResMode::Ipv4, false).await?;
         }
     }
     Ok(())
