@@ -47,6 +47,10 @@ letmein-proto = { version = "10", path = "./letmein-proto" }
 letmein-seccomp = { version = "10", path = "./letmein-seccomp" }
 letmein-systemd = { version = "10", path = "./letmein-systemd" }
 
+[profile.dev]
+debug = "limited"
+panic = "abort"
+
 [profile.release]
 opt-level = "z"
 lto = "fat"
