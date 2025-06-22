@@ -149,7 +149,11 @@ pub async fn resolve(host: &str, cfg: &ResConf) -> ah::Result<IpAddr> {
         }
 
         #[cfg(not(target_os = "android"))]
-        if !cfg.suppress_warnings {
+        let print_warning = true;
+        #[cfg(target_os = "android")]
+        let print_warning = false;
+
+        if print_warning && !cfg.suppress_warnings {
             #[cfg(target_os = "windows")]
             let os_info = "Is your DNS resolver configured correctly in network settings?";
 
