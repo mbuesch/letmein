@@ -155,15 +155,16 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
         let opts = Arc::clone(&opts);
 
         async move {
-            let conn_semaphore = Semaphore::new(opts.num_connections);
+            let conn_semaphore = Arc::new(Semaphore::new(opts.num_connections));
             loop {
                 let conf = Arc::clone(&conf);
                 let opts = Arc::clone(&opts);
+                let conn_semaphore = Arc::clone(&conn_semaphore);
                 match srv.accept().await {
                     Ok(conn) => {
                         // Socket connection handler.
                         let conn = Arc::new(conn);
-                        if let Ok(_permit) = conn_semaphore.acquire().await {
+                        if let Ok(permit) = conn_semaphore.acquire_owned().await {
                             let conn = Arc::clone(&conn);
                             task::spawn(async move {
                                 let mut proto = Protocol::new(&*conn, &conf, &opts.rundir);
@@ -176,6 +177,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                                     );
                                 }
                                 conn.close().await;
+                                drop(permit);
                             });
                         } else {
                             conn.close().await;

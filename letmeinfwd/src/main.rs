@@ -219,18 +219,20 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
         let fw = Arc::clone(&fw);
 
         async move {
-            let conn_semaphore = Semaphore::new(opts.num_connections);
+            let conn_semaphore = Arc::new(Semaphore::new(opts.num_connections));
             loop {
                 let conf = Arc::clone(&conf);
                 let fw = Arc::clone(&fw);
+                let conn_semaphore = Arc::clone(&conn_semaphore);
                 match srv.accept(&opts).await {
                     Ok(mut conn) => {
                         // Socket connection handler.
-                        if let Ok(_permit) = conn_semaphore.acquire().await {
+                        if let Ok(permit) = conn_semaphore.acquire_owned().await {
                             task::spawn(async move {
                                 if let Err(e) = conn.handle_message(&conf, fw).await {
                                     eprintln!("Client error: {e:?}");
                                 }
+                                drop(permit);
                             });
                         }
                     }
