@@ -14,17 +14,16 @@ std::compile_error!("letmeind server and letmeinfwd do not support non-Linux pla
 mod firewall;
 mod seccomp;
 mod server;
-mod uid_gid;
 
 use crate::{
     firewall::{nftables::NftFirewall, FirewallMaintain},
     seccomp::install_seccomp_rules,
     server::FirewallServer,
-    uid_gid::{os_get_gid, os_get_uid},
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant, Seccomp};
+use nix::unistd::{Group, User};
 use std::{
     fs::{create_dir_all, metadata, set_permissions, OpenOptions},
     io::Write as _,
@@ -95,8 +94,20 @@ fn make_run_subdir(opts: &Opts) -> ah::Result<()> {
 /// Get UIDs and GIDs.
 fn read_etc_passwd(opts: &Opts) -> ah::Result<()> {
     if !opts.test_mode() {
-        LETMEIND_UID.store(os_get_uid("letmeind")?, Relaxed);
-        LETMEIND_GID.store(os_get_gid("letmeind")?, Relaxed);
+        let user_name = "letmeind";
+        let group_name = "letmeind";
+
+        let uid = User::from_name(user_name)?
+            .ok_or_else(|| err!("User '{user_name}' not found in /etc/passwd"))?
+            .uid
+            .as_raw();
+        let gid = Group::from_name(group_name)?
+            .ok_or_else(|| err!("Group '{group_name}' not found in /etc/group"))?
+            .gid
+            .as_raw();
+
+        LETMEIND_UID.store(uid, Relaxed);
+        LETMEIND_GID.store(gid, Relaxed);
     }
     Ok(())
 }

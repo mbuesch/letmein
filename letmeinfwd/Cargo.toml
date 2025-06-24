@@ -20,6 +20,7 @@ letmein-conf = { workspace = true }
 letmein-fwproto = { workspace = true }
 libc = { workspace = true }
 nftables = { workspace = true, features = [ "tokio" ] }
+nix = { workspace = true, features = [ "user" ] }
 tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync", "time" ] }
 
 [target.'cfg(any(target_os="linux", target_os="android"))'.dependencies]

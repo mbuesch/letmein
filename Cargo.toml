@@ -35,6 +35,7 @@ hickory-resolver = "0.25"
 hmac = "0.12"
 libc = "0.2"
 nftables = "0.6"
+nix = { version = "0.30", default-features = false }
 sd-notify = "0.4"
 seccompiler = "0.5"
 sha3 = "0.10"
