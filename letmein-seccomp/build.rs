@@ -8,18 +8,18 @@
 
 #![forbid(unsafe_code)]
 
-use build_target::{target_arch, target_os, Arch, Os};
+use std::env;
 
 fn main() {
-    let arch = target_arch().expect("Failed to get build target architecture");
-    let os = target_os().expect("Failed to get build target OS");
+    let os = env::var("CARGO_CFG_TARGET_OS").expect("Failed to get build target OS");
+    let arch = env::var("CARGO_CFG_TARGET_ARCH").expect("Failed to get build target architecture");
 
     println!("cargo:rustc-check-cfg=cfg(has_seccomp_support)");
-    match os {
-        Os::Linux | Os::Android => {
-            match arch {
+    match os.as_str() {
+        "linux" | "android" => {
+            match arch.as_str() {
                 // This is what `seccompiler` currently supports:
-                Arch::X86_64 | Arch::AARCH64 => {
+                "x86_64" | "aarch64" => {
                     println!("cargo:rustc-cfg=has_seccomp_support");
                 }
                 _ => (),

@@ -19,7 +19,4 @@ anyhow = { workspace = true }
 libc = { workspace = true }
 seccompiler = { workspace = true }
 
-[build-dependencies]
-build-target = { workspace = true }
-
 # vim: ts=4 sw=4 expandtab
