@@ -1,6 +1,6 @@
 // -*- coding: utf-8 -*-
 //
-// Copyright (C) 2024 Michael Büsch <m@bues.ch>
+// Copyright (C) 2024-2025 Michael Büsch <m@bues.ch>
 //
 // Licensed under the Apache License version 2.0
 // or the MIT license, at your option.
@@ -92,9 +92,30 @@ impl Ini {
     /// Note that the parser state will be cleared before adding new items
     /// from the string.
     pub fn parse_str(&mut self, content: &str) -> ah::Result<()> {
-        let mut sections = HashMap::new();
+        let mut sections: HashMap<String, IniSection> = HashMap::new();
         let mut in_section = None;
+        let mut cur_opt_name = None;
+
         for line in content.lines() {
+            // Check if this is an option content multi-line continuation.
+            if let Some(opt_name) = &cur_opt_name {
+                if let Some(section) = &in_section {
+                    if line.starts_with([' ', '\t']) && !line.trim().is_empty() {
+                        // Append to the value.
+                        let opt_value = sections
+                            .get_mut(section)
+                            .unwrap()
+                            .options_mut()
+                            .get_mut(opt_name)
+                            .unwrap();
+                        opt_value.push(' ');
+                        opt_value.push_str(line.trim_start());
+                        continue;
+                    }
+                }
+                cur_opt_name = None;
+            }
+
             let line = line.trim_start();
             if line.is_empty() {
                 continue; // This is an empty line.
@@ -102,6 +123,7 @@ impl Ini {
             if line.starts_with('#') {
                 continue; // This is a comment.
             }
+
             // Section start?
             if line.starts_with('[') {
                 let line = line.trim_end();
@@ -122,6 +144,7 @@ impl Ini {
                     return Err(err!("Invalid section name: '{line}'"));
                 }
             }
+
             // Are we inside of a section?
             if let Some(section) = &in_section {
                 if let Some(idx) = line.find('=') {
@@ -134,7 +157,8 @@ impl Ini {
                             .get_mut(section)
                             .unwrap()
                             .options_mut()
-                            .insert(opt_name, opt_value);
+                            .insert(opt_name.to_string(), opt_value);
+                        cur_opt_name = Some(opt_name);
                     } else {
                         return Err(err!("Option has no name before equal sign '=': '{line}'"));
                     }
@@ -145,6 +169,7 @@ impl Ini {
                 return Err(err!("Option is not inside of a section: '{line}'"));
             }
         }
+
         self.sections = sections;
         Ok(())
     }
@@ -168,6 +193,105 @@ impl Ini {
 impl Default for Ini {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_parser_base() {
+        let text = "
+# Comment
+
+[SECTION]
+# Another comment
+
+# An option.
+# Yes, really an option.
+foo = bar
+
+biz-baz=1.0
+bzzzzz =brrrrrr\t
+
+[ANOTHER-SECTION]
+#option = commented out
+        ";
+
+        let mut ini = Ini::new();
+        ini.parse_str(text).unwrap();
+        for (name, value) in ini.options_iter("SECTION").unwrap() {
+            match name.as_str() {
+                "foo" => assert_eq!(value, " bar"),
+                "biz-baz" => assert_eq!(value, "1.0"),
+                "bzzzzz" => assert_eq!(value, "brrrrrr\t"),
+                _ => unreachable!(),
+            }
+        }
+        assert!(ini
+            .options_iter("ANOTHER-SECTION")
+            .unwrap()
+            .next()
+            .is_none());
+    }
+
+    #[test]
+    fn test_parser_continuation() {
+        let text = "
+[SECT1]
+opt = abc
+  def
+
+withtab =
+\tcontwithtab
+\t\tand another
+\t
+\t
+
+[SECT2]
+this = that
+  cont = oh no!
+nocont = ok
+\t
+  also-not-cont = :P
+
+not-comment =
+ # really not a comment
+        ";
+
+        let mut ini = Ini::new();
+        ini.parse_str(text).unwrap();
+        for (name, value) in ini.options_iter("SECT1").unwrap() {
+            match name.as_str() {
+                "opt" => assert_eq!(value, " abc def"),
+                "withtab" => assert_eq!(value, " contwithtab and another"),
+                _ => unreachable!(),
+            }
+        }
+        for (name, value) in ini.options_iter("SECT2").unwrap() {
+            match name.as_str() {
+                "this" => assert_eq!(value, " that cont = oh no!"),
+                "nocont" => assert_eq!(value, " ok"),
+                "also-not-cont" => assert_eq!(value, " :P"),
+                "not-comment" => assert_eq!(value, " # really not a comment"),
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Option has no equal sign '=': 'invalid'")]
+    fn test_parser_continuation_bad() {
+        let text = "
+[S]
+opt=val
+
+ invalid
+        ";
+
+        let mut ini = Ini::new();
+        ini.parse_str(text).unwrap();
     }
 }
 

@@ -13,8 +13,32 @@ If you installed letmein via distribution package or by other means, the configu
 - server: `/etc/letmeind.conf`
 - client: `/etc/letmein.conf`
 
+# Configuration file format
+
 The format of the configuration files is a very simple `ini`-style format.
 The files have multiple `[SECTIONS]` with `options=` and `# comments`.
+
+Comments are lines starting with a `#` character.
+Comments are are ignored and can contain arbitrary text.
+
+Options can be split into multiple lines.
+If the lines immediately following an `option = ...` start with a space character or a tab character, then these lines are appended to the option's value with one space character as a separator.
+
+Option split / line continuation example:
+
+```
+option = This is
+         a line
+         continuation
+nextopt = ...
+```
+
+is equal to
+
+```
+option = This is a line continuation
+nextopt = ...
+```
 
 # Common configuration parts
 
@@ -250,7 +274,7 @@ If this is an absolute path (with leading slash), then `$PATH` will not be searc
 If this is a relative path (no leading slash), then `$PATH` and/or the current working directory will be searched.
 
 This option can be used to either use an `nft` executable that cannot be found in `$PATH`.
-Or it can be used to harden against injection of forged a `nft` executable somewhere else in the `$PATH`.
+Or it can be used to harden against injection of a forged `nft` executable somewhere else in the `$PATH`.
 
 It is recommended to set this option to the abolute path of the `nft` executable of your Linux distribution.
 E.g.: `exe = /usr/sbin/nft`
@@ -259,7 +283,6 @@ There are a couple of minor restrictions for what the `exe` path can be.
 These restrictions are believed to be non-critical in actual real world use cases, but are listed here for completeness:
 
 - The path can't start or end with white space. White space at the start or at the end will be trimmed.
-- The path can't end with a backslash.
 - The path can't contain a newline character.
 - The path can't contain a non-UTF8 character.
 
