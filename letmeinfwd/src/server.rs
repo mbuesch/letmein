@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::{
-    firewall::{FirewallOpen, LeasePort},
+    firewall::{FirewallAction, FirewallJumpTargets, LeasePort},
     set_owner_mode, Opts, LETMEIND_GID, LETMEIND_UID,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
@@ -140,7 +140,7 @@ impl FirewallConnection {
     pub async fn handle_message(
         &mut self,
         conf: &Config,
-        fw: Arc<Mutex<impl FirewallOpen>>,
+        fw: Arc<Mutex<impl FirewallAction>>,
     ) -> ah::Result<()> {
         let Some(msg) = self.recv_msg().await? else {
             return Err(err!("Disconnected."));
@@ -180,10 +180,54 @@ impl FirewallConnection {
                             }
                         };
                     }
+                    _ => {
+                        let res = Err(err!(
+                            "The resource {} is not a port resource.",
+                            msg.resource()
+                        ));
+                        return self.send_result(res).await;
+                    }
                 }
 
                 // Open the firewall.
                 let res = fw.lock().await.open_port(conf, addr, lease_port).await;
+                self.send_result(res).await
+            }
+            FirewallOperation::Jump => {
+                // Compare the configuration checksum to ensure that
+                // letmeind and letmeinfwd have the same view of the configuration.
+                self.check_conf_checksum(conf, &msg).await?;
+
+                // Get the address from the socket message.
+                let addr = self.get_addr(&msg).await?;
+
+                // Get the resource from the socket message.
+                let resource = self.get_resource(conf, &msg).await?;
+
+                let targets = match resource {
+                    Resource::Jump {
+                        id,
+                        input,
+                        forward,
+                        output,
+                        ..
+                    } => FirewallJumpTargets {
+                        id,
+                        input,
+                        forward,
+                        output,
+                    },
+                    _ => {
+                        let res = Err(err!(
+                            "The resource {} is not a jump resource.",
+                            msg.resource()
+                        ));
+                        return self.send_result(res).await;
+                    }
+                };
+
+                // Add the jump-rules to the firewall.
+                let res = fw.lock().await.add_jump(conf, addr, &targets).await;
                 self.send_result(res).await
             }
             FirewallOperation::Ack | FirewallOperation::Nack => {

@@ -10,6 +10,7 @@ pub mod nftables;
 
 use anyhow as ah;
 use letmein_conf::Config;
+use letmein_proto::ResourceId;
 use std::{collections::HashMap, net::IpAddr, time::Instant};
 
 /// TCP and/or UDP port number.
@@ -51,17 +52,36 @@ impl std::fmt::Display for SingleLeasePort {
     }
 }
 
+#[derive(Clone)]
+enum LeaseType {
+    Port { port: LeasePort },
+    Jump { targets: FirewallJumpTargets },
+}
+
+impl std::fmt::Display for LeaseType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Port { port } => {
+                write!(f, "Port({port})")
+            }
+            Self::Jump { targets } => {
+                write!(f, "Jump({targets})")
+            }
+        }
+    }
+}
+
 /// Dynamic port/address lease.
 #[derive(Clone)]
 struct Lease {
     addr: IpAddr,
-    port: LeasePort,
     timeout: Instant,
+    type_: LeaseType,
 }
 
 impl Lease {
-    /// Create a new lease with maximum timeout.
-    pub fn new(conf: &Config, addr: IpAddr, port: LeasePort) -> Self {
+    /// Create a new port-lease with maximum timeout.
+    pub fn new_port(conf: &Config, addr: IpAddr, port: LeasePort) -> Self {
         // The upper layers must never give us a lease request for the control port.
         assert_ne!(
             conf.port().port,
@@ -71,11 +91,26 @@ impl Lease {
                 LeasePort::TcpUdp(p) => p,
             }
         );
+        Self::new(conf, addr, LeaseType::Port { port })
+    }
+
+    /// Create a new jump-lease with maximum timeout.
+    pub fn new_jump(conf: &Config, addr: IpAddr, targets: &FirewallJumpTargets) -> Self {
+        Self::new(
+            conf,
+            addr,
+            LeaseType::Jump {
+                targets: targets.clone(),
+            },
+        )
+    }
+
+    fn new(conf: &Config, addr: IpAddr, type_: LeaseType) -> Self {
         let timeout = Instant::now() + conf.nft_timeout();
         Self {
             addr,
-            port,
             timeout,
+            type_,
         }
     }
 
@@ -94,43 +129,55 @@ impl Lease {
         self.addr
     }
 
-    /// Get the port number of this lease.
-    pub fn port(&self) -> LeasePort {
-        self.port
+    /// Get the lease type.
+    pub fn type_(&self) -> &LeaseType {
+        &self.type_
     }
 }
 
 impl std::fmt::Display for Lease {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "Lease(addr={}, port={})", self.addr(), self.port())
+        write!(f, "Lease(addr={}, {})", self.addr(), self.type_())
     }
 }
 
-/// Key in the lease map.
-type LeaseId = (IpAddr, LeasePort);
+/// Key in the port lease map.
+type PortLeaseId = (IpAddr, LeasePort);
 
-/// A map of [Lease]s.
-type LeaseMap = HashMap<LeaseId, Lease>;
+/// A map of port [Lease]s.
+type PortLeaseMap = HashMap<PortLeaseId, Lease>;
 
-/// Prune (remove) all leases that have timed out.
-///
-/// Returns a `Vec` of pruned [Lease]s.
-/// If no lease timed out, an empty `Vec` is returned.
-#[must_use]
-fn prune_all_lease_timeouts(conf: &Config, leases: &mut LeaseMap) -> Vec<Lease> {
-    let mut pruned = vec![];
-    let now = Instant::now();
-    leases.retain(|_, lease| {
-        let timed_out = lease.is_timed_out(now);
-        if timed_out {
-            pruned.push(lease.clone());
-            if conf.debug() {
-                println!("firewall: {lease} timed out");
+/// Key in the jump lease map.
+type JumpLeaseId = (IpAddr, ResourceId);
+
+/// A map of jump [Lease]s.
+type JumpLeaseMap = HashMap<JumpLeaseId, Lease>;
+
+trait LeaseMapOps {
+    /// Prune (remove) all leases that have timed out.
+    ///
+    /// Returns a `Vec` of pruned [Lease]s.
+    /// If no lease timed out, an empty `Vec` is returned.
+    #[must_use]
+    fn prune_timeouts(&mut self, conf: &Config) -> Vec<Lease>;
+}
+
+impl<K> LeaseMapOps for HashMap<K, Lease> {
+    fn prune_timeouts(&mut self, conf: &Config) -> Vec<Lease> {
+        let mut pruned = vec![];
+        let now = Instant::now();
+        self.retain(|_, lease| {
+            let timed_out = lease.is_timed_out(now);
+            if timed_out {
+                pruned.push(lease.clone());
+                if conf.debug() {
+                    println!("firewall: {lease} timed out");
+                }
             }
-        }
-        !timed_out
-    });
-    pruned
+            !timed_out
+        });
+        pruned
+    }
 }
 
 /// Firewall maintenance operations.
@@ -144,8 +191,32 @@ pub trait FirewallMaintain {
     async fn maintain(&mut self, conf: &Config) -> ah::Result<()>;
 }
 
-/// Firewall knock-open operations.
-pub trait FirewallOpen {
+#[derive(Clone, Default)]
+pub struct FirewallJumpTargets {
+    pub id: ResourceId,
+    pub input: Option<String>,
+    pub forward: Option<String>,
+    pub output: Option<String>,
+}
+
+impl std::fmt::Display for FirewallJumpTargets {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "id={}", self.id)?;
+        if let Some(input) = &self.input {
+            write!(f, ", input={input}")?;
+        }
+        if let Some(forward) = &self.forward {
+            write!(f, ", forward={forward}")?;
+        }
+        if let Some(output) = &self.output {
+            write!(f, ", output={output}")?;
+        }
+        Ok(())
+    }
+}
+
+/// Firewall action operations.
+pub trait FirewallAction {
     /// Add a rule to open the specified `port` for the specified `remote_addr`.
     /// This operation shall handle the case where there already is such
     /// a rule present gracefully.
@@ -154,6 +225,16 @@ pub trait FirewallOpen {
         conf: &Config,
         remote_addr: IpAddr,
         port: LeasePort,
+    ) -> ah::Result<()>;
+
+    /// Add jump rules to jump to the specified processing rule chains.
+    /// This operation shall handle the case where there already is such
+    /// a rule present gracefully.
+    async fn add_jump(
+        &mut self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        targets: &FirewallJumpTargets,
     ) -> ah::Result<()>;
 }
 
