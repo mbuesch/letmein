@@ -706,6 +706,7 @@ name = "letmein-fwproto"
 version = "10.2.1"
 dependencies = [
  "anyhow",
+ "letmein-proto",
  "tokio",
 ]
 

@@ -182,6 +182,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                     ));
                 }
             }
+            Resource::Jump { .. } => (),
         }
 
         // Generate and send a challenge.
@@ -214,11 +215,23 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 if let Err(e) = self
                     .connect_to_fw()
                     .await?
-                    .open_port(self.conn.peer_addr().ip(), port_type, *port)
+                    .open_port(resource_id, self.conn.peer_addr().ip(), port_type, *port)
                     .await
                 {
                     let _ = self.send_go_away().await;
                     return Err(err!("letmeinfwd firewall open: {e}"));
+                }
+            }
+            Resource::Jump { .. } => {
+                // Send an add-jump request to letmeinfwd.
+                if let Err(e) = self
+                    .connect_to_fw()
+                    .await?
+                    .jump(resource_id, self.conn.peer_addr().ip())
+                    .await
+                {
+                    let _ = self.send_go_away().await;
+                    return Err(err!("letmeinfwd firewall jump: {e}"));
                 }
             }
         }

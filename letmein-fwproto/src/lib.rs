@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 use anyhow::{self as ah, format_err as err, Context as _};
+use letmein_proto::ResourceId;
 use std::{
     future::Future,
     net::{IpAddr, Ipv4Addr},
@@ -41,6 +42,8 @@ pub enum FirewallOperation {
     Ack,
     /// Open a port.
     Open,
+    /// Add a jump rule.
+    Jump,
 }
 
 impl TryFrom<u16> for FirewallOperation {
@@ -50,10 +53,12 @@ impl TryFrom<u16> for FirewallOperation {
         const OPERATION_OPEN: u16 = FirewallOperation::Open as u16;
         const OPERATION_ACK: u16 = FirewallOperation::Ack as u16;
         const OPERATION_NACK: u16 = FirewallOperation::Nack as u16;
+        const OPERATION_JUMP: u16 = FirewallOperation::Jump as u16;
         match value {
             OPERATION_OPEN => Ok(Self::Open),
             OPERATION_ACK => Ok(Self::Ack),
             OPERATION_NACK => Ok(Self::Nack),
+            OPERATION_JUMP => Ok(Self::Jump),
             _ => Err(err!("Invalid FirewallMessage/Operation value")),
         }
     }
@@ -135,27 +140,31 @@ impl From<AddrType> for u16 {
 const ADDR_SIZE: usize = 16;
 
 /// Size of the firewall control message.
-const FWMSG_SIZE: usize = 2 + 2 + 2 + 2 + ADDR_SIZE;
+const FWMSG_SIZE: usize = 2 + 4 + 2 + 2 + 2 + ADDR_SIZE;
 
 /// Byte offset of the `operation` field in the firewall control message.
 const FWMSG_OFFS_OPERATION: usize = 0;
 
+/// Byte offset of the `resource` field in the firewall control message.
+const FWMSG_OFFS_RESOURCE: usize = 2;
+
 /// Byte offset of the `port_type` field in the firewall control message.
-const FWMSG_OFFS_PORT_TYPE: usize = 2;
+const FWMSG_OFFS_PORT_TYPE: usize = 6;
 
 /// Byte offset of the `port` field in the firewall control message.
-const FWMSG_OFFS_PORT: usize = 4;
+const FWMSG_OFFS_PORT: usize = 8;
 
 /// Byte offset of the `addr_type` field in the firewall control message.
-const FWMSG_OFFS_ADDR_TYPE: usize = 6;
+const FWMSG_OFFS_ADDR_TYPE: usize = 10;
 
 /// Byte offset of the `addr` field in the firewall control message.
-const FWMSG_OFFS_ADDR: usize = 8;
+const FWMSG_OFFS_ADDR: usize = 12;
 
 /// A message to control the firewall.
 #[derive(PartialEq, Eq, Debug, Default)]
 pub struct FirewallMessage {
     operation: FirewallOperation,
+    resource: ResourceId,
     port_type: PortType,
     port: u16,
     addr_type: AddrType,
@@ -186,14 +195,26 @@ fn octets_to_addr(addr_type: AddrType, addr: &[u8; ADDR_SIZE]) -> IpAddr {
 
 impl FirewallMessage {
     /// Construct a new message that requests installing a firewall-port-open rule.
-    pub fn new_open(addr: IpAddr, port_type: PortType, port: u16) -> Self {
+    pub fn new_open(resource: ResourceId, addr: IpAddr, port_type: PortType, port: u16) -> Self {
         let (addr_type, addr) = addr_to_octets(addr);
         Self {
             operation: FirewallOperation::Open,
+            resource,
             port_type,
             port,
             addr_type,
             addr,
+        }
+    }
+
+    pub fn new_jump(resource: ResourceId, addr: IpAddr) -> Self {
+        let (addr_type, addr) = addr_to_octets(addr);
+        Self {
+            operation: FirewallOperation::Jump,
+            resource,
+            addr_type,
+            addr,
+            ..Default::default()
         }
     }
 
@@ -218,18 +239,25 @@ impl FirewallMessage {
         self.operation
     }
 
+    /// Get the resource ID from this message.
+    pub fn resource(&self) -> ResourceId {
+        self.resource
+    }
+
     /// Get the port number from this message.
     pub fn port(&self) -> Option<(PortType, u16)> {
         match self.operation {
             FirewallOperation::Open => Some((self.port_type, self.port)),
-            FirewallOperation::Ack | FirewallOperation::Nack => None,
+            FirewallOperation::Ack | FirewallOperation::Nack | FirewallOperation::Jump => None,
         }
     }
 
     /// Get the `IpAddr` from this message.
     pub fn addr(&self) -> Option<IpAddr> {
         match self.operation {
-            FirewallOperation::Open => Some(octets_to_addr(self.addr_type, &self.addr)),
+            FirewallOperation::Open | FirewallOperation::Jump => {
+                Some(octets_to_addr(self.addr_type, &self.addr))
+            }
             FirewallOperation::Ack | FirewallOperation::Nack => None,
         }
     }
@@ -244,8 +272,14 @@ impl FirewallMessage {
             buf[0..2].copy_from_slice(&value.to_be_bytes());
         }
 
+        #[inline]
+        fn serialize_u32(buf: &mut [u8], value: u32) {
+            buf[0..4].copy_from_slice(&value.to_be_bytes());
+        }
+
         let mut buf = [0; FWMSG_SIZE];
         serialize_u16(&mut buf[FWMSG_OFFS_OPERATION..], self.operation.into());
+        serialize_u32(&mut buf[FWMSG_OFFS_RESOURCE..], self.resource.into());
         serialize_u16(&mut buf[FWMSG_OFFS_PORT_TYPE..], self.port_type.into());
         serialize_u16(&mut buf[FWMSG_OFFS_PORT..], self.port);
         serialize_u16(&mut buf[FWMSG_OFFS_ADDR_TYPE..], self.addr_type.into());
@@ -268,7 +302,13 @@ impl FirewallMessage {
             Ok(u16::from_be_bytes(buf[0..2].try_into()?))
         }
 
+        #[inline]
+        fn deserialize_u32(buf: &[u8]) -> ah::Result<u32> {
+            Ok(u32::from_be_bytes(buf[0..4].try_into()?))
+        }
+
         let operation = deserialize_u16(&buf[FWMSG_OFFS_OPERATION..])?;
+        let resource = deserialize_u32(&buf[FWMSG_OFFS_RESOURCE..])?;
         let port_type = deserialize_u16(&buf[FWMSG_OFFS_PORT_TYPE..])?;
         let port = deserialize_u16(&buf[FWMSG_OFFS_PORT..])?;
         let addr_type = deserialize_u16(&buf[FWMSG_OFFS_ADDR_TYPE..])?;
@@ -276,6 +316,7 @@ impl FirewallMessage {
 
         Ok(Self {
             operation: operation.try_into()?,
+            resource: resource.into(),
             port_type: port_type.try_into()?,
             port,
             addr_type: addr_type.try_into()?,
@@ -379,13 +420,19 @@ mod tests {
 
     #[test]
     fn test_msg_open_v6() {
-        let msg = FirewallMessage::new_open("::1".parse().unwrap(), PortType::Tcp, 0x9876);
+        let msg = FirewallMessage::new_open(
+            0xAABB9988.into(),
+            "::1".parse().unwrap(),
+            PortType::Tcp,
+            0x9876,
+        );
         assert_eq!(msg.operation(), FirewallOperation::Open);
         assert_eq!(msg.port(), Some((PortType::Tcp, 0x9876)));
         assert_eq!(msg.addr(), Some("::1".parse().unwrap()));
         check_ser_de(&msg);
 
         let msg = FirewallMessage::new_open(
+            0xAABB9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
             PortType::Tcp,
             0x9876,
@@ -395,6 +442,7 @@ mod tests {
             bytes,
             [
                 0x00, 0x02, // operation
+                0xAA, 0xBB, 0x99, 0x88, // resource
                 0x00, 0x00, // port_type
                 0x98, 0x76, // port
                 0x00, 0x00, // addr_type
@@ -404,6 +452,7 @@ mod tests {
         );
 
         let msg = FirewallMessage::new_open(
+            0xAABB9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
             PortType::Udp,
             0x9876,
@@ -413,6 +462,7 @@ mod tests {
             bytes,
             [
                 0x00, 0x02, // operation
+                0xAA, 0xBB, 0x99, 0x88, // resource
                 0x00, 0x01, // port_type
                 0x98, 0x76, // port
                 0x00, 0x00, // addr_type
@@ -422,6 +472,7 @@ mod tests {
         );
 
         let msg = FirewallMessage::new_open(
+            0xAABB9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
             PortType::TcpUdp,
             0x9876,
@@ -431,6 +482,7 @@ mod tests {
             bytes,
             [
                 0x00, 0x02, // operation
+                0xAA, 0xBB, 0x99, 0x88, // resource
                 0x00, 0x02, // port_type
                 0x98, 0x76, // port
                 0x00, 0x00, // addr_type
@@ -442,7 +494,12 @@ mod tests {
 
     #[test]
     fn test_msg_open_v4() {
-        let msg = FirewallMessage::new_open("1.2.3.4".parse().unwrap(), PortType::Tcp, 0x9876);
+        let msg = FirewallMessage::new_open(
+            0xAABB9988.into(),
+            "1.2.3.4".parse().unwrap(),
+            PortType::Tcp,
+            0x9876,
+        );
         assert_eq!(msg.operation(), FirewallOperation::Open);
         assert_eq!(msg.port(), Some((PortType::Tcp, 0x9876)));
         assert_eq!(msg.addr(), Some("1.2.3.4".parse().unwrap()));
@@ -453,6 +510,7 @@ mod tests {
             bytes,
             [
                 0x00, 0x02, // operation
+                0xAA, 0xBB, 0x99, 0x88, // resource
                 0x00, 0x00, // port_type
                 0x98, 0x76, // port
                 0x00, 0x01, // addr_type
@@ -475,6 +533,7 @@ mod tests {
             bytes,
             [
                 0x00, 0x01, // operation
+                0x00, 0x00, 0x00, 0x00, // resource
                 0x00, 0x00, // port_type
                 0x00, 0x00, // port
                 0x00, 0x00, // addr_type
@@ -497,6 +556,7 @@ mod tests {
             bytes,
             [
                 0x00, 0x00, // operation
+                0x00, 0x00, 0x00, 0x00, // resource
                 0x00, 0x00, // port_type
                 0x00, 0x00, // port
                 0x00, 0x00, // addr_type

@@ -91,12 +91,19 @@ pub enum Resource {
         udp: bool,
         users: Vec<UserId>,
     },
+    Jump {
+        input: Option<String>,
+        forward: Option<String>,
+        output: Option<String>,
+        users: Vec<UserId>,
+    },
 }
 
 impl Resource {
     pub fn contains_user(&self, id: UserId) -> bool {
         let users = match self {
             Self::Port { users, .. } => users,
+            Self::Jump { users, .. } => users,
         };
         if users.is_empty() {
             // This resource is unrestricted.
@@ -359,6 +366,7 @@ fn extract_resource_port(
                     ));
                 }
             }
+            Resource::Jump { .. } => (),
         }
     }
 
@@ -374,7 +382,72 @@ fn extract_resource_port(
     Ok(())
 }
 
-#[allow(clippy::single_match)]
+fn extract_resource_jump(
+    id: ResourceId,
+    resources: &mut HashMap<ResourceId, Resource>,
+    map: &Map,
+) -> ah::Result<()> {
+    let mut input: Option<String> = None;
+    let mut forward: Option<String> = None;
+    let mut output: Option<String> = None;
+    let mut users: Vec<String> = vec![];
+
+    for item in map.items() {
+        match item {
+            MapItem::KeyValues(k, vs) => {
+                if k == "jump" {
+                    return Err(err!("[RESOURCE] invalid 'jump' option"));
+                } else if k == "input" {
+                    if vs.len() == 1 {
+                        input = Some(vs[0].to_string());
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'input' option"));
+                    }
+                } else if k == "forward" {
+                    if vs.len() == 1 {
+                        forward = Some(vs[0].to_string());
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'forward' option"));
+                    }
+                } else if k == "output" {
+                    if vs.len() == 1 {
+                        output = Some(vs[0].to_string());
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'output' option"));
+                    }
+                } else if k == "users" {
+                    if !users.is_empty() {
+                        return Err(err!("[RESOURCE] multiple 'users' values"));
+                    }
+                    users = vs.clone();
+                } else {
+                    return Err(err!("[RESOURCE] unknown option: {k}"));
+                }
+            }
+            MapItem::Values(vs) => {
+                if vs.len() == 1 && vs[0] == "jump" {
+                    // jump resource.
+                } else {
+                    return Err(err!("[RESOURCE] unknown values: {vs:?}"));
+                }
+            }
+        }
+    }
+
+    let users = extract_users(id, &users)?;
+
+    resources.insert(
+        id,
+        Resource::Jump {
+            input,
+            forward,
+            output,
+            users,
+        },
+    );
+    Ok(())
+}
+
 fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
     let mut resources = HashMap::new();
     if let Some(options) = ini.options_iter("RESOURCES") {
@@ -391,16 +464,20 @@ fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
 
             let map = resource.parse::<Map>().context("[RESOURCES]")?;
             let mut is_port = false;
+            let mut is_jump = false;
 
             for item in map.items() {
                 match item.key() {
                     Some("port") => is_port = true,
+                    Some("jump") => is_jump = true,
                     _ => (),
                 }
             }
 
-            if is_port {
+            if is_port && !is_jump {
                 extract_resource_port(id, &mut resources, &map)?;
+            } else if !is_port && is_jump {
+                extract_resource_jump(id, &mut resources, &map)?;
             } else {
                 return Err(err!(
                     "[RESOURCE] Resource ID '{id}' is neither a 'port' not a 'jump' resource."
@@ -642,6 +719,7 @@ impl Config {
                         }
                     }
                 }
+                Resource::Jump { .. } => (),
             }
         }
         None
@@ -833,6 +911,51 @@ mod tests {
                 tcp: true,
                 udp: true,
                 users: vec![4.into()]
+            }
+        );
+    }
+
+    #[test]
+    fn test_resources_jump() {
+        let mut ini = Ini::new();
+        ini.parse_str("[RESOURCES]\n1234FEDC = jump / input: FOO\n")
+            .unwrap();
+        let resources = get_resources(&ini).unwrap();
+        assert_eq!(
+            resources.get(&0x1234FEDC.into()).unwrap(),
+            &Resource::Jump {
+                input: Some("FOO".to_string()),
+                forward: None,
+                output: None,
+                users: vec![]
+            }
+        );
+
+        let mut ini = Ini::new();
+        ini.parse_str("[RESOURCES]\n1234FEDC = jump / input: FOO / forward:BAR\n")
+            .unwrap();
+        let resources = get_resources(&ini).unwrap();
+        assert_eq!(
+            resources.get(&0x1234FEDC.into()).unwrap(),
+            &Resource::Jump {
+                input: Some("FOO".to_string()),
+                forward: Some("BAR".to_string()),
+                output: None,
+                users: vec![]
+            }
+        );
+
+        let mut ini = Ini::new();
+        ini.parse_str("[RESOURCES]\n1234FEDC = jump / input: FOO / forward:BAR / output: BIZ / users: 1, 10, 100\n")
+            .unwrap();
+        let resources = get_resources(&ini).unwrap();
+        assert_eq!(
+            resources.get(&0x1234FEDC.into()).unwrap(),
+            &Resource::Jump {
+                input: Some("FOO".to_string()),
+                forward: Some("BAR".to_string()),
+                output: Some("BIZ".to_string()),
+                users: vec![0x1.into(), 0x10.into(), 0x100.into()]
             }
         );
     }

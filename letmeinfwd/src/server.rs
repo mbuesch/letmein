@@ -136,6 +136,9 @@ impl FirewallConnection {
                     self.send_msg(&FirewallMessage::new_nack()).await?;
                 }
             }
+            FirewallOperation::Jump => {
+                todo!()
+            }
             FirewallOperation::Ack | FirewallOperation::Nack => {
                 return Err(err!("Received invalid message"));
             }

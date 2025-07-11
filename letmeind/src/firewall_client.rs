@@ -8,6 +8,7 @@
 
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
+use letmein_proto::ResourceId;
 use std::{net::IpAddr, path::Path};
 use tokio::net::UnixStream;
 
@@ -39,19 +40,34 @@ impl FirewallClient {
         match msg_reply.operation() {
             FirewallOperation::Ack => Ok(()),
             FirewallOperation::Nack => Err(err!("The firewall rejected the request")),
-            FirewallOperation::Open => Err(err!("Received invalid reply")),
+            FirewallOperation::Open | FirewallOperation::Jump => {
+                Err(err!("Received invalid reply"))
+            }
         }
     }
 
     /// Send a request to open a firewall `port` for the specified `addr`.
     pub async fn open_port(
         &mut self,
+        resource: ResourceId,
         addr: IpAddr,
         port_type: PortType,
         port: u16,
     ) -> ah::Result<()> {
         // Send an open-port request to the firewall daemon.
-        FirewallMessage::new_open(addr, port_type, port)
+        FirewallMessage::new_open(resource, addr, port_type, port)
+            .send(&mut self.stream)
+            .await
+            .context("Send port-open message")?;
+
+        // Receive the acknowledge reply.
+        self.recv_ack().await
+    }
+
+    /// Send a request to add a firewall "jump" rule.
+    pub async fn jump(&mut self, resource: ResourceId, addr: IpAddr) -> ah::Result<()> {
+        // Send an open-port request to the firewall daemon.
+        FirewallMessage::new_jump(resource, addr)
             .send(&mut self.stream)
             .await
             .context("Send port-open message")?;
