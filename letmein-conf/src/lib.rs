@@ -95,19 +95,14 @@ pub enum Resource {
 
 impl Resource {
     pub fn contains_user(&self, id: UserId) -> bool {
-        match self {
-            Self::Port {
-                port: _,
-                tcp: _,
-                udp: _,
-                users,
-            } => {
-                if users.is_empty() {
-                    // This resource is unrestricted.
-                    return true;
-                }
-                users.contains(&id)
-            }
+        let users = match self {
+            Self::Port { users, .. } => users,
+        };
+        if users.is_empty() {
+            // This resource is unrestricted.
+            true
+        } else {
+            users.contains(&id)
         }
     }
 }
@@ -214,7 +209,7 @@ fn get_port(ini: &Ini) -> ah::Result<ControlPort> {
         let map = port.parse::<Map>().context("[GENERAL] port")?;
         for item in map.items() {
             match item {
-                MapItem::KeyValue(k, _) | MapItem::KeyValues(k, _) => {
+                MapItem::KeyValues(k, _) => {
                     return Err(err!("[GENERAL] port: Unknown option: {k}"));
                 }
                 MapItem::Values(vs) => {
@@ -285,102 +280,132 @@ fn get_keys(ini: &Ini) -> ah::Result<HashMap<UserId, Key>> {
     Ok(keys)
 }
 
-fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
-    let mut resources = HashMap::new();
-    if let Some(options) = ini.options_iter("RESOURCES") {
-        for (id, resource) in options {
-            let id = id.parse().context("[RESOURCES]")?;
-            let map = resource.parse::<Map>().context("[RESOURCES]")?;
+fn extract_users(id: ResourceId, users: &[String]) -> ah::Result<Vec<UserId>> {
+    let mut ret = Vec::with_capacity(users.len());
+    for user in users {
+        if let Ok(user) = user.parse() {
+            ret.push(user);
+        } else {
+            return Err(err!("[RESOURCE] '{id}': 'user' id is invalid"));
+        }
+    }
+    Ok(ret)
+}
 
-            let mut port: Option<u16> = None;
-            let mut users: Vec<String> = vec![];
-            let mut tcp = false;
-            let mut udp = false;
+fn extract_resource_port(
+    id: ResourceId,
+    resources: &mut HashMap<ResourceId, Resource>,
+    map: &Map,
+) -> ah::Result<()> {
+    let mut port: Option<u16> = None;
+    let mut users: Vec<String> = vec![];
+    let mut tcp = false;
+    let mut udp = false;
 
-            for item in map.items() {
-                match item {
-                    MapItem::KeyValue(k, v) => {
-                        if k == "port" {
-                            if port.is_some() {
-                                return Err(err!("[RESOURCE] multiple 'port' values"));
-                            }
-                            port = Some(parse_u16(v).context("[RESOURCES] port")?);
-                        } else if k == "users" {
-                            if !users.is_empty() {
-                                return Err(err!("[RESOURCE] multiple 'users' values"));
-                            }
-                            users.push(v.clone());
-                        } else {
-                            return Err(err!("[RESOURCE] unknown option: {k}"));
+    for item in map.items() {
+        match item {
+            MapItem::KeyValues(k, vs) => {
+                if k == "port" {
+                    if vs.len() == 1 {
+                        if port.is_some() {
+                            return Err(err!("[RESOURCE] multiple 'port' values"));
                         }
+                        port = Some(parse_u16(&vs[0]).context("[RESOURCES] port")?);
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'port' option"));
                     }
-                    MapItem::KeyValues(k, vs) => {
-                        if k == "port" {
-                            return Err(err!("[RESOURCE] invalid 'port' option"));
-                        } else if k == "users" {
-                            if !users.is_empty() {
-                                return Err(err!("[RESOURCE] multiple 'users' values"));
-                            }
-                            users = vs.clone();
-                        } else {
-                            return Err(err!("[RESOURCE] unknown option: {k}"));
-                        }
+                } else if k == "users" {
+                    if !users.is_empty() {
+                        return Err(err!("[RESOURCE] multiple 'users' values"));
                     }
-                    MapItem::Values(vs) => {
-                        for v in vs {
-                            match &v.to_lowercase()[..] {
-                                "tcp" => {
-                                    tcp = true;
-                                }
-                                "udp" => {
-                                    udp = true;
-                                }
-                                v => {
-                                    return Err(err!("[RESOURCE] unknown option: {v}"));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if !tcp && !udp {
-                // Default, if no tcp/udp option is given.
-                tcp = true;
-            }
-            let Some(port) = port else {
-                return Err(err!("[RESOURCE] '{id}': No 'port' value present"));
-            };
-
-            let mut res_users = vec![];
-            for user in users {
-                if let Ok(user) = user.parse() {
-                    res_users.push(user);
+                    users = vs.clone();
                 } else {
-                    return Err(err!("[RESOURCE] '{id}': 'user' id is invalid"));
+                    return Err(err!("[RESOURCE] unknown option: {k}"));
                 }
             }
-
-            for (res_id, res) in &resources {
-                let Resource::Port { port: res_port, .. } = res;
-                if *res_id == id {
-                    return Err(err!(
-                        "[RESOURCE] Multiple definitions of resource ID '{id}'"
-                    ));
+            MapItem::Values(vs) => {
+                for v in vs {
+                    match &v.to_lowercase()[..] {
+                        "tcp" => {
+                            tcp = true;
+                        }
+                        "udp" => {
+                            udp = true;
+                        }
+                        v => {
+                            return Err(err!("[RESOURCE] unknown option: {v}"));
+                        }
+                    }
                 }
+            }
+        }
+    }
+    if !tcp && !udp {
+        // Default, if no tcp/udp option is given.
+        tcp = true;
+    }
+    let Some(port) = port else {
+        return Err(err!("[RESOURCE] '{id}': No 'port' value present"));
+    };
+
+    let users = extract_users(id, &users)?;
+
+    for (_, res) in resources.iter() {
+        match res {
+            Resource::Port { port: res_port, .. } => {
                 if *res_port == port {
                     return Err(err!(
                         "[RESOURCE] Multiple definitions of resource port '{port}'"
                     ));
                 }
             }
+        }
+    }
 
-            let res = Resource::Port {
-                port,
-                tcp,
-                udp,
-                users: res_users,
+    resources.insert(
+        id,
+        Resource::Port {
+            port,
+            tcp,
+            udp,
+            users,
+        },
+    );
+    Ok(())
+}
+
+#[allow(clippy::single_match)]
+fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
+    let mut resources = HashMap::new();
+    if let Some(options) = ini.options_iter("RESOURCES") {
+        for (id, resource) in options {
+            let id: ResourceId = id.parse().context("[RESOURCES]")?;
+
+            for res_id in resources.keys() {
+                if *res_id == id {
+                    return Err(err!(
+                        "[RESOURCE] Multiple definitions of resource ID '{id}'"
+                    ));
+                }
+            }
+
+            let map = resource.parse::<Map>().context("[RESOURCES]")?;
+            let mut is_port = false;
+
+            for item in map.items() {
+                match item.key() {
+                    Some("port") => is_port = true,
+                    _ => (),
+                }
+            }
+
+            if is_port {
+                extract_resource_port(id, &mut resources, &map)?;
+            } else {
+                return Err(err!(
+                    "[RESOURCE] Resource ID '{id}' is neither a 'port' not a 'jump' resource."
+                ));
             };
-            resources.insert(id, res);
         }
     }
     Ok(resources)
@@ -754,7 +779,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resources() {
+    fn test_resources_port() {
         let mut ini = Ini::new();
         ini.parse_str("[RESOURCES]\n9876ABCD = port : 4096\n")
             .unwrap();

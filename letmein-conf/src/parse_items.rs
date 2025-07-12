@@ -10,9 +10,23 @@ use anyhow::{self as ah, format_err as err};
 use std::str::FromStr;
 
 pub enum MapItem {
-    KeyValue(String, String),
     KeyValues(String, Vec<String>),
     Values(Vec<String>),
+}
+
+impl MapItem {
+    pub fn key(&self) -> Option<&str> {
+        match self {
+            Self::KeyValues(k, _) => Some(k),
+            Self::Values(values) => {
+                if values.len() == 1 {
+                    Some(&values[0])
+                } else {
+                    None
+                }
+            }
+        }
+    }
 }
 
 pub struct Map {
@@ -36,14 +50,10 @@ impl FromStr for Map {
                     return Err(err!("Invalid item key."));
                 }
                 let value = &item[idx + chlen..];
-                if value.find(',').is_some() {
-                    MapItem::KeyValues(
-                        key.to_string(),
-                        value.split(',').map(|v| v.trim().to_string()).collect(),
-                    )
-                } else {
-                    MapItem::KeyValue(key.to_string(), value.trim().to_string())
-                }
+                MapItem::KeyValues(
+                    key.to_string(),
+                    value.split(',').map(|v| v.trim().to_string()).collect(),
+                )
             } else {
                 let values = item.split(',');
                 let values: Vec<String> = values.map(|s| s.trim().to_string()).collect();
