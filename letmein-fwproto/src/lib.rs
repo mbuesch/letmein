@@ -47,13 +47,13 @@ impl TryFrom<u16> for FirewallOperation {
     type Error = ah::Error;
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
-        const OPERATION_OPEN: u16 = FirewallOperation::Open as u16;
-        const OPERATION_ACK: u16 = FirewallOperation::Ack as u16;
         const OPERATION_NACK: u16 = FirewallOperation::Nack as u16;
+        const OPERATION_ACK: u16 = FirewallOperation::Ack as u16;
+        const OPERATION_OPEN: u16 = FirewallOperation::Open as u16;
         match value {
-            OPERATION_OPEN => Ok(Self::Open),
-            OPERATION_ACK => Ok(Self::Ack),
             OPERATION_NACK => Ok(Self::Nack),
+            OPERATION_ACK => Ok(Self::Ack),
+            OPERATION_OPEN => Ok(Self::Open),
             _ => Err(err!("Invalid FirewallMessage/Operation value")),
         }
     }
