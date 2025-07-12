@@ -116,6 +116,17 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         .await
     }
 
+    async fn connect_to_fw(&mut self) -> ah::Result<FirewallClient> {
+        assert_eq!(self.auth_state, AuthState::ChallengeResponseAuth);
+        match FirewallClient::new(self.rundir).await {
+            Err(e) => {
+                let _ = self.send_go_away().await;
+                Err(err!("Failed to connect to letmeinfwd: {e}"))
+            }
+            Ok(fw) => Ok(fw),
+        }
+    }
+
     pub async fn run(&mut self) -> ah::Result<()> {
         self.user_id = None;
         self.resource_id = None;
@@ -151,20 +162,16 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         };
 
         // Check if the authenticating user is allowed to access this resource.
+        if !resource.contains_user(user_id) {
+            let _ = self.send_go_away().await;
+            return Err(err!(
+                "Resource {resource_id} not allowed for user {user_id}"
+            ));
+        }
+
+        // Check if trying to knock the control port.
         match resource {
-            Resource::Port {
-                port,
-                tcp: _,
-                udp: _,
-                users: _,
-            } => {
-                // Check the mapped user on the resource.
-                if !resource.contains_user(user_id) {
-                    let _ = self.send_go_away().await;
-                    return Err(err!(
-                        "Resource {resource_id} not allowed for user {user_id}"
-                    ));
-                }
+            Resource::Port { port, .. } => {
                 // The control port is never allowed.
                 let control_port = self.conf.port().port;
                 if *port == control_port {
@@ -194,12 +201,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Reconfigure the firewall.
         match resource {
-            Resource::Port {
-                port,
-                tcp,
-                udp,
-                users: _,
-            } => {
+            Resource::Port { port, tcp, udp, .. } => {
                 // Port type to open.
                 let port_type = match (tcp, udp) {
                     (true, false) => PortType::Tcp,
@@ -208,18 +210,10 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                     (false, false) => unreachable!(),
                 };
 
-                // Connect to letmeinfwd unix socket.
-                let mut fw = match FirewallClient::new(self.rundir).await {
-                    Err(e) => {
-                        let _ = self.send_go_away().await;
-                        return Err(err!("Failed to connect to letmeinfwd: {e}"));
-                    }
-                    Ok(fw) => fw,
-                };
-
                 // Send an open-port request to letmeinfwd.
-                assert_eq!(self.auth_state, AuthState::ChallengeResponseAuth);
-                if let Err(e) = fw
+                if let Err(e) = self
+                    .connect_to_fw()
+                    .await?
                     .open_port(self.conn.peer_addr().ip(), port_type, *port)
                     .await
                 {

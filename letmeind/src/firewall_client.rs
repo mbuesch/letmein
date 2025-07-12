@@ -27,6 +27,22 @@ impl FirewallClient {
         Ok(Self { stream })
     }
 
+    /// Receive an Ack message.
+    async fn recv_ack(&mut self) -> ah::Result<()> {
+        let Some(msg_reply) = FirewallMessage::recv(&mut self.stream)
+            .await
+            .context("Receive ack-reply")?
+        else {
+            return Err(err!("Connection terminated"));
+        };
+
+        match msg_reply.operation() {
+            FirewallOperation::Ack => Ok(()),
+            FirewallOperation::Nack => Err(err!("The firewall rejected the request")),
+            FirewallOperation::Open => Err(err!("Received invalid reply")),
+        }
+    }
+
     /// Send a request to open a firewall `port` for the specified `addr`.
     pub async fn open_port(
         &mut self,
@@ -40,19 +56,8 @@ impl FirewallClient {
             .await
             .context("Send port-open message")?;
 
-        // Receive the open-port reply.
-        let Some(msg_reply) = FirewallMessage::recv(&mut self.stream)
-            .await
-            .context("Receive port-open reply")?
-        else {
-            return Err(err!("Connection terminated"));
-        };
-
-        match msg_reply.operation() {
-            FirewallOperation::Ack => Ok(()),
-            FirewallOperation::Nack => Err(err!("The firewall rejected the port-open request")),
-            FirewallOperation::Open => Err(err!("Received invalid reply")),
-        }
+        // Receive the acknowledge reply.
+        self.recv_ack().await
     }
 }
 
