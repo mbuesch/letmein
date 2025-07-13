@@ -72,6 +72,15 @@ impl FirewallConnection {
         msg.send(&mut self.stream).await
     }
 
+    async fn send_result(&mut self, res: ah::Result<()>) -> ah::Result<()> {
+        if res.is_ok() {
+            self.send_msg(&FirewallMessage::new_ack()).await?;
+        } else {
+            self.send_msg(&FirewallMessage::new_nack()).await?;
+        }
+        res
+    }
+
     /// Handle the firewall daemon unix socket communication.
     pub async fn handle_message(
         &mut self,
@@ -85,36 +94,32 @@ impl FirewallConnection {
             FirewallOperation::Open => {
                 // Get the address from the socket message.
                 let Some(addr) = msg.addr() else {
-                    self.send_msg(&FirewallMessage::new_nack()).await?;
-                    return Err(err!("No addr."));
+                    return self.send_result(Err(err!("No addr."))).await;
                 };
-
                 // Check if addr is valid.
                 if !addr_check(&addr) {
-                    self.send_msg(&FirewallMessage::new_nack()).await?;
-                    return Err(err!("Invalid addr."));
+                    return self.send_result(Err(err!("Invalid addr."))).await;
                 }
 
                 // Get the port from the socket message.
                 let Some((port_type, port)) = msg.port() else {
-                    self.send_msg(&FirewallMessage::new_nack()).await?;
-                    return Err(err!("No port."));
+                    return self.send_result(Err(err!("No port."))).await;
                 };
 
                 // Check if the port is actually configured.
                 if conf.resource_id_by_port(port, None).is_none() {
                     // Whoops, letmeind should never send us a request for an
                     // unconfigured port. Did some other process write to the unix socket?
-                    self.send_msg(&FirewallMessage::new_nack()).await?;
-                    return Err(err!("The port {port} is not configured in letmeind.conf."));
+                    let res = Err(err!("The port {port} is not configured in letmeind.conf."));
+                    return self.send_result(res).await;
                 }
 
                 // Don't allow the user to manage the control port.
                 if port == conf.port().port {
                     // Whoops, letmeind should never send us a request for the
                     // control port. Did some other process write to the unix socket?
-                    self.send_msg(&FirewallMessage::new_nack()).await?;
-                    return Err(err!("The knocked port {port} is the letmein control port."));
+                    let res = Err(err!("The knocked port {port} is the letmein control port."));
+                    return self.send_result(res).await;
                 }
 
                 // Convert from protocol port type to lease port type.
@@ -125,22 +130,13 @@ impl FirewallConnection {
                 };
 
                 // Open the firewall.
-                let ok = {
-                    let mut fw = fw.lock().await;
-                    fw.open_port(conf, addr, lease_port).await.is_ok()
-                };
-
-                if ok {
-                    self.send_msg(&FirewallMessage::new_ack()).await?;
-                } else {
-                    self.send_msg(&FirewallMessage::new_nack()).await?;
-                }
+                let res = fw.lock().await.open_port(conf, addr, lease_port).await;
+                self.send_result(res).await
             }
             FirewallOperation::Ack | FirewallOperation::Nack => {
-                return Err(err!("Received invalid message"));
+                Err(err!("Received invalid message"))
             }
         }
-        Ok(())
     }
 }
 
