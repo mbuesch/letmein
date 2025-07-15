@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 use anyhow::{self as ah, format_err as err, Context as _};
+use letmein_conf::ConfigChecksum;
 use std::{
     future::Future,
     net::{IpAddr, Ipv4Addr},
@@ -134,8 +135,11 @@ impl From<AddrType> for u16 {
 /// Size of the `addr` field in the message.
 const ADDR_SIZE: usize = 16;
 
+/// Size of the `conf_cs` field in the message.
+const CONF_CS_SIZE: usize = ConfigChecksum::SIZE;
+
 /// Size of the firewall control message.
-const FWMSG_SIZE: usize = 2 + 2 + 2 + 2 + ADDR_SIZE;
+const FWMSG_SIZE: usize = 2 + 2 + 2 + 2 + ADDR_SIZE + CONF_CS_SIZE;
 
 /// Byte offset of the `operation` field in the firewall control message.
 const FWMSG_OFFS_OPERATION: usize = 0;
@@ -152,6 +156,9 @@ const FWMSG_OFFS_ADDR_TYPE: usize = 6;
 /// Byte offset of the `addr` field in the firewall control message.
 const FWMSG_OFFS_ADDR: usize = 8;
 
+/// Byte offset of the `conf_cs` field in the firewall control message.
+const FWMSG_OFFS_CONF_CS: usize = 24;
+
 /// A message to control the firewall.
 #[derive(PartialEq, Eq, Debug, Default)]
 pub struct FirewallMessage {
@@ -160,6 +167,7 @@ pub struct FirewallMessage {
     port: u16,
     addr_type: AddrType,
     addr: [u8; ADDR_SIZE],
+    conf_cs: ConfigChecksum,
 }
 
 /// Convert an `IpAddr` to the `operation` and `addr` fields of a firewall control message.
@@ -186,7 +194,12 @@ fn octets_to_addr(addr_type: AddrType, addr: &[u8; ADDR_SIZE]) -> IpAddr {
 
 impl FirewallMessage {
     /// Construct a new message that requests installing a firewall-port-open rule.
-    pub fn new_open(addr: IpAddr, port_type: PortType, port: u16) -> Self {
+    pub fn new_open(
+        addr: IpAddr,
+        port_type: PortType,
+        port: u16,
+        conf_cs: &ConfigChecksum,
+    ) -> Self {
         let (addr_type, addr) = addr_to_octets(addr);
         Self {
             operation: FirewallOperation::Open,
@@ -194,6 +207,7 @@ impl FirewallMessage {
             port,
             addr_type,
             addr,
+            conf_cs: conf_cs.clone(),
         }
     }
 
@@ -234,6 +248,14 @@ impl FirewallMessage {
         }
     }
 
+    /// Get the configuration checksum from this message.
+    pub fn conf_checksum(&self) -> Option<&ConfigChecksum> {
+        match self.operation {
+            FirewallOperation::Open => Some(&self.conf_cs),
+            FirewallOperation::Ack | FirewallOperation::Nack => None,
+        }
+    }
+
     /// Serialize this message into a byte stream.
     pub fn msg_serialize(&self) -> ah::Result<[u8; FWMSG_SIZE]> {
         // The serialization is simple enough to do manually.
@@ -250,6 +272,8 @@ impl FirewallMessage {
         serialize_u16(&mut buf[FWMSG_OFFS_PORT..], self.port);
         serialize_u16(&mut buf[FWMSG_OFFS_ADDR_TYPE..], self.addr_type.into());
         buf[FWMSG_OFFS_ADDR..FWMSG_OFFS_ADDR + ADDR_SIZE].copy_from_slice(&self.addr);
+        buf[FWMSG_OFFS_CONF_CS..FWMSG_OFFS_CONF_CS + CONF_CS_SIZE]
+            .copy_from_slice(self.conf_cs.as_bytes());
 
         Ok(buf)
     }
@@ -273,6 +297,7 @@ impl FirewallMessage {
         let port = deserialize_u16(&buf[FWMSG_OFFS_PORT..])?;
         let addr_type = deserialize_u16(&buf[FWMSG_OFFS_ADDR_TYPE..])?;
         let addr = &buf[FWMSG_OFFS_ADDR..FWMSG_OFFS_ADDR + ADDR_SIZE];
+        let conf_cs = &buf[FWMSG_OFFS_CONF_CS..FWMSG_OFFS_CONF_CS + CONF_CS_SIZE];
 
         Ok(Self {
             operation: operation.try_into()?,
@@ -280,6 +305,7 @@ impl FirewallMessage {
             port,
             addr_type: addr_type.try_into()?,
             addr: addr.try_into()?,
+            conf_cs: conf_cs.try_into()?,
         })
     }
 
@@ -379,7 +405,12 @@ mod tests {
 
     #[test]
     fn test_msg_open_v6() {
-        let msg = FirewallMessage::new_open("::1".parse().unwrap(), PortType::Tcp, 0x9876);
+        let msg = FirewallMessage::new_open(
+            "::1".parse().unwrap(),
+            PortType::Tcp,
+            0x9876,
+            &ConfigChecksum::calculate(b"foo"),
+        );
         assert_eq!(msg.operation(), FirewallOperation::Open);
         assert_eq!(msg.port(), Some((PortType::Tcp, 0x9876)));
         assert_eq!(msg.addr(), Some("::1".parse().unwrap()));
@@ -389,6 +420,7 @@ mod tests {
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
             PortType::Tcp,
             0x9876,
+            &ConfigChecksum::calculate(b"foo"),
         );
         let bytes = msg.msg_serialize().unwrap();
         assert_eq!(
@@ -400,6 +432,10 @@ mod tests {
                 0x00, 0x00, // addr_type
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
                 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
+                0xA9, 0x14, 0x20, 0xEB, 0x27, 0x9B, 0xD1, 0x96, // conf_cs
+                0x15, 0x04, 0x9D, 0x00, 0xD6, 0x07, 0x07, 0x35, // conf_cs
+                0xAF, 0xF1, 0xE9, 0x28, 0xC1, 0xBF, 0x9C, 0x65, // conf_cs
+                0x3F, 0x29, 0x22, 0x33, 0x11, 0xDD, 0x4C, 0xAA, // conf_cs
             ]
         );
 
@@ -407,6 +443,7 @@ mod tests {
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
             PortType::Udp,
             0x9876,
+            &ConfigChecksum::calculate(b"foo"),
         );
         let bytes = msg.msg_serialize().unwrap();
         assert_eq!(
@@ -418,6 +455,10 @@ mod tests {
                 0x00, 0x00, // addr_type
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
                 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
+                0xA9, 0x14, 0x20, 0xEB, 0x27, 0x9B, 0xD1, 0x96, // conf_cs
+                0x15, 0x04, 0x9D, 0x00, 0xD6, 0x07, 0x07, 0x35, // conf_cs
+                0xAF, 0xF1, 0xE9, 0x28, 0xC1, 0xBF, 0x9C, 0x65, // conf_cs
+                0x3F, 0x29, 0x22, 0x33, 0x11, 0xDD, 0x4C, 0xAA, // conf_cs
             ]
         );
 
@@ -425,6 +466,7 @@ mod tests {
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
             PortType::TcpUdp,
             0x9876,
+            &ConfigChecksum::calculate(b"bar"),
         );
         let bytes = msg.msg_serialize().unwrap();
         assert_eq!(
@@ -436,13 +478,22 @@ mod tests {
                 0x00, 0x00, // addr_type
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
                 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
+                0xFB, 0x58, 0xE5, 0x1D, 0x34, 0xB5, 0x6B, 0x33, // conf_cs
+                0x78, 0xF6, 0xEC, 0x2D, 0x4A, 0x54, 0x96, 0xC2, // conf_cs
+                0xAF, 0x00, 0xF2, 0x75, 0x02, 0x00, 0x0F, 0xD5, // conf_cs
+                0x98, 0xED, 0x31, 0x09, 0x73, 0x68, 0x50, 0x79, // conf_cs
             ]
         );
     }
 
     #[test]
     fn test_msg_open_v4() {
-        let msg = FirewallMessage::new_open("1.2.3.4".parse().unwrap(), PortType::Tcp, 0x9876);
+        let msg = FirewallMessage::new_open(
+            "1.2.3.4".parse().unwrap(),
+            PortType::Tcp,
+            0x9876,
+            &ConfigChecksum::calculate(b"foo"),
+        );
         assert_eq!(msg.operation(), FirewallOperation::Open);
         assert_eq!(msg.port(), Some((PortType::Tcp, 0x9876)));
         assert_eq!(msg.addr(), Some("1.2.3.4".parse().unwrap()));
@@ -458,6 +509,10 @@ mod tests {
                 0x00, 0x01, // addr_type
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
                 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, // addr
+                0xA9, 0x14, 0x20, 0xEB, 0x27, 0x9B, 0xD1, 0x96, // conf_cs
+                0x15, 0x04, 0x9D, 0x00, 0xD6, 0x07, 0x07, 0x35, // conf_cs
+                0xAF, 0xF1, 0xE9, 0x28, 0xC1, 0xBF, 0x9C, 0x65, // conf_cs
+                0x3F, 0x29, 0x22, 0x33, 0x11, 0xDD, 0x4C, 0xAA, // conf_cs
             ]
         );
     }
@@ -480,6 +535,10 @@ mod tests {
                 0x00, 0x00, // addr_type
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // conf_cs
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // conf_cs
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // conf_cs
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // conf_cs
             ]
         );
     }
@@ -502,6 +561,10 @@ mod tests {
                 0x00, 0x00, // addr_type
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // conf_cs
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // conf_cs
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // conf_cs
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // conf_cs
             ]
         );
     }

@@ -24,11 +24,13 @@ use crate::{
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_proto::{Key, ResourceId, UserId, PORT};
+use sha3::{Digest, Sha3_256};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     time::Duration,
 };
+use subtle::ConstantTimeEq as _;
 
 pub use crate::ini::{Ini, IniSectionIter};
 
@@ -46,6 +48,45 @@ const CLIENT_CONF_PATH: &str = "letmein.conf";
 
 const DEFAULT_CONTROL_TIMEOUT: Duration = Duration::from_millis(5_000);
 const DEFAULT_NFT_TIMEOUT: Duration = Duration::from_millis(600_000);
+
+/// Configuration content checksum.
+#[derive(Clone, Debug, Default, Eq)]
+pub struct ConfigChecksum([u8; ConfigChecksum::SIZE]);
+
+impl ConfigChecksum {
+    /// Digest size, in bytes.
+    pub const SIZE: usize = 32;
+
+    /// Calculate the checksum from a raw byte stream.
+    pub fn calculate(content: &[u8]) -> Self {
+        let mut hash = Sha3_256::new();
+        hash.update((content.len() as u64).to_be_bytes());
+        hash.update(content);
+        let digest = hash.finalize();
+        Self((*digest).try_into().expect("Unwrap sha digest"))
+    }
+
+    /// Get the calculated checksum digest.
+    pub fn as_bytes(&self) -> &[u8; ConfigChecksum::SIZE] {
+        &self.0
+    }
+}
+
+impl PartialEq for ConfigChecksum {
+    fn eq(&self, other: &ConfigChecksum) -> bool {
+        // Constant-time compare.
+        self.0.ct_eq(&other.0).into()
+    }
+}
+
+impl TryFrom<&[u8]> for ConfigChecksum {
+    type Error = ah::Error;
+
+    /// Convert a raw checksum digest into `ConfigChecksum`.
+    fn try_from(data: &[u8]) -> ah::Result<Self> {
+        Ok(ConfigChecksum(data.try_into()?))
+    }
+}
 
 /// Configured control port.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -477,6 +518,7 @@ pub enum ConfigVariant {
 /// Parsed letmein.conf or letmeind.conf. (See [ConfigVariant]).
 #[derive(Clone, Default, Debug)]
 pub struct Config {
+    checksum: ConfigChecksum,
     variant: ConfigVariant,
     path: Option<PathBuf>,
     debug: bool,
@@ -498,6 +540,7 @@ impl Config {
     /// Create a new configuration instance with all-default values.
     pub fn new(variant: ConfigVariant) -> Self {
         Self {
+            checksum: Default::default(),
             variant,
             control_timeout: DEFAULT_CONTROL_TIMEOUT,
             nft_timeout: DEFAULT_NFT_TIMEOUT,
@@ -576,6 +619,7 @@ impl Config {
             nft_timeout = get_nft_timeout(ini)?;
         }
 
+        self.checksum = ini.checksum().clone();
         self.debug = debug;
         self.port = port;
         self.control_timeout = control_timeout;
@@ -590,6 +634,11 @@ impl Config {
         self.nft_chain_input = nft_chain_input;
         self.nft_timeout = nft_timeout;
         Ok(())
+    }
+
+    /// Calculate a checksum that represents the content.
+    pub fn checksum(&self) -> &ConfigChecksum {
+        &self.checksum
     }
 
     /// Get the `debug` option from `[GENERAL]` section.
@@ -685,11 +734,14 @@ mod tests {
     #[test]
     fn test_general() {
         let mut ini = Ini::new();
+        let cs_empty = ini.checksum().clone();
         ini.parse_str(
             "[GENERAL]\ndebug = true\nport = 1234\ncontrol-timeout=1.5\n\
             control-error-policy= basic-auth \nseccomp = kill",
         )
         .unwrap();
+        let cs_parsed = ini.checksum().clone();
+        assert_ne!(cs_empty, cs_parsed);
         assert!(get_debug(&ini).unwrap());
         assert_eq!(
             get_port(&ini).unwrap(),
@@ -714,6 +766,7 @@ mod tests {
     fn test_port() {
         let mut ini = Ini::new();
         ini.parse_str("[GENERAL]\nport=1234").unwrap();
+        let cs_a = ini.checksum().clone();
         assert_eq!(
             get_port(&ini).unwrap(),
             ControlPort {
@@ -723,6 +776,7 @@ mod tests {
             }
         );
         ini.parse_str("[GENERAL]\nport=1234 / TCP ").unwrap();
+        let cs_b = ini.checksum().clone();
         assert_eq!(
             get_port(&ini).unwrap(),
             ControlPort {
@@ -732,6 +786,7 @@ mod tests {
             }
         );
         ini.parse_str("[GENERAL]\nport=1234/UDP").unwrap();
+        let cs_c = ini.checksum().clone();
         assert_eq!(
             get_port(&ini).unwrap(),
             ControlPort {
@@ -758,6 +813,8 @@ mod tests {
                 udp: true
             }
         );
+        assert_ne!(cs_a, cs_b);
+        assert_ne!(cs_b, cs_c);
     }
 
     #[test]
@@ -862,6 +919,18 @@ mod tests {
         assert_eq!(nft_table, "myfilter");
         assert_eq!(nft_chain_input, "myLETMEIN-INPUT");
         assert_eq!(nft_timeout, Duration::from_secs(50));
+    }
+
+    #[test]
+    fn test_checksum() {
+        let checksum = ConfigChecksum::calculate(b"foo");
+        assert_eq!(
+            checksum.as_bytes(),
+            &[
+                169, 20, 32, 235, 39, 155, 209, 150, 21, 4, 157, 0, 214, 7, 7, 53, 175, 241, 233,
+                40, 193, 191, 156, 101, 63, 41, 34, 51, 17, 221, 76, 170
+            ]
+        );
     }
 }
 

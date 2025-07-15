@@ -92,6 +92,19 @@ impl FirewallConnection {
         };
         match msg.operation() {
             FirewallOperation::Open => {
+                // Compare the configuration checksum to ensure that
+                // letmeind and letmeinfwd have the same view of the configuration.
+                let Some(conf_cs) = msg.conf_checksum() else {
+                    let res = Err(err!("No configuration checksum in message."));
+                    return self.send_result(res).await;
+                };
+                if *conf_cs != *conf.checksum() {
+                    let res = Err(err!(
+                        "letmeind.conf checksum mismatch between letmeind and letmeinfwd."
+                    ));
+                    return self.send_result(res).await;
+                }
+
                 // Get the address from the socket message.
                 let Some(addr) = msg.addr() else {
                     return self.send_result(Err(err!("No addr."))).await;

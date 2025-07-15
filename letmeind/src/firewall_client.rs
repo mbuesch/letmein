@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{self as ah, format_err as err, Context as _};
+use letmein_conf::ConfigChecksum;
 use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
 use std::{net::IpAddr, path::Path};
 use tokio::net::UnixStream;
@@ -49,9 +50,10 @@ impl FirewallClient {
         addr: IpAddr,
         port_type: PortType,
         port: u16,
+        conf_cs: &ConfigChecksum,
     ) -> ah::Result<()> {
         // Send an open-port request to the firewall daemon.
-        FirewallMessage::new_open(addr, port_type, port)
+        FirewallMessage::new_open(addr, port_type, port, conf_cs)
             .send(&mut self.stream)
             .await
             .context("Send port-open message")?;

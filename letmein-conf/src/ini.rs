@@ -6,6 +6,7 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use crate::ConfigChecksum;
 use anyhow::{self as ah, format_err as err, Context as _};
 use std::{
     collections::{hash_map, HashMap},
@@ -43,6 +44,7 @@ impl IniSection {
 
 /// Simple `.ini`-style file parser.
 pub struct Ini {
+    checksum: ConfigChecksum,
     sections: HashMap<String, IniSection>,
 }
 
@@ -50,6 +52,7 @@ impl Ini {
     /// Create a new empty parser state.
     pub fn new() -> Self {
         Self {
+            checksum: Default::default(),
             sections: HashMap::new(),
         }
     }
@@ -170,6 +173,7 @@ impl Ini {
             }
         }
 
+        self.checksum = ConfigChecksum::calculate(content.as_bytes());
         self.sections = sections;
         Ok(())
     }
@@ -187,6 +191,11 @@ impl Ini {
     /// Get an iterator over all option name-value tuples from a section.
     pub fn options_iter(&self, section: &str) -> Option<IniSectionIter<'_>> {
         self.sections.get(section).map(|s| s.iter())
+    }
+
+    /// Get the content checksum.
+    pub fn checksum(&self) -> &ConfigChecksum {
+        &self.checksum
     }
 }
 

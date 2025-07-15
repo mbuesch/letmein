@@ -214,7 +214,12 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 if let Err(e) = self
                     .connect_to_fw()
                     .await?
-                    .open_port(self.conn.peer_addr().ip(), port_type, *port)
+                    .open_port(
+                        self.conn.peer_addr().ip(),
+                        port_type,
+                        *port,
+                        self.conf.checksum(),
+                    )
                     .await
                 {
                     let _ = self.send_go_away().await;

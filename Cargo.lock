@@ -699,6 +699,8 @@ version = "10.3.0"
 dependencies = [
  "anyhow",
  "letmein-proto",
+ "sha3",
+ "subtle",
 ]
 
 [[package]]
@@ -706,6 +708,7 @@ name = "letmein-fwproto"
 version = "10.3.0"
 dependencies = [
  "anyhow",
+ "letmein-conf",
  "tokio",
 ]
 
