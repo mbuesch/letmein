@@ -13,8 +13,6 @@ use letmein_proto::{ResourceId, UserId};
 use std::{net::IpAddr, path::Path};
 use tokio::net::UnixStream;
 
-pub use letmein_fwproto::PortType;
-
 pub struct FirewallClient {
     stream: UnixStream,
 }
@@ -51,12 +49,10 @@ impl FirewallClient {
         user: UserId,
         resource: ResourceId,
         addr: IpAddr,
-        port_type: PortType,
-        port: u16,
         conf_cs: &ConfigChecksum,
     ) -> ah::Result<()> {
         // Send an open-port request to the firewall daemon.
-        FirewallMessage::new_open(user, resource, addr, port_type, port, conf_cs)
+        FirewallMessage::new_open(user, resource, addr, conf_cs)
             .send(&mut self.stream)
             .await
             .context("Send port-open message")?;

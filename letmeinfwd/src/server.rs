@@ -12,7 +12,7 @@ use crate::{
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::{Config, Resource};
-use letmein_fwproto::{FirewallMessage, FirewallOperation, PortType, SOCK_FILE};
+use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
 use letmein_systemd::{systemd_notify_ready, SystemdSocket};
 use std::{
     fs::{metadata, remove_file, OpenOptions},
@@ -130,52 +130,50 @@ impl FirewallConnection {
                 // Get the address from the socket message.
                 let addr = self.get_addr(&msg).await?;
 
-                // Get the port from the socket message.
-                let Some((port_type, port)) = msg.port() else {
-                    return self.send_result(Err(err!("No port."))).await;
-                };
-
                 // Get the resource and user IDs.
                 let resource_id = msg.resource();
                 let user_id = msg.user();
 
-                // Check if the port is actually configured.
+                // Check if the resource is actually configured.
                 let Some(resource) = conf.resource(resource_id) else {
                     let res = Err(err!(
                         "The resource {resource_id} is not configured in letmeind.conf."
                     ));
                     return self.send_result(res).await;
                 };
+
+                // Check if the user is allowed to use the resource.
                 if !resource.contains_user(user_id) {
                     let res = Err(err!(
                         "The resource {resource_id} is not allowed for user {user_id}."
                     ));
                     return self.send_result(res).await;
                 }
+
+                // Get the port information.
+                let lease_port;
                 match resource {
-                    Resource::Port { port: res_port, .. } => {
-                        if *res_port != port {
+                    Resource::Port { port, tcp, udp, .. } => {
+                        // Don't allow the user to manage the control port.
+                        if *port == conf.port().port {
+                            // Whoops, letmeind should never send us a request for the
+                            // control port. Did some other process write to the unix socket?
                             let res =
-                                Err(err!("The resource {resource_id} is not for port {port}."));
+                                Err(err!("The knocked port {port} is the letmein control port."));
                             return self.send_result(res).await;
                         }
+
+                        lease_port = match (tcp, udp) {
+                            (true, false) => LeasePort::Tcp(*port),
+                            (false, true) => LeasePort::Udp(*port),
+                            (true, true) => LeasePort::TcpUdp(*port),
+                            (false, false) => {
+                                let res = Err(err!("Invalid port info in config."));
+                                return self.send_result(res).await;
+                            }
+                        };
                     }
                 }
-
-                // Don't allow the user to manage the control port.
-                if port == conf.port().port {
-                    // Whoops, letmeind should never send us a request for the
-                    // control port. Did some other process write to the unix socket?
-                    let res = Err(err!("The knocked port {port} is the letmein control port."));
-                    return self.send_result(res).await;
-                }
-
-                // Convert from protocol port type to lease port type.
-                let lease_port = match port_type {
-                    PortType::Tcp => LeasePort::Tcp(port),
-                    PortType::Udp => LeasePort::Udp(port),
-                    PortType::TcpUdp => LeasePort::TcpUdp(port),
-                };
 
                 // Open the firewall.
                 let res = fw.lock().await.open_port(conf, addr, lease_port).await;

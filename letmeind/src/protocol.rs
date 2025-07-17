@@ -6,10 +6,7 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{
-    firewall_client::{FirewallClient, PortType},
-    server::ConnectionOps,
-};
+use crate::{firewall_client::FirewallClient, server::ConnectionOps};
 use anyhow::{self as ah, format_err as err};
 use letmein_conf::{Config, ErrorPolicy, Resource};
 use letmein_proto::{Message, Operation, ResourceId, UserId};
@@ -201,15 +198,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Reconfigure the firewall.
         match resource {
-            Resource::Port { port, tcp, udp, .. } => {
-                // Port type to open.
-                let port_type = match (tcp, udp) {
-                    (true, false) => PortType::Tcp,
-                    (false, true) => PortType::Udp,
-                    (true, true) => PortType::TcpUdp,
-                    (false, false) => unreachable!(),
-                };
-
+            Resource::Port { .. } => {
                 // Send an open-port request to letmeinfwd.
                 if let Err(e) = self
                     .connect_to_fw()
@@ -218,8 +207,6 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                         user_id,
                         resource_id,
                         self.conn.peer_addr().ip(),
-                        port_type,
-                        *port,
                         self.conf.checksum(),
                     )
                     .await

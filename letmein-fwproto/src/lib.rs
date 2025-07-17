@@ -67,41 +67,6 @@ impl From<FirewallOperation> for u16 {
     }
 }
 
-/// The type of port to open in the firewall.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-#[repr(u16)]
-pub enum PortType {
-    /// TCP port only.
-    #[default]
-    Tcp,
-    /// UDP port only.
-    Udp,
-    /// TCP and UDP port.
-    TcpUdp,
-}
-
-impl TryFrom<u16> for PortType {
-    type Error = ah::Error;
-
-    fn try_from(value: u16) -> Result<Self, Self::Error> {
-        const PORTTYPE_TCP: u16 = PortType::Tcp as u16;
-        const PORTTYPE_UDP: u16 = PortType::Udp as u16;
-        const PORTTYPE_TCPUDP: u16 = PortType::TcpUdp as u16;
-        match value {
-            PORTTYPE_TCP => Ok(Self::Tcp),
-            PORTTYPE_UDP => Ok(Self::Udp),
-            PORTTYPE_TCPUDP => Ok(Self::TcpUdp),
-            _ => Err(err!("Invalid FirewallMessage/PortType value")),
-        }
-    }
-}
-
-impl From<PortType> for u16 {
-    fn from(port_type: PortType) -> u16 {
-        port_type as _
-    }
-}
-
 /// The type of address to open in the firewall.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[repr(u16)]
@@ -140,7 +105,7 @@ const ADDR_SIZE: usize = 16;
 const CONF_CS_SIZE: usize = ConfigChecksum::SIZE;
 
 /// Size of the firewall control message.
-const FWMSG_SIZE: usize = 2 + 4 + 4 + 2 + 2 + 2 + ADDR_SIZE + CONF_CS_SIZE;
+const FWMSG_SIZE: usize = 2 + 4 + 4 + 2 + ADDR_SIZE + CONF_CS_SIZE;
 
 /// Byte offset of the `operation` field in the firewall control message.
 const FWMSG_OFFS_OPERATION: usize = 0;
@@ -151,20 +116,14 @@ const FWMSG_OFFS_USER: usize = 2;
 /// Byte offset of the `resource` field in the firewall control message.
 const FWMSG_OFFS_RESOURCE: usize = 6;
 
-/// Byte offset of the `port_type` field in the firewall control message.
-const FWMSG_OFFS_PORT_TYPE: usize = 10;
-
-/// Byte offset of the `port` field in the firewall control message.
-const FWMSG_OFFS_PORT: usize = 12;
-
 /// Byte offset of the `addr_type` field in the firewall control message.
-const FWMSG_OFFS_ADDR_TYPE: usize = 14;
+const FWMSG_OFFS_ADDR_TYPE: usize = 10;
 
 /// Byte offset of the `addr` field in the firewall control message.
-const FWMSG_OFFS_ADDR: usize = 16;
+const FWMSG_OFFS_ADDR: usize = 12;
 
 /// Byte offset of the `conf_cs` field in the firewall control message.
-const FWMSG_OFFS_CONF_CS: usize = 32;
+const FWMSG_OFFS_CONF_CS: usize = 28;
 
 /// A message to control the firewall.
 #[derive(PartialEq, Eq, Debug, Default)]
@@ -172,8 +131,6 @@ pub struct FirewallMessage {
     operation: FirewallOperation,
     user: UserId,
     resource: ResourceId,
-    port_type: PortType,
-    port: u16,
     addr_type: AddrType,
     addr: [u8; ADDR_SIZE],
     conf_cs: ConfigChecksum,
@@ -207,8 +164,6 @@ impl FirewallMessage {
         user: UserId,
         resource: ResourceId,
         addr: IpAddr,
-        port_type: PortType,
-        port: u16,
         conf_cs: &ConfigChecksum,
     ) -> Self {
         let (addr_type, addr) = addr_to_octets(addr);
@@ -216,8 +171,6 @@ impl FirewallMessage {
             operation: FirewallOperation::Open,
             user,
             resource,
-            port_type,
-            port,
             addr_type,
             addr,
             conf_cs: conf_cs.clone(),
@@ -255,14 +208,6 @@ impl FirewallMessage {
         self.resource
     }
 
-    /// Get the port number from this message.
-    pub fn port(&self) -> Option<(PortType, u16)> {
-        match self.operation {
-            FirewallOperation::Open => Some((self.port_type, self.port)),
-            FirewallOperation::Ack | FirewallOperation::Nack => None,
-        }
-    }
-
     /// Get the `IpAddr` from this message.
     pub fn addr(&self) -> Option<IpAddr> {
         match self.operation {
@@ -298,8 +243,6 @@ impl FirewallMessage {
         serialize_u16(&mut buf[FWMSG_OFFS_OPERATION..], self.operation.into());
         serialize_u32(&mut buf[FWMSG_OFFS_USER..], self.user.into());
         serialize_u32(&mut buf[FWMSG_OFFS_RESOURCE..], self.resource.into());
-        serialize_u16(&mut buf[FWMSG_OFFS_PORT_TYPE..], self.port_type.into());
-        serialize_u16(&mut buf[FWMSG_OFFS_PORT..], self.port);
         serialize_u16(&mut buf[FWMSG_OFFS_ADDR_TYPE..], self.addr_type.into());
         buf[FWMSG_OFFS_ADDR..FWMSG_OFFS_ADDR + ADDR_SIZE].copy_from_slice(&self.addr);
         buf[FWMSG_OFFS_CONF_CS..FWMSG_OFFS_CONF_CS + CONF_CS_SIZE]
@@ -330,8 +273,6 @@ impl FirewallMessage {
         let operation = deserialize_u16(&buf[FWMSG_OFFS_OPERATION..])?;
         let user = deserialize_u32(&buf[FWMSG_OFFS_USER..])?;
         let resource = deserialize_u32(&buf[FWMSG_OFFS_RESOURCE..])?;
-        let port_type = deserialize_u16(&buf[FWMSG_OFFS_PORT_TYPE..])?;
-        let port = deserialize_u16(&buf[FWMSG_OFFS_PORT..])?;
         let addr_type = deserialize_u16(&buf[FWMSG_OFFS_ADDR_TYPE..])?;
         let addr = &buf[FWMSG_OFFS_ADDR..FWMSG_OFFS_ADDR + ADDR_SIZE];
         let conf_cs = &buf[FWMSG_OFFS_CONF_CS..FWMSG_OFFS_CONF_CS + CONF_CS_SIZE];
@@ -340,8 +281,6 @@ impl FirewallMessage {
             operation: operation.try_into()?,
             resource: resource.into(),
             user: user.into(),
-            port_type: port_type.try_into()?,
-            port,
             addr_type: addr_type.try_into()?,
             addr: addr.try_into()?,
             conf_cs: conf_cs.try_into()?,
@@ -448,12 +387,9 @@ mod tests {
             0x66773322.into(),
             0xAABB9988.into(),
             "::1".parse().unwrap(),
-            PortType::Tcp,
-            0x9876,
             &ConfigChecksum::calculate(b"foo"),
         );
         assert_eq!(msg.operation(), FirewallOperation::Open);
-        assert_eq!(msg.port(), Some((PortType::Tcp, 0x9876)));
         assert_eq!(msg.addr(), Some("::1".parse().unwrap()));
         check_ser_de(&msg);
 
@@ -461,8 +397,6 @@ mod tests {
             0x66773322.into(),
             0xAABB9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
-            PortType::Tcp,
-            0x9876,
             &ConfigChecksum::calculate(b"foo"),
         );
         let bytes = msg.msg_serialize().unwrap();
@@ -472,8 +406,6 @@ mod tests {
                 0x00, 0x02, // operation
                 0x66, 0x77, 0x33, 0x22, // user
                 0xAA, 0xBB, 0x99, 0x88, // resource
-                0x00, 0x00, // port_type
-                0x98, 0x76, // port
                 0x00, 0x00, // addr_type
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
                 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
@@ -488,8 +420,6 @@ mod tests {
             0x66773322.into(),
             0xAABB9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
-            PortType::Udp,
-            0x9876,
             &ConfigChecksum::calculate(b"foo"),
         );
         let bytes = msg.msg_serialize().unwrap();
@@ -499,8 +429,6 @@ mod tests {
                 0x00, 0x02, // operation
                 0x66, 0x77, 0x33, 0x22, // user
                 0xAA, 0xBB, 0x99, 0x88, // resource
-                0x00, 0x01, // port_type
-                0x98, 0x76, // port
                 0x00, 0x00, // addr_type
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
                 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
@@ -515,8 +443,6 @@ mod tests {
             0x66773322.into(),
             0xAABB9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
-            PortType::TcpUdp,
-            0x9876,
             &ConfigChecksum::calculate(b"bar"),
         );
         let bytes = msg.msg_serialize().unwrap();
@@ -526,8 +452,6 @@ mod tests {
                 0x00, 0x02, // operation
                 0x66, 0x77, 0x33, 0x22, // user
                 0xAA, 0xBB, 0x99, 0x88, // resource
-                0x00, 0x02, // port_type
-                0x98, 0x76, // port
                 0x00, 0x00, // addr_type
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
                 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
@@ -545,12 +469,9 @@ mod tests {
             0x66773322.into(),
             0xAABB9988.into(),
             "1.2.3.4".parse().unwrap(),
-            PortType::Tcp,
-            0x9876,
             &ConfigChecksum::calculate(b"foo"),
         );
         assert_eq!(msg.operation(), FirewallOperation::Open);
-        assert_eq!(msg.port(), Some((PortType::Tcp, 0x9876)));
         assert_eq!(msg.addr(), Some("1.2.3.4".parse().unwrap()));
         check_ser_de(&msg);
 
@@ -561,8 +482,6 @@ mod tests {
                 0x00, 0x02, // operation
                 0x66, 0x77, 0x33, 0x22, // user
                 0xAA, 0xBB, 0x99, 0x88, // resource
-                0x00, 0x00, // port_type
-                0x98, 0x76, // port
                 0x00, 0x01, // addr_type
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
                 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, // addr
@@ -578,7 +497,6 @@ mod tests {
     fn test_msg_ack() {
         let msg = FirewallMessage::new_ack();
         assert_eq!(msg.operation(), FirewallOperation::Ack);
-        assert_eq!(msg.port(), None);
         assert_eq!(msg.addr(), None);
         check_ser_de(&msg);
 
@@ -589,8 +507,6 @@ mod tests {
                 0x00, 0x01, // operation
                 0x00, 0x00, 0x00, 0x00, // user
                 0x00, 0x00, 0x00, 0x00, // resource
-                0x00, 0x00, // port_type
-                0x00, 0x00, // port
                 0x00, 0x00, // addr_type
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
@@ -606,7 +522,6 @@ mod tests {
     fn test_msg_nack() {
         let msg = FirewallMessage::new_nack();
         assert_eq!(msg.operation(), FirewallOperation::Nack);
-        assert_eq!(msg.port(), None);
         assert_eq!(msg.addr(), None);
         check_ser_de(&msg);
 
@@ -617,8 +532,6 @@ mod tests {
                 0x00, 0x00, // operation
                 0x00, 0x00, 0x00, 0x00, // user
                 0x00, 0x00, 0x00, 0x00, // resource
-                0x00, 0x00, // port_type
-                0x00, 0x00, // port
                 0x00, 0x00, // addr_type
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
