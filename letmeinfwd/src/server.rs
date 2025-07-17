@@ -11,7 +11,7 @@ use crate::{
     set_owner_mode, Opts, LETMEIND_GID, LETMEIND_UID,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
-use letmein_conf::Config;
+use letmein_conf::{Config, Resource};
 use letmein_fwproto::{FirewallMessage, FirewallOperation, PortType, SOCK_FILE};
 use letmein_systemd::{systemd_notify_ready, SystemdSocket};
 use std::{
@@ -81,6 +81,37 @@ impl FirewallConnection {
         res
     }
 
+    async fn check_conf_checksum(
+        &mut self,
+        conf: &Config,
+        msg: &FirewallMessage,
+    ) -> ah::Result<()> {
+        let Some(conf_cs) = msg.conf_checksum() else {
+            let res = Err(err!("No configuration checksum in message."));
+            return self.send_result(res).await;
+        };
+        if *conf_cs != *conf.checksum() {
+            let res = Err(err!(
+                "letmeind.conf checksum mismatch between letmeind and letmeinfwd."
+            ));
+            return self.send_result(res).await;
+        }
+        Ok(())
+    }
+
+    async fn get_addr(&mut self, msg: &FirewallMessage) -> ah::Result<IpAddr> {
+        let Some(addr) = msg.addr() else {
+            let res = Err(err!("No address in message."));
+            return self.send_result(res).await.map(|_| unreachable!());
+        };
+        // Check if addr is valid.
+        if !addr_check(&addr) {
+            let res = Err(err!("Invalid address in message."));
+            return self.send_result(res).await.map(|_| unreachable!());
+        }
+        Ok(addr)
+    }
+
     /// Handle the firewall daemon unix socket communication.
     pub async fn handle_message(
         &mut self,
@@ -94,37 +125,41 @@ impl FirewallConnection {
             FirewallOperation::Open => {
                 // Compare the configuration checksum to ensure that
                 // letmeind and letmeinfwd have the same view of the configuration.
-                let Some(conf_cs) = msg.conf_checksum() else {
-                    let res = Err(err!("No configuration checksum in message."));
-                    return self.send_result(res).await;
-                };
-                if *conf_cs != *conf.checksum() {
-                    let res = Err(err!(
-                        "letmeind.conf checksum mismatch between letmeind and letmeinfwd."
-                    ));
-                    return self.send_result(res).await;
-                }
+                self.check_conf_checksum(conf, &msg).await?;
 
                 // Get the address from the socket message.
-                let Some(addr) = msg.addr() else {
-                    return self.send_result(Err(err!("No addr."))).await;
-                };
-                // Check if addr is valid.
-                if !addr_check(&addr) {
-                    return self.send_result(Err(err!("Invalid addr."))).await;
-                }
+                let addr = self.get_addr(&msg).await?;
 
                 // Get the port from the socket message.
                 let Some((port_type, port)) = msg.port() else {
                     return self.send_result(Err(err!("No port."))).await;
                 };
 
+                // Get the resource and user IDs.
+                let resource_id = msg.resource();
+                let user_id = msg.user();
+
                 // Check if the port is actually configured.
-                if conf.resource_id_by_port(port, None).is_none() {
-                    // Whoops, letmeind should never send us a request for an
-                    // unconfigured port. Did some other process write to the unix socket?
-                    let res = Err(err!("The port {port} is not configured in letmeind.conf."));
+                let Some(resource) = conf.resource(resource_id) else {
+                    let res = Err(err!(
+                        "The resource {resource_id} is not configured in letmeind.conf."
+                    ));
                     return self.send_result(res).await;
+                };
+                if !resource.contains_user(user_id) {
+                    let res = Err(err!(
+                        "The resource {resource_id} is not allowed for user {user_id}."
+                    ));
+                    return self.send_result(res).await;
+                }
+                match resource {
+                    Resource::Port { port: res_port, .. } => {
+                        if *res_port != port {
+                            let res =
+                                Err(err!("The resource {resource_id} is not for port {port}."));
+                            return self.send_result(res).await;
+                        }
+                    }
                 }
 
                 // Don't allow the user to manage the control port.

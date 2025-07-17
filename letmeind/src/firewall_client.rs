@@ -9,6 +9,7 @@
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::ConfigChecksum;
 use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
+use letmein_proto::{ResourceId, UserId};
 use std::{net::IpAddr, path::Path};
 use tokio::net::UnixStream;
 
@@ -47,13 +48,15 @@ impl FirewallClient {
     /// Send a request to open a firewall `port` for the specified `addr`.
     pub async fn open_port(
         &mut self,
+        user: UserId,
+        resource: ResourceId,
         addr: IpAddr,
         port_type: PortType,
         port: u16,
         conf_cs: &ConfigChecksum,
     ) -> ah::Result<()> {
         // Send an open-port request to the firewall daemon.
-        FirewallMessage::new_open(addr, port_type, port, conf_cs)
+        FirewallMessage::new_open(user, resource, addr, port_type, port, conf_cs)
             .send(&mut self.stream)
             .await
             .context("Send port-open message")?;

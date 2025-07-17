@@ -17,6 +17,7 @@ keywords = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 letmein-conf = { workspace = true }
+letmein-proto = { workspace = true }
 tokio = { workspace = true, features = [ "net" ] }
 
 # vim: ts=4 sw=4 expandtab

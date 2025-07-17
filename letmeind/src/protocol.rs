@@ -215,6 +215,8 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                     .connect_to_fw()
                     .await?
                     .open_port(
+                        user_id,
+                        resource_id,
                         self.conn.peer_addr().ip(),
                         port_type,
                         *port,

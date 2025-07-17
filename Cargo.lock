@@ -709,6 +709,7 @@ version = "10.3.0"
 dependencies = [
  "anyhow",
  "letmein-conf",
+ "letmein-proto",
  "tokio",
 ]
 

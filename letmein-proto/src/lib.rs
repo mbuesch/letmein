@@ -57,7 +57,7 @@ const ZERO_AUTH: Auth = [0; AUTH_SIZE];
 /// Identification number of a resource.
 ///
 /// Used in the wire protocol and in the configuration file.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub struct ResourceId(u32);
 
 /// Identification number of a user (and a key).
