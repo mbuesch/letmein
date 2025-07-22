@@ -444,7 +444,7 @@ fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
                 extract_resource_port(id, &mut resources, &map)?;
             } else {
                 return Err(err!(
-                    "[RESOURCE] Resource ID '{id}' is neither a 'port' not a 'jump' resource."
+                    "[RESOURCE] Resource ID '{id}' is not a 'port' resource."
                 ));
             };
         }
