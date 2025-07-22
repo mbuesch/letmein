@@ -28,11 +28,6 @@ use letmein_proto::UserId;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::runtime;
 
-/// Parse `UserId` helper for command line argument parsing.
-fn parse_user(s: &str) -> ah::Result<UserId> {
-    s.parse()
-}
-
 /// Parse `ResSrv` helper for command line argument parsing.
 fn parse_dns(dns: &str) -> ah::Result<ResSrv> {
     let mut srv = ResSrv {
@@ -159,7 +154,7 @@ enum Command {
         /// configuration file will be used instead.
         /// If the configuration is not available, user 00000000 will
         /// be used instead.
-        #[arg(short, long, value_parser = parse_user)]
+        #[arg(short, long)]
         user: Option<UserId>,
 
         /// letmein server port number.
@@ -232,7 +227,7 @@ enum Command {
         /// configuration file will be used instead.
         /// If the configuration is not available, user 00000000 will
         /// be used instead.
-        #[arg(long, short, value_parser = parse_user)]
+        #[arg(long, short)]
         user: Option<UserId>,
     },
 }
