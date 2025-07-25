@@ -2,6 +2,8 @@ name: Build and test
 
 on:
   push:
+    branches-ignore:
+      - android-app
   pull_request:
 
 env: 
