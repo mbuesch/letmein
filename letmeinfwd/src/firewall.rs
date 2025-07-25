@@ -10,7 +10,11 @@ pub mod nftables;
 
 use anyhow as ah;
 use letmein_conf::Config;
-use std::{collections::HashMap, net::IpAddr, time::Instant};
+use std::{
+    collections::HashMap,
+    net::IpAddr,
+    time::{Duration, Instant},
+};
 
 /// TCP and/or UDP port number.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -61,7 +65,7 @@ struct Lease {
 
 impl Lease {
     /// Create a new lease with maximum timeout.
-    pub fn new(conf: &Config, addr: IpAddr, port: LeasePort) -> Self {
+    pub fn new(conf: &Config, addr: IpAddr, port: LeasePort, timeout: Option<Duration>) -> Self {
         // The upper layers must never give us a lease request for the control port.
         assert_ne!(
             conf.port().port,
@@ -71,7 +75,7 @@ impl Lease {
                 LeasePort::TcpUdp(p) => p,
             }
         );
-        let timeout = Instant::now() + conf.nft_timeout();
+        let timeout = Instant::now() + timeout.unwrap_or_else(|| conf.nft_timeout());
         Self {
             addr,
             port,
@@ -154,6 +158,7 @@ pub trait FirewallOpen {
         conf: &Config,
         remote_addr: IpAddr,
         port: LeasePort,
+        timeout: Option<Duration>,
     ) -> ah::Result<()>;
 }
 

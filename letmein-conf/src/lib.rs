@@ -130,6 +130,7 @@ pub enum Resource {
         port: u16,
         tcp: bool,
         udp: bool,
+        timeout: Option<Duration>,
         users: Vec<UserId>,
     },
 }
@@ -339,6 +340,7 @@ fn extract_resource_port(
     map: &Map,
 ) -> ah::Result<()> {
     let mut port: Option<u16> = None;
+    let mut timeout: Option<Duration> = None;
     let mut users: Vec<String> = vec![];
     let mut tcp = false;
     let mut udp = false;
@@ -354,6 +356,15 @@ fn extract_resource_port(
                         port = Some(parse_u16(&vs[0]).context("[RESOURCES] port")?);
                     } else {
                         return Err(err!("[RESOURCE] invalid 'port' option"));
+                    }
+                } else if k == "timeout" {
+                    if vs.len() == 1 {
+                        if timeout.is_some() {
+                            return Err(err!("[RESOURCE] multiple 'timeout' values"));
+                        }
+                        timeout = Some(parse_duration(&vs[0]).context("[RESOURCES] timeout")?);
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'timeout' option"));
                     }
                 } else if k == "users" {
                     if !users.is_empty() {
@@ -409,6 +420,7 @@ fn extract_resource_port(
             port,
             tcp,
             udp,
+            timeout,
             users,
         },
     );
@@ -847,6 +859,7 @@ mod tests {
                 port: 4096,
                 tcp: true,
                 udp: false,
+                timeout: None,
                 users: vec![]
             }
         );
@@ -861,6 +874,7 @@ mod tests {
                 port: 4096,
                 tcp: true,
                 udp: false,
+                timeout: None,
                 users: vec![]
             }
         );
@@ -875,12 +889,13 @@ mod tests {
                 port: 4096,
                 tcp: false,
                 udp: true,
+                timeout: None,
                 users: vec![1.into(), 2.into(), 3.into()]
             }
         );
 
         let mut ini = Ini::new();
-        ini.parse_str("[RESOURCES]\n9876ABCD = port : 4096 / udp, tcp / users: 4\n")
+        ini.parse_str("[RESOURCES]\n9876ABCD = port : 4096 / udp, tcp / users: 4 / timeout:42\n")
             .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
@@ -889,6 +904,7 @@ mod tests {
                 port: 4096,
                 tcp: true,
                 udp: true,
+                timeout: Some(Duration::from_secs(42)),
                 users: vec![4.into()]
             }
         );

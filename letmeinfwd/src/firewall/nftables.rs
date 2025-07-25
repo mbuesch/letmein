@@ -20,7 +20,7 @@ use nftables::{
     stmt::{Match, Operator, Statement},
     types::NfFamily,
 };
-use std::{borrow::Cow, fmt::Write as _, net::IpAddr};
+use std::{borrow::Cow, fmt::Write as _, net::IpAddr, time::Duration};
 
 const NFTNL_UDATA_COMMENT_MAXLEN: usize = 128;
 
@@ -474,13 +474,14 @@ impl FirewallOpen for NftFirewall {
         conf: &Config,
         remote_addr: IpAddr,
         port: LeasePort,
+        timeout: Option<Duration>,
     ) -> ah::Result<()> {
         assert!(!self.shutdown);
         let id = (remote_addr, port);
         if let Some(lease) = self.leases.get_mut(&id) {
             lease.refresh_timeout(conf);
         } else {
-            let lease = Lease::new(conf, remote_addr, port);
+            let lease = Lease::new(conf, remote_addr, port, timeout);
             self.nftables_add_lease(conf, &lease).await?;
             self.leases.insert(id, lease);
             self.print_total_rule_count(conf);

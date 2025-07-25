@@ -158,9 +158,14 @@ impl FirewallConnection {
                 let resource = self.get_resource(conf, &msg).await?;
 
                 // Get the port information.
-                let lease_port;
-                match resource {
-                    Resource::Port { port, tcp, udp, .. } => {
+                let (lease_port, timeout) = match resource {
+                    Resource::Port {
+                        port,
+                        tcp,
+                        udp,
+                        timeout,
+                        users: _,
+                    } => {
                         // Don't allow the user to manage the control port.
                         if port == conf.port().port {
                             // Whoops, letmeind should never send us a request for the
@@ -170,7 +175,7 @@ impl FirewallConnection {
                             return self.send_result(res).await;
                         }
 
-                        lease_port = match (tcp, udp) {
+                        let lease_port = match (tcp, udp) {
                             (true, false) => LeasePort::Tcp(port),
                             (false, true) => LeasePort::Udp(port),
                             (true, true) => LeasePort::TcpUdp(port),
@@ -179,11 +184,17 @@ impl FirewallConnection {
                                 return self.send_result(res).await;
                             }
                         };
+
+                        (lease_port, timeout)
                     }
-                }
+                };
 
                 // Open the firewall.
-                let res = fw.lock().await.open_port(conf, addr, lease_port).await;
+                let res = fw
+                    .lock()
+                    .await
+                    .open_port(conf, addr, lease_port, timeout)
+                    .await;
                 self.send_result(res).await
             }
             FirewallOperation::Ack | FirewallOperation::Nack => {

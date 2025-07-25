@@ -241,6 +241,9 @@ If a `users` list is given, then only these users can knock the port open.
 The `users` list is just a comma separated list of user identifiers.
 See `[KEYS]` section above for more information about user identifiers.
 
+Optionally a resource specific `timeout` override can be specified.
+The `timeout` is specified in seconds and will override the default timeout from `[NFTABLES] timeout=...`.
+
 If a client wants to knock a port open on a server, the client and the server must share a compatible resource entry for the port.
 
 Example resources:
@@ -260,6 +263,9 @@ Example resources:
 
 # Resource: TCP and UDP port 1234. Only for users 00000005 and 00000006
 00000001 = port: 1234 / tcp,udp / users: 00000005,00000006
+
+# Resource: TCP port 1234. Timeout 42 seconds instead of default timeout.
+00000001 = port: 1234, timeout: 42
 ```
 
 # Server specific configuration parts
@@ -326,7 +332,7 @@ This option has no default and must be specified in the server configuration.
 
 ### `timeout`
 
-The `timeout` option specifies the knock-open firewall rule timeout, in seconds.
+The `timeout` option specifies the default knock-open firewall rule timeout, in seconds.
 Knocked-open ports will be closed again this many seconds after the knocking.
 
 This is the time you have to connect to the opened port.
@@ -336,5 +342,7 @@ For most applications the port does only have to be open for the initial connect
 Established connections will stay active when the port is closed.
 
 It is recommended to set this to a small duration of e.g. one minute `timeout=60` or ten minutes `timeout=600`.
+
+This timeout can be overridden in the individual `[RESOURCES]`.
 
 This option defaults to `timeout=600`, if it is absent from the configuration.
