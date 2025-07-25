@@ -22,6 +22,8 @@ use nftables::{
 };
 use std::{borrow::Cow, fmt::Write as _, net::IpAddr};
 
+const NFTNL_UDATA_COMMENT_MAXLEN: usize = 128;
+
 struct NftNames<'a> {
     family: NfFamily,
     table: &'a str,
@@ -123,14 +125,25 @@ fn statement_accept<'a>() -> Statement<'a> {
 /// Comment string for a `Rule`.
 /// It can be used as unique identifier for lease rules.
 fn gen_rule_comment(addr: Option<IpAddr>, port: SingleLeasePort) -> ah::Result<String> {
-    let mut comment = String::with_capacity(256);
+    let mut comment = String::with_capacity(NFTNL_UDATA_COMMENT_MAXLEN);
+
     if let Some(addr) = addr {
         write!(&mut comment, "{addr}/")?;
     } else {
         write!(&mut comment, "any/")?;
     }
     write!(&mut comment, "{port}/accept/letmein/GENERATED")?;
-    Ok(comment)
+
+    if comment.len() > NFTNL_UDATA_COMMENT_MAXLEN {
+        Err(err!(
+            "Could not generate nftables rule comment. \
+            The length {} is longer than the maximum of {}.",
+            comment.len(),
+            NFTNL_UDATA_COMMENT_MAXLEN
+        ))
+    } else {
+        Ok(comment)
+    }
 }
 
 /// Generate a nftables add-rule for this addr/port.
