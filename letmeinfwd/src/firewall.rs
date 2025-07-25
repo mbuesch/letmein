@@ -64,7 +64,7 @@ struct Lease {
 }
 
 impl Lease {
-    /// Create a new lease with maximum timeout.
+    /// Create a new port-lease.
     pub fn new(conf: &Config, addr: IpAddr, port: LeasePort, timeout: Option<Duration>) -> Self {
         // The upper layers must never give us a lease request for the control port.
         assert_ne!(
