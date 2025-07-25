@@ -1,4 +1,4 @@
-# letmein - Authenticated port knocking
+# letmein - Authenticated port/firewall knocking
 
 Letmein is a simple port knocker with a simple and secure authentication mechanism.
 It can be used to harden against pre-authentication attacks on services like SSH, VPN, IMAP and many more.
@@ -20,6 +20,9 @@ It's not as hard and as much work as it sounds. :)
 
 The letmein control communication itself defaults to TCP port 5800, but it can be configured to any TCP or UDP port.
 If you choose a UDP port as control port and configure [control-error-policy=basic-auth](doc/CONFIGURATION.md#control-error-policy), then the letmein service itself operates in stealth mode and doesn't respond to unauthenticated incoming messages.
+
+Letmein can be used to knock-open single ports or to knock-enable completely user defined `nftables` rules by adding a `nftables` `jump` statement after successful knocking.
+This way you can for example knock-enable forwarding rules or arbitrary user defined firewall rules.
 
 ## Typical letmein operation flow
 

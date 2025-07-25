@@ -16,6 +16,24 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Firewall chain type.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FirewallChain {
+    Input,
+    Forward,
+    Output,
+}
+
+impl std::fmt::Display for FirewallChain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Input => write!(f, "chain-input"),
+            Self::Forward => write!(f, "chain-forward"),
+            Self::Output => write!(f, "chain-output"),
+        }
+    }
+}
+
 /// TCP and/or UDP port number.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LeasePort {
@@ -55,17 +73,52 @@ impl std::fmt::Display for SingleLeasePort {
     }
 }
 
-/// Dynamic port/address lease.
+/// Dynamic resource lease type.
+#[derive(Clone)]
+enum LeaseType {
+    Port {
+        port: LeasePort,
+    },
+    Jump {
+        chain: FirewallChain,
+        target: String,
+        match_saddr: bool,
+    },
+}
+
+impl std::fmt::Display for LeaseType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Port { port } => {
+                write!(f, "Port({port})")
+            }
+            Self::Jump {
+                chain,
+                target,
+                match_saddr: _,
+            } => {
+                write!(f, "Jump({chain}.{target})")
+            }
+        }
+    }
+}
+
+/// Dynamic resource lease.
 #[derive(Clone)]
 struct Lease {
-    addr: IpAddr,
-    port: LeasePort,
+    addr: Option<IpAddr>,
     timeout: Instant,
+    type_: LeaseType,
 }
 
 impl Lease {
     /// Create a new port-lease.
-    pub fn new(conf: &Config, addr: IpAddr, port: LeasePort, timeout: Option<Duration>) -> Self {
+    pub fn new_port(
+        conf: &Config,
+        addr: IpAddr,
+        port: LeasePort,
+        timeout: Option<Duration>,
+    ) -> Self {
         // The upper layers must never give us a lease request for the control port.
         assert_ne!(
             conf.port().port,
@@ -75,11 +128,41 @@ impl Lease {
                 LeasePort::TcpUdp(p) => p,
             }
         );
+        Self::new(conf, Some(addr), LeaseType::Port { port }, timeout)
+    }
+
+    /// Create a new jump-lease.
+    pub fn new_jump(
+        conf: &Config,
+        addr: Option<IpAddr>,
+        chain: FirewallChain,
+        target: &str,
+        match_saddr: bool,
+        timeout: Option<Duration>,
+    ) -> Self {
+        Self::new(
+            conf,
+            addr,
+            LeaseType::Jump {
+                chain,
+                target: target.to_string(),
+                match_saddr,
+            },
+            timeout,
+        )
+    }
+
+    fn new(
+        conf: &Config,
+        addr: Option<IpAddr>,
+        type_: LeaseType,
+        timeout: Option<Duration>,
+    ) -> Self {
         let timeout = Instant::now() + timeout.unwrap_or_else(|| conf.nft_timeout());
         Self {
             addr,
-            port,
             timeout,
+            type_,
         }
     }
 
@@ -94,47 +177,71 @@ impl Lease {
     }
 
     /// Get the IP address of this lease.
-    pub fn addr(&self) -> IpAddr {
+    pub fn addr(&self) -> Option<IpAddr> {
         self.addr
     }
 
-    /// Get the port number of this lease.
-    pub fn port(&self) -> LeasePort {
-        self.port
+    /// Get the lease type.
+    pub fn type_(&self) -> &LeaseType {
+        &self.type_
     }
 }
 
 impl std::fmt::Display for Lease {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "Lease(addr={}, port={})", self.addr(), self.port())
+        let addr = self
+            .addr()
+            .map(|a| a.to_string())
+            .unwrap_or_else(|| "any".to_string());
+        write!(f, "Lease(addr={addr}, {})", self.type_())
     }
 }
 
-/// Key in the lease map.
-type LeaseId = (IpAddr, LeasePort);
-
-/// A map of [Lease]s.
-type LeaseMap = HashMap<LeaseId, Lease>;
-
-/// Prune (remove) all leases that have timed out.
+/// Key in the port lease map.
 ///
-/// Returns a `Vec` of pruned [Lease]s.
-/// If no lease timed out, an empty `Vec` is returned.
-#[must_use]
-fn prune_all_lease_timeouts(conf: &Config, leases: &mut LeaseMap) -> Vec<Lease> {
-    let mut pruned = vec![];
-    let now = Instant::now();
-    leases.retain(|_, lease| {
-        let timed_out = lease.is_timed_out(now);
-        if timed_out {
-            pruned.push(lease.clone());
-            if conf.debug() {
-                println!("firewall: {lease} timed out");
+/// - `0`: Address of the client that the port is opened for.
+/// - `1`: Port number and type that is opened.
+type PortLeaseId = (IpAddr, LeasePort);
+
+/// A map of port [Lease]s.
+type PortLeaseMap = HashMap<PortLeaseId, Lease>;
+
+/// Key in the jump lease map.
+///
+/// - `0`: Address of the client that the jump uses as saddr condition
+///   or `None` if the jump is unconditional.
+/// - `1`: The firewall chain that the jump is added to.
+/// - `2`: The name of the target chain that the jump jumps to.
+type JumpLeaseId = (Option<IpAddr>, FirewallChain, String);
+
+/// A map of jump [Lease]s.
+type JumpLeaseMap = HashMap<JumpLeaseId, Lease>;
+
+trait LeaseMapOps {
+    /// Prune (remove) all leases that have timed out.
+    ///
+    /// Returns a `Vec` of pruned [Lease]s.
+    /// If no lease timed out, an empty `Vec` is returned.
+    #[must_use]
+    fn prune_timeouts(&mut self, conf: &Config) -> Vec<Lease>;
+}
+
+impl<K> LeaseMapOps for HashMap<K, Lease> {
+    fn prune_timeouts(&mut self, conf: &Config) -> Vec<Lease> {
+        let mut pruned = vec![];
+        let now = Instant::now();
+        self.retain(|_, lease| {
+            let timed_out = lease.is_timed_out(now);
+            if timed_out {
+                pruned.push(lease.clone());
+                if conf.debug() {
+                    println!("firewall: {lease} timed out");
+                }
             }
-        }
-        !timed_out
-    });
-    pruned
+            !timed_out
+        });
+        pruned
+    }
 }
 
 /// Firewall maintenance operations.
@@ -148,8 +255,34 @@ pub trait FirewallMaintain {
     async fn maintain(&mut self, conf: &Config) -> ah::Result<()>;
 }
 
-/// Firewall knock-open operations.
-pub trait FirewallOpen {
+/// Firewall jump targets for a jump lease.
+#[derive(Clone, Default)]
+pub struct FirewallJumpTargets {
+    pub input: Option<String>,
+    pub input_match_saddr: bool,
+    pub forward: Option<String>,
+    pub forward_match_saddr: bool,
+    pub output: Option<String>,
+    pub output_match_saddr: bool,
+}
+
+impl std::fmt::Display for FirewallJumpTargets {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        if let Some(input) = &self.input {
+            write!(f, "input={input} ")?;
+        }
+        if let Some(forward) = &self.forward {
+            write!(f, "forward={forward} ")?;
+        }
+        if let Some(output) = &self.output {
+            write!(f, "output={output} ")?;
+        }
+        Ok(())
+    }
+}
+
+/// Firewall action operations.
+pub trait FirewallAction {
     /// Add a rule to open the specified `port` for the specified `remote_addr`.
     /// This operation shall handle the case where there already is such
     /// a rule present gracefully.
@@ -158,6 +291,17 @@ pub trait FirewallOpen {
         conf: &Config,
         remote_addr: IpAddr,
         port: LeasePort,
+        timeout: Option<Duration>,
+    ) -> ah::Result<()>;
+
+    /// Add jump rules to jump to the specified processing rule chains.
+    /// This operation shall handle the case where there already is such
+    /// a rule present gracefully.
+    async fn add_jump(
+        &mut self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        targets: &FirewallJumpTargets,
         timeout: Option<Duration>,
     ) -> ah::Result<()>;
 }

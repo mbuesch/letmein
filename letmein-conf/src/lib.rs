@@ -129,18 +129,38 @@ impl std::fmt::Display for ControlPort {
 pub enum Resource {
     /// Port resource.
     Port {
+        id: ResourceId,
         port: u16,
         tcp: bool,
         udp: bool,
         timeout: Option<Duration>,
         users: Vec<UserId>,
     },
+    Jump {
+        id: ResourceId,
+        input: Option<String>,
+        input_match_saddr: bool,
+        forward: Option<String>,
+        forward_match_saddr: bool,
+        output: Option<String>,
+        output_match_saddr: bool,
+        timeout: Option<Duration>,
+        users: Vec<UserId>,
+    },
 }
 
 impl Resource {
+    pub fn id(&self) -> ResourceId {
+        match self {
+            Self::Port { id, .. } => *id,
+            Self::Jump { id, .. } => *id,
+        }
+    }
+
     pub fn contains_user(&self, id: UserId) -> bool {
         let users = match self {
             Self::Port { users, .. } => users,
+            Self::Jump { users, .. } => users,
         };
         if users.is_empty() {
             // This resource is unrestricted.
@@ -413,12 +433,14 @@ fn extract_resource_port(
                     ));
                 }
             }
+            Resource::Jump { .. } => (),
         }
     }
 
     resources.insert(
         id,
         Resource::Port {
+            id,
             port,
             tcp,
             udp,
@@ -429,7 +451,114 @@ fn extract_resource_port(
     Ok(())
 }
 
-#[allow(clippy::single_match)]
+fn extract_resource_jump(
+    id: ResourceId,
+    resources: &mut HashMap<ResourceId, Resource>,
+    map: &Map,
+) -> ah::Result<()> {
+    let mut input: Option<String> = None;
+    let mut input_match_saddr = false;
+    let mut forward: Option<String> = None;
+    let mut forward_match_saddr = false;
+    let mut output: Option<String> = None;
+    let mut output_match_saddr = false;
+    let mut timeout: Option<Duration> = None;
+    let mut users: Vec<String> = vec![];
+
+    for item in map.items() {
+        match item {
+            MapItem::KeyValues(k, vs) => {
+                if k == "jump" {
+                    return Err(err!("[RESOURCE] invalid 'jump' option"));
+                } else if k == "input" {
+                    if vs.len() == 1 {
+                        input = Some(vs[0].trim().to_string());
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'input' option"));
+                    }
+                } else if k == "input-match" {
+                    if vs.len() == 1 && vs[0].trim() == "saddr" {
+                        input_match_saddr = true;
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'input-match' option"));
+                    }
+                } else if k == "forward" {
+                    if vs.len() == 1 {
+                        forward = Some(vs[0].trim().to_string());
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'forward' option"));
+                    }
+                } else if k == "forward-match" {
+                    if vs.len() == 1 && vs[0].trim() == "saddr" {
+                        forward_match_saddr = true;
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'forward-match' option"));
+                    }
+                } else if k == "output" {
+                    if vs.len() == 1 {
+                        output = Some(vs[0].trim().to_string());
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'output' option"));
+                    }
+                } else if k == "output-match" {
+                    if vs.len() == 1 && vs[0].trim() == "saddr" {
+                        output_match_saddr = true;
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'output-match' option"));
+                    }
+                } else if k == "timeout" {
+                    if vs.len() == 1 {
+                        if timeout.is_some() {
+                            return Err(err!("[RESOURCE] multiple 'timeout' values"));
+                        }
+                        timeout = Some(parse_duration(&vs[0]).context("[RESOURCES] timeout")?);
+                    } else {
+                        return Err(err!("[RESOURCE] invalid 'timeout' option"));
+                    }
+                } else if k == "users" {
+                    if !users.is_empty() {
+                        return Err(err!("[RESOURCE] multiple 'users' values"));
+                    }
+                    users = vs.clone();
+                } else {
+                    return Err(err!("[RESOURCE] unknown option: {k}"));
+                }
+            }
+            MapItem::Values(vs) => {
+                if vs.len() == 1 && vs[0].trim() == "jump" {
+                    // jump resource.
+                } else {
+                    return Err(err!("[RESOURCE] unknown values: {vs:?}"));
+                }
+            }
+        }
+    }
+
+    if input.is_none() && forward.is_none() && output.is_none() {
+        return Err(err!(
+            "[RESOURCE] '{id}': 'jump' resource has no 'input', 'forward' or 'output' target."
+        ));
+    }
+
+    let users = extract_users(id, &users)?;
+
+    resources.insert(
+        id,
+        Resource::Jump {
+            id,
+            input,
+            input_match_saddr,
+            forward,
+            forward_match_saddr,
+            output,
+            output_match_saddr,
+            timeout,
+            users,
+        },
+    );
+    Ok(())
+}
+
 fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
     let mut resources = HashMap::new();
     if let Some(options) = ini.options_iter("RESOURCES") {
@@ -446,16 +575,20 @@ fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
 
             let map = resource.parse::<Map>().context("[RESOURCES]")?;
             let mut is_port = false;
+            let mut is_jump = false;
 
             for item in map.items() {
                 match item.key() {
                     Some("port") => is_port = true,
+                    Some("jump") => is_jump = true,
                     _ => (),
                 }
             }
 
-            if is_port {
+            if is_port && !is_jump {
                 extract_resource_port(id, &mut resources, &map)?;
+            } else if !is_port && is_jump {
+                extract_resource_jump(id, &mut resources, &map)?;
             } else {
                 return Err(err!(
                     "[RESOURCE] Resource ID '{id}' is not a 'port' resource."
@@ -527,6 +660,14 @@ fn get_nft_chain_input(ini: &Ini) -> ah::Result<String> {
     get_nft_chain(ini, "chain-input")
 }
 
+fn get_nft_chain_forward(ini: &Ini) -> ah::Result<String> {
+    get_nft_chain(ini, "chain-forward")
+}
+
+fn get_nft_chain_output(ini: &Ini) -> ah::Result<String> {
+    get_nft_chain(ini, "chain-output")
+}
+
 fn get_nft_timeout(ini: &Ini) -> ah::Result<Duration> {
     if let Some(nft_timeout) = ini.get("NFTABLES", "timeout") {
         parse_duration(nft_timeout)
@@ -563,6 +704,8 @@ pub struct Config {
     nft_family: String,
     nft_table: String,
     nft_chain_input: String,
+    nft_chain_forward: String,
+    nft_chain_output: String,
     nft_timeout: Duration,
 }
 
@@ -629,6 +772,8 @@ impl Config {
         let mut nft_family = Default::default();
         let mut nft_table = Default::default();
         let mut nft_chain_input = Default::default();
+        let mut nft_chain_forward = Default::default();
+        let mut nft_chain_output = Default::default();
         let mut nft_timeout = DEFAULT_NFT_TIMEOUT;
 
         let debug = get_debug(ini)?;
@@ -646,6 +791,8 @@ impl Config {
             nft_family = get_nft_family(ini)?;
             nft_table = get_nft_table(ini)?;
             nft_chain_input = get_nft_chain_input(ini)?;
+            nft_chain_forward = get_nft_chain_forward(ini)?;
+            nft_chain_output = get_nft_chain_output(ini)?;
             nft_timeout = get_nft_timeout(ini)?;
         }
 
@@ -662,6 +809,8 @@ impl Config {
         self.nft_family = nft_family;
         self.nft_table = nft_table;
         self.nft_chain_input = nft_chain_input;
+        self.nft_chain_forward = nft_chain_forward;
+        self.nft_chain_output = nft_chain_output;
         self.nft_timeout = nft_timeout;
         Ok(())
     }
@@ -721,6 +870,7 @@ impl Config {
                         }
                     }
                 }
+                Resource::Jump { .. } => (),
             }
         }
         None
@@ -749,6 +899,16 @@ impl Config {
     /// Get the `chain-input` option from `[NFTABLES]` section.
     pub fn nft_chain_input(&self) -> &str {
         &self.nft_chain_input
+    }
+
+    /// Get the `chain-forward` option from `[NFTABLES]` section.
+    pub fn nft_chain_forward(&self) -> &str {
+        &self.nft_chain_forward
+    }
+
+    /// Get the `chain-output` option from `[NFTABLES]` section.
+    pub fn nft_chain_output(&self) -> &str {
+        &self.nft_chain_output
     }
 
     /// Get the `timeout` option from `[NFTABLES]` section.
@@ -874,6 +1034,7 @@ mod tests {
         assert_eq!(
             resources.get(&0x9876ABCD.into()).unwrap(),
             &Resource::Port {
+                id: 0x9876ABCD.into(),
                 port: 4096,
                 tcp: true,
                 udp: false,
@@ -889,6 +1050,7 @@ mod tests {
         assert_eq!(
             resources.get(&0x9876ABCD.into()).unwrap(),
             &Resource::Port {
+                id: 0x9876ABCD.into(),
                 port: 4096,
                 tcp: true,
                 udp: false,
@@ -904,6 +1066,7 @@ mod tests {
         assert_eq!(
             resources.get(&0x9876ABCD.into()).unwrap(),
             &Resource::Port {
+                id: 0x9876ABCD.into(),
                 port: 4096,
                 tcp: false,
                 udp: true,
@@ -919,11 +1082,95 @@ mod tests {
         assert_eq!(
             resources.get(&0x9876ABCD.into()).unwrap(),
             &Resource::Port {
+                id: 0x9876ABCD.into(),
                 port: 4096,
                 tcp: true,
                 udp: true,
                 timeout: Some(Duration::from_secs(42)),
                 users: vec![4.into()]
+            }
+        );
+    }
+
+    #[test]
+    fn test_resources_jump() {
+        let mut ini = Ini::new();
+        ini.parse_str("[RESOURCES]\n1234FEDC = jump / input: FOO\n")
+            .unwrap();
+        let resources = get_resources(&ini).unwrap();
+        assert_eq!(
+            resources.get(&0x1234FEDC.into()).unwrap(),
+            &Resource::Jump {
+                id: 0x1234FEDC.into(),
+                input: Some("FOO".to_string()),
+                input_match_saddr: false,
+                forward: None,
+                forward_match_saddr: false,
+                output: None,
+                output_match_saddr: false,
+                timeout: None,
+                users: vec![]
+            }
+        );
+
+        let mut ini = Ini::new();
+        ini.parse_str(
+            "[RESOURCES]\n1234FEDC = jump / input: FOO / forward:BAR / input-match: saddr\n",
+        )
+        .unwrap();
+        let resources = get_resources(&ini).unwrap();
+        assert_eq!(
+            resources.get(&0x1234FEDC.into()).unwrap(),
+            &Resource::Jump {
+                id: 0x1234FEDC.into(),
+                input: Some("FOO".to_string()),
+                input_match_saddr: true,
+                forward: Some("BAR".to_string()),
+                forward_match_saddr: false,
+                output: None,
+                output_match_saddr: false,
+                timeout: None,
+                users: vec![]
+            }
+        );
+
+        let mut ini = Ini::new();
+        ini.parse_str("[RESOURCES]\n1234FEDC = jump / input: FOO / forward:BAR / output: BIZ / users: 1, 10, 100 / output-match: saddr\n")
+            .unwrap();
+        let resources = get_resources(&ini).unwrap();
+        assert_eq!(
+            resources.get(&0x1234FEDC.into()).unwrap(),
+            &Resource::Jump {
+                id: 0x1234FEDC.into(),
+                input: Some("FOO".to_string()),
+                input_match_saddr: false,
+                forward: Some("BAR".to_string()),
+                forward_match_saddr: false,
+                output: Some("BIZ".to_string()),
+                output_match_saddr: true,
+                timeout: None,
+                users: vec![0x1.into(), 0x10.into(), 0x100.into()]
+            }
+        );
+
+        let mut ini = Ini::new();
+        ini.parse_str(
+            "[RESOURCES]\n1234FEDC = jump / forward:BAR / forward-match: saddr / timeout: 3\n",
+        )
+        .unwrap();
+        let resources = get_resources(&ini).unwrap();
+        assert_eq!(
+            resources.get(&0x1234FEDC.into()).unwrap(),
+            &Resource::Jump {
+                id: 0x1234FEDC.into(),
+                input: None,
+                input_match_saddr: false,
+                forward: Some("BAR".to_string()),
+                forward_match_saddr: true,
+                output: None,
+                output_match_saddr: false,
+                timeout: Some(Duration::from_secs(3)),
+                users: vec![]
             }
         );
     }

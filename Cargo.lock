@@ -738,6 +738,7 @@ dependencies = [
  "clap",
  "letmein-conf",
  "letmein-fwproto",
+ "letmein-proto",
  "letmein-seccomp",
  "letmein-systemd",
  "libc",

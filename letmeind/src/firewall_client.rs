@@ -39,7 +39,9 @@ impl FirewallClient {
         match msg_reply.operation() {
             FirewallOperation::Ack => Ok(()),
             FirewallOperation::Nack => Err(err!("The firewall rejected the request")),
-            FirewallOperation::Open => Err(err!("Received invalid reply")),
+            FirewallOperation::Open | FirewallOperation::Jump => {
+                Err(err!("Received invalid reply"))
+            }
         }
     }
 
@@ -56,6 +58,24 @@ impl FirewallClient {
             .send(&mut self.stream)
             .await
             .context("Send port-open message")?;
+
+        // Receive the acknowledge reply.
+        self.recv_ack().await
+    }
+
+    /// Send a request to add a firewall "jump" rule.
+    pub async fn jump(
+        &mut self,
+        user: UserId,
+        resource: ResourceId,
+        addr: IpAddr,
+        conf_cs: &ConfigChecksum,
+    ) -> ah::Result<()> {
+        // Send an add-jump request to the firewall daemon.
+        FirewallMessage::new_jump(user, resource, addr, conf_cs)
+            .send(&mut self.stream)
+            .await
+            .context("Send add-jump message")?;
 
         // Receive the acknowledge reply.
         self.recv_ack().await

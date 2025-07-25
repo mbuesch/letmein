@@ -200,7 +200,7 @@ This configuration entry is what essentially authorizes the client to knock a po
 
 ## `[RESOURCES]`
 
-This section holds a table of knock-able ports.
+This section holds a table of knock-able ports or optionally more complex jump resources.
 
 There is an arbitrary amount of options of the following style in this section:
 
@@ -235,6 +235,11 @@ By default the port will only be opened for TCP.
 If you want TCP+UDP or UDP only, then specify this as flags in the resource.
 See examples below.
 
+Alternatively, instead of opening a single `port` the resource can be used to add a `jump` statement to the nftables firewall.
+This can be used to knock-open more complex and fully user defined firewall rules.
+The nftables `jump` statement lets you jump to a fully user defined chain from the letmein input, forward and/or output chains.
+Arbitrary manual rules can then be written in the jumped to chain.
+
 A resource can optionally be restricted to one or multiple `users`.
 If the `users` list is not given, then the resource is unrestricted and any successfully authenticated user can knock it open.
 If a `users` list is given, then only these users can knock the port open.
@@ -266,6 +271,23 @@ Example resources:
 
 # Resource: TCP port 1234. Timeout 42 seconds instead of default timeout.
 00000001 = port: 1234, timeout: 42
+
+# Jump to arbitrary user defined nftables chains based on whether
+# the resource is knocked open:
+00000001 = jump / input: MYCHAIN-INPUT / forward: MYCHAIN-FORWARD / output: MYCHAIN-OUTPUT
+
+# Invididual jump targets can be omitted, if not needed:
+00000001 = jump / input: MYCHAIN-INPUT
+
+# Restrict it to one or more users:
+00000001 = jump / input: MYCHAIN-INPUT / users: 00000001, 00000002
+
+# Match the jump rule to the 'saddr' doing the knock:
+00000001 = jump /
+           input: MYCHAIN-INPUT / forward: MYCHAIN-FORWARD / output: MYCHAIN-OUTPUT /
+           input-match: saddr / forward-match: saddr / output-match: saddr /
+           users: 00000001 /
+           timeout: 60
 ```
 
 # Server specific configuration parts
@@ -320,7 +342,7 @@ This option has no default and must be specified in the server configuration.
 
 ### `chain-input`
 
-This is the name of the nftables chain that letmein should control.
+This is the name of the nftables input chain that letmein should control.
 
 In the example configuration the table is `chain-input=LETMEIN-INPUT`.
 
@@ -329,6 +351,18 @@ If you don't know what this means, please use the example [nftables.conf](nftabl
 For more information about the nftables firewall, please see the nftables documentation.
 
 This option has no default and must be specified in the server configuration.
+
+### `chain-forward`
+
+This is the name of the nftables forward chain that letmein should control.
+
+This entry is optional and is only needed if you use `jump` resources with a forward rule.
+
+### `chain-output`
+
+This is the name of the nftables output chain that letmein should control.
+
+This entry is optional and is only needed if you use `jump` resources with an output rule.
 
 ### `timeout`
 

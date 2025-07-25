@@ -43,6 +43,8 @@ pub enum FirewallOperation {
     Ack,
     /// Open a port.
     Open,
+    /// Add a jump rule.
+    Jump,
 }
 
 impl TryFrom<u16> for FirewallOperation {
@@ -52,10 +54,12 @@ impl TryFrom<u16> for FirewallOperation {
         const OPERATION_NACK: u16 = FirewallOperation::Nack as u16;
         const OPERATION_ACK: u16 = FirewallOperation::Ack as u16;
         const OPERATION_OPEN: u16 = FirewallOperation::Open as u16;
+        const OPERATION_JUMP: u16 = FirewallOperation::Jump as u16;
         match value {
             OPERATION_NACK => Ok(Self::Nack),
             OPERATION_ACK => Ok(Self::Ack),
             OPERATION_OPEN => Ok(Self::Open),
+            OPERATION_JUMP => Ok(Self::Jump),
             _ => Err(err!("Invalid FirewallMessage/Operation value")),
         }
     }
@@ -177,6 +181,23 @@ impl FirewallMessage {
         }
     }
 
+    pub fn new_jump(
+        user: UserId,
+        resource: ResourceId,
+        addr: IpAddr,
+        conf_cs: &ConfigChecksum,
+    ) -> Self {
+        let (addr_type, addr) = addr_to_octets(addr);
+        Self {
+            operation: FirewallOperation::Jump,
+            user,
+            resource,
+            addr_type,
+            addr,
+            conf_cs: conf_cs.clone(),
+        }
+    }
+
     /// Construct a new acknowledge message.
     pub fn new_ack() -> Self {
         Self {
@@ -211,7 +232,9 @@ impl FirewallMessage {
     /// Get the `IpAddr` from this message.
     pub fn addr(&self) -> Option<IpAddr> {
         match self.operation {
-            FirewallOperation::Open => Some(octets_to_addr(self.addr_type, &self.addr)),
+            FirewallOperation::Open | FirewallOperation::Jump => {
+                Some(octets_to_addr(self.addr_type, &self.addr))
+            }
             FirewallOperation::Ack | FirewallOperation::Nack => None,
         }
     }
@@ -219,7 +242,7 @@ impl FirewallMessage {
     /// Get the configuration checksum from this message.
     pub fn conf_checksum(&self) -> Option<&ConfigChecksum> {
         match self.operation {
-            FirewallOperation::Open => Some(&self.conf_cs),
+            FirewallOperation::Open | FirewallOperation::Jump => Some(&self.conf_cs),
             FirewallOperation::Ack | FirewallOperation::Nack => None,
         }
     }
