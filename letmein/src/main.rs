@@ -152,6 +152,8 @@ enum Command {
         port: Option<u16>,
 
         /// Specify the resource ID instead of the [PORT] to knock open.
+        ///
+        /// This can be used to knock open a `jump` resource.
         #[arg(long, short = 'r', conflicts_with = "port")]
         resource: Option<ResourceId>,
 

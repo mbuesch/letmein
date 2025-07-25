@@ -7,8 +7,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::firewall::{
-    prune_all_lease_timeouts, FirewallMaintain, FirewallOpen, Lease, LeaseMap, LeasePort,
-    SingleLeasePort,
+    FirewallAction, FirewallChain, FirewallJumpTargets, FirewallMaintain, JumpLeaseMap, Lease,
+    LeaseMapOps as _, LeasePort, LeaseType, PortLeaseMap, SingleLeasePort,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::Config;
@@ -17,7 +17,7 @@ use nftables::{
     expr::{Expression, NamedExpression, Payload, PayloadField},
     helper::{apply_ruleset_with_args_async, get_current_ruleset_with_args_async, DEFAULT_ARGS},
     schema::{Chain, FlushObject, NfCmd, NfListObject, NfObject, Rule},
-    stmt::{Counter, Match, Operator, Statement},
+    stmt::{Counter, JumpTarget, Match, Operator, Statement},
     types::NfFamily,
 };
 use std::{borrow::Cow, fmt::Write as _, net::IpAddr, time::Duration};
@@ -28,6 +28,8 @@ struct NftNames<'a> {
     family: NfFamily,
     table: &'a str,
     chain_input: &'a str,
+    chain_forward: Option<&'a str>,
+    chain_output: Option<&'a str>,
 }
 
 impl<'a> NftNames<'a> {
@@ -50,13 +52,63 @@ impl<'a> NftNames<'a> {
             "" => {
                 return Err(err!("nftables chain-input not specified."));
             }
-            table => table,
+            chain => chain,
+        };
+        let chain_forward = match conf.nft_chain_forward() {
+            "" => None,
+            chain => Some(chain),
+        };
+        let chain_output = match conf.nft_chain_output() {
+            "" => None,
+            chain => Some(chain),
         };
         Ok(NftNames {
             family,
             table,
             chain_input,
+            chain_forward,
+            chain_output,
         })
+    }
+
+    fn get_chain_input(&self) -> ah::Result<&'a str> {
+        Ok(self.chain_input)
+    }
+
+    fn get_chain_forward(&self) -> ah::Result<&'a str> {
+        if let Some(chain_forward) = self.chain_forward {
+            Ok(chain_forward)
+        } else {
+            Err(err!(
+                "[NFTABLES] 'chain-forward=' is not specified in the configuration"
+            ))
+        }
+    }
+
+    fn get_chain_output(&self) -> ah::Result<&'a str> {
+        if let Some(chain_output) = self.chain_output {
+            Ok(chain_output)
+        } else {
+            Err(err!(
+                "[NFTABLES] 'chain-output=' is not specified in the configuration"
+            ))
+        }
+    }
+
+    fn get_chain(&self, chain: FirewallChain) -> ah::Result<&'a str> {
+        match chain {
+            FirewallChain::Input => self.get_chain_input(),
+            FirewallChain::Forward => self.get_chain_forward(),
+            FirewallChain::Output => self.get_chain_output(),
+        }
+    }
+}
+
+fn option_if<T>(t: T, c: bool) -> Option<T> {
+    if c {
+        Some(t)
+    } else {
+        None
     }
 }
 
@@ -122,6 +174,13 @@ fn statement_counter<'a>() -> Statement<'a> {
     Statement::Counter(Counter::Anonymous(None))
 }
 
+/// Create an nftables `jump` statement.
+fn statement_jump(target: &str) -> Statement<'_> {
+    Statement::Jump(JumpTarget {
+        target: Cow::Borrowed(target),
+    })
+}
+
 /// Create an nftables `accept` statement.
 fn statement_accept<'a>() -> Statement<'a> {
     Statement::Accept(None)
@@ -129,7 +188,11 @@ fn statement_accept<'a>() -> Statement<'a> {
 
 /// Comment string for a `Rule`.
 /// It can be used as unique identifier for lease rules.
-fn gen_rule_comment(addr: Option<IpAddr>, port: SingleLeasePort) -> ah::Result<String> {
+fn gen_rule_comment(
+    addr: Option<IpAddr>,
+    port: Option<SingleLeasePort>,
+    target: Option<&str>,
+) -> ah::Result<String> {
     let mut comment = String::with_capacity(NFTNL_UDATA_COMMENT_MAXLEN);
 
     if let Some(addr) = addr {
@@ -137,7 +200,13 @@ fn gen_rule_comment(addr: Option<IpAddr>, port: SingleLeasePort) -> ah::Result<S
     } else {
         write!(&mut comment, "any/")?;
     }
-    write!(&mut comment, "{port}/accept/LETMEIN")?;
+    if let Some(port) = port {
+        write!(&mut comment, "port/{port}/accept/")?;
+    }
+    if let Some(target) = target {
+        write!(&mut comment, "jump/{target}/")?;
+    }
+    write!(&mut comment, "LETMEIN")?;
 
     if comment.len() > NFTNL_UDATA_COMMENT_MAXLEN {
         Err(err!(
@@ -153,12 +222,11 @@ fn gen_rule_comment(addr: Option<IpAddr>, port: SingleLeasePort) -> ah::Result<S
 
 /// Generate a nftables add-rule for this addr/port.
 /// This rule will open the port for the IP address.
-fn gen_add_lease_cmd(
-    conf: &Config,
+fn gen_add_port_lease_cmd<'a>(
+    names: &'a NftNames<'a>,
     addr: Option<IpAddr>,
     port: SingleLeasePort,
-) -> ah::Result<NfCmd<'_>> {
-    let names = NftNames::get(conf).context("Read configuration")?;
+) -> ah::Result<NfCmd<'a>> {
     let mut expr = Vec::with_capacity(4);
     if let Some(addr) = addr {
         expr.push(statement_match_saddr(names.family, addr)?);
@@ -173,31 +241,86 @@ fn gen_add_lease_cmd(
         expr: Cow::Owned(expr),
         ..Default::default()
     };
-    rule.comment = Some(Cow::Owned(gen_rule_comment(addr, port)?));
+    rule.comment = Some(Cow::Owned(gen_rule_comment(addr, Some(port), None)?));
+    Ok(NfCmd::Add(NfListObject::Rule(rule)))
+}
+
+/// Generate a nftables jump-rule for this chain.
+fn gen_add_jump_cmd<'a>(
+    names: &'a NftNames,
+    chain: &'a str,
+    addr: Option<IpAddr>,
+    target: &'a str,
+) -> ah::Result<NfCmd<'a>> {
+    let mut expr = Vec::with_capacity(2);
+    if let Some(addr) = addr {
+        expr.push(statement_match_saddr(names.family, addr)?);
+    }
+    expr.push(statement_jump(target));
+    let mut rule = Rule {
+        family: names.family,
+        table: Cow::Borrowed(names.table),
+        chain: Cow::Borrowed(chain),
+        expr: Cow::Owned(expr),
+        ..Default::default()
+    };
+    rule.comment = Some(Cow::Owned(gen_rule_comment(addr, None, Some(target))?));
     Ok(NfCmd::Add(NfListObject::Rule(rule)))
 }
 
 /// Generate the nftables add-rule commands for this lease.
 /// These commands will open the port(s) for the IP address.
-fn gen_add_lease_cmds<'a>(conf: &'a Config, lease: &Lease) -> ah::Result<Vec<NfCmd<'a>>> {
-    let mut cmds = Vec::with_capacity(2);
-    let addr = Some(lease.addr());
-    match lease.port() {
-        LeasePort::Tcp(port) => {
-            cmds.push(gen_add_lease_cmd(conf, addr, SingleLeasePort::Tcp(port))?);
+fn gen_add_lease_cmds<'a>(
+    conf: &'a Config,
+    names: &'a NftNames<'a>,
+    lease: &'a Lease,
+) -> ah::Result<Vec<NfCmd<'a>>> {
+    let mut cmds = Vec::with_capacity(3);
+    match lease.type_() {
+        LeaseType::Port { port } => {
+            let addr = lease.addr();
+            assert!(addr.is_some());
+            match port {
+                LeasePort::Tcp(port) => {
+                    let port = SingleLeasePort::Tcp(*port);
+                    cmds.push(gen_add_port_lease_cmd(names, addr, port)?);
+                }
+                LeasePort::Udp(port) => {
+                    let port = SingleLeasePort::Udp(*port);
+                    cmds.push(gen_add_port_lease_cmd(names, addr, port)?);
+                }
+                LeasePort::TcpUdp(port) => {
+                    let port_tcp = SingleLeasePort::Tcp(*port);
+                    let port_udp = SingleLeasePort::Udp(*port);
+                    cmds.push(gen_add_port_lease_cmd(names, addr, port_tcp)?);
+                    cmds.push(gen_add_port_lease_cmd(names, addr, port_udp)?);
+                }
+            }
         }
-        LeasePort::Udp(port) => {
-            cmds.push(gen_add_lease_cmd(conf, addr, SingleLeasePort::Udp(port))?);
-        }
-        LeasePort::TcpUdp(port) => {
-            cmds.push(gen_add_lease_cmd(conf, addr, SingleLeasePort::Tcp(port))?);
-            cmds.push(gen_add_lease_cmd(conf, addr, SingleLeasePort::Udp(port))?);
+        LeaseType::Jump {
+            chain,
+            target,
+            match_saddr,
+        } => {
+            assert_eq!(*match_saddr, lease.addr().is_some());
+            let chain = names.get_chain(*chain)?;
+            cmds.push(gen_add_jump_cmd(names, chain, lease.addr(), target)?);
         }
     }
     if conf.debug() {
         println!("nftables: Adding rules for {lease}");
     }
     Ok(cmds)
+}
+
+/// Generate the nftables flush-chain command to delete the contents of a chain.
+fn gen_flush_chain_cmd<'a>(names: &'a NftNames<'a>, chain: &'a str) -> ah::Result<NfCmd<'a>> {
+    Ok(NfCmd::Flush(FlushObject::Chain(Chain {
+        family: names.family,
+        table: Cow::Borrowed(names.table),
+        name: Cow::Borrowed(chain),
+        ..Default::default()
+    })))
 }
 
 struct ListedRuleset<'a> {
@@ -223,11 +346,12 @@ impl ListedRuleset<'_> {
         &self,
         family: NfFamily,
         table: &str,
-        chain_input: &str,
-        addr: IpAddr,
-        port: SingleLeasePort,
+        chain: &str,
+        addr: Option<IpAddr>,
+        port: Option<SingleLeasePort>,
+        target: Option<&str>,
     ) -> ah::Result<u32> {
-        let comment = gen_rule_comment(Some(addr), port)?;
+        let comment = gen_rule_comment(addr, port, target)?;
         for obj in &*self.objs {
             if let NfObject::ListObject(obj) = obj {
                 match obj {
@@ -240,7 +364,7 @@ impl ListedRuleset<'_> {
                         ..
                     }) if *rule_family == family
                         && *rule_table == table
-                        && *rule_chain == chain_input
+                        && *rule_chain == chain
                         && *rule_comment == comment =>
                     {
                         return Ok(*rule_handle);
@@ -250,7 +374,10 @@ impl ListedRuleset<'_> {
             }
         }
         Err(err!(
-            "Nftables 'handle' for {addr}:{port} not found in the kernel ruleset."
+            "Nftables handle for {}/{}/{} not found in the kernel ruleset.",
+            addr.map(|a| a.to_string()).unwrap_or_default(),
+            port.map(|p| p.to_string()).unwrap_or_default(),
+            target.unwrap_or_default()
         ))
     }
 
@@ -259,35 +386,52 @@ impl ListedRuleset<'_> {
     pub fn gen_delete_lease_cmds<'a>(
         &self,
         conf: &'a Config,
+        names: &'a NftNames,
         lease: &Lease,
     ) -> ah::Result<Vec<NfCmd<'a>>> {
-        let mut cmds = Vec::with_capacity(2);
-        let names = NftNames::get(conf).context("Read configuration")?;
         let addr = lease.addr();
 
-        let new_rule = |port: SingleLeasePort| -> ah::Result<NfCmd> {
+        let new_rule = |chain: &'a str,
+                        port: Option<SingleLeasePort>,
+                        target: Option<&str>|
+         -> ah::Result<NfCmd> {
             let mut rule = Rule {
                 family: names.family,
                 table: Cow::Borrowed(names.table),
-                chain: Cow::Borrowed(names.chain_input),
+                chain: Cow::Borrowed(chain),
                 expr: Cow::Owned(vec![]),
                 ..Default::default()
             };
             rule.handle =
-                Some(self.find_handle(names.family, names.table, names.chain_input, addr, port)?);
+                Some(self.find_handle(names.family, names.table, chain, addr, port, target)?);
             Ok(NfCmd::Delete(NfListObject::Rule(rule)))
         };
 
-        match lease.port() {
-            LeasePort::Tcp(port) => {
-                cmds.push(new_rule(SingleLeasePort::Tcp(port))?);
-            }
-            LeasePort::Udp(port) => {
-                cmds.push(new_rule(SingleLeasePort::Udp(port))?);
-            }
-            LeasePort::TcpUdp(port) => {
-                cmds.push(new_rule(SingleLeasePort::Tcp(port))?);
-                cmds.push(new_rule(SingleLeasePort::Udp(port))?);
+        let mut cmds = Vec::with_capacity(2);
+        match lease.type_() {
+            LeaseType::Port { port } => match port {
+                LeasePort::Tcp(port) => {
+                    let chain = names.get_chain_input()?;
+                    cmds.push(new_rule(chain, Some(SingleLeasePort::Tcp(*port)), None)?);
+                }
+                LeasePort::Udp(port) => {
+                    let chain = names.get_chain_input()?;
+                    cmds.push(new_rule(chain, Some(SingleLeasePort::Udp(*port)), None)?);
+                }
+                LeasePort::TcpUdp(port) => {
+                    let chain = names.get_chain_input()?;
+                    cmds.push(new_rule(chain, Some(SingleLeasePort::Tcp(*port)), None)?);
+                    cmds.push(new_rule(chain, Some(SingleLeasePort::Udp(*port)), None)?);
+                }
+            },
+            LeaseType::Jump {
+                chain,
+                target,
+                match_saddr,
+            } => {
+                assert_eq!(*match_saddr, lease.addr().is_some());
+                let chain = names.get_chain(*chain)?;
+                cmds.push(new_rule(chain, None, Some(target))?);
             }
         }
         if conf.debug() {
@@ -298,7 +442,8 @@ impl ListedRuleset<'_> {
 }
 
 pub struct NftFirewall {
-    leases: LeaseMap,
+    port_leases: PortLeaseMap,
+    jump_leases: JumpLeaseMap,
     shutdown: bool,
     num_ctrl_rules: u8,
 }
@@ -321,7 +466,8 @@ impl NftFirewall {
         }
 
         let mut this = Self {
-            leases: LeaseMap::new(),
+            port_leases: PortLeaseMap::new(),
+            jump_leases: JumpLeaseMap::new(),
             shutdown: false,
             num_ctrl_rules: 0,
         };
@@ -338,11 +484,20 @@ impl NftFirewall {
     fn print_total_rule_count(&self, conf: &Config) {
         if conf.debug() {
             let mut count: usize = self.num_ctrl_rules.into();
-            for lease in self.leases.values() {
-                count += match lease.port() {
-                    LeasePort::Tcp(_) | LeasePort::Udp(_) => 1,
-                    LeasePort::TcpUdp(_) => 2,
+            for lease in self.port_leases.values() {
+                count += match lease.type_() {
+                    LeaseType::Port { port } => match port {
+                        LeasePort::Tcp(_) | LeasePort::Udp(_) => 1,
+                        LeasePort::TcpUdp(_) => 2,
+                    },
+                    _ => unreachable!(),
                 };
+            }
+            for lease in self.jump_leases.values() {
+                count += match lease.type_() {
+                    LeaseType::Jump { .. } => 1,
+                    _ => unreachable!(),
+                }
             }
             println!("nftables: A total of {count} rules is installed.");
         }
@@ -367,15 +522,16 @@ impl NftFirewall {
 
         let mut batch = Batch::new();
 
-        // Remove all rules from our chain.
-        batch.add_cmd(NfCmd::Flush(FlushObject::Chain(Chain {
-            family: names.family,
-            table: Cow::Borrowed(names.table),
-            name: Cow::Borrowed(names.chain_input),
-            ..Default::default()
-        })));
+        // Remove all rules from our chains.
+        batch.add_cmd(gen_flush_chain_cmd(&names, names.chain_input)?);
+        if let Some(chain_forward) = &names.chain_forward {
+            batch.add_cmd(gen_flush_chain_cmd(&names, chain_forward)?);
+        }
+        if let Some(chain_output) = &names.chain_output {
+            batch.add_cmd(gen_flush_chain_cmd(&names, chain_output)?);
+        }
         if conf.debug() {
-            println!("nftables: Chain flushed");
+            println!("nftables: All chains flushed");
         }
 
         self.num_ctrl_rules = 0;
@@ -383,7 +539,7 @@ impl NftFirewall {
             // Open the port letmeind is listening on.
             if conf.port().tcp {
                 let p = SingleLeasePort::Tcp(conf.port().port);
-                batch.add_cmd(gen_add_lease_cmd(conf, None, p)?);
+                batch.add_cmd(gen_add_port_lease_cmd(&names, None, p)?);
                 if conf.debug() {
                     println!("nftables: Adding control port rule for port={p}");
                 }
@@ -391,7 +547,7 @@ impl NftFirewall {
             }
             if conf.port().udp {
                 let p = SingleLeasePort::Udp(conf.port().port);
-                batch.add_cmd(gen_add_lease_cmd(conf, None, p)?);
+                batch.add_cmd(gen_add_port_lease_cmd(&names, None, p)?);
                 if conf.debug() {
                     println!("nftables: Adding control port rule for port={p}");
                 }
@@ -399,8 +555,8 @@ impl NftFirewall {
             }
 
             // Open all lease ports, restricted to the peer addresses.
-            for lease in self.leases.values() {
-                for cmd in gen_add_lease_cmds(conf, lease)? {
+            for lease in self.port_leases.values().chain(self.jump_leases.values()) {
+                for cmd in gen_add_lease_cmds(conf, &names, lease)? {
                     batch.add_cmd(cmd);
                 }
             }
@@ -412,9 +568,11 @@ impl NftFirewall {
 
     /// Generate one lease rule and apply it to the kernel.
     async fn nftables_add_lease(&mut self, conf: &Config, lease: &Lease) -> ah::Result<()> {
+        let names = NftNames::get(conf).context("Read configuration")?;
+
         // Open the lease port, restricted to the peer address.
         let mut batch = Batch::new();
-        for cmd in gen_add_lease_cmds(conf, lease)? {
+        for cmd in gen_add_lease_cmds(conf, &names, lease)? {
             batch.add_cmd(cmd);
         }
 
@@ -425,13 +583,15 @@ impl NftFirewall {
     /// Remove an existing lease rule from the kernel.
     async fn nftables_remove_leases(&mut self, conf: &Config, leases: &[Lease]) -> ah::Result<()> {
         if !leases.is_empty() {
+            let names = NftNames::get(conf).context("Read configuration")?;
+
             // Get the active ruleset from the kernel.
             let ruleset = ListedRuleset::from_kernel(conf).await?;
 
             // Add delete commands to remove the lease ports.
             let mut batch = Batch::new();
             for lease in leases {
-                for cmd in ruleset.gen_delete_lease_cmds(conf, lease)? {
+                for cmd in ruleset.gen_delete_lease_cmds(conf, &names, lease)? {
                     batch.add_cmd(cmd);
                 }
             }
@@ -447,10 +607,13 @@ impl FirewallMaintain for NftFirewall {
     /// Remove all leases and remove all rules from the kernel.
     async fn shutdown(&mut self, conf: &Config) -> ah::Result<()> {
         assert!(!self.shutdown);
+
         self.shutdown = true;
-        self.leases.clear();
+        self.port_leases.clear();
+        self.jump_leases.clear();
         self.nftables_full_rebuild(conf).await?;
         self.print_total_rule_count(conf);
+
         Ok(())
     }
 
@@ -458,7 +621,10 @@ impl FirewallMaintain for NftFirewall {
     /// This will remove timed-out leases.
     async fn maintain(&mut self, conf: &Config) -> ah::Result<()> {
         assert!(!self.shutdown);
-        let pruned = prune_all_lease_timeouts(conf, &mut self.leases);
+
+        let mut pruned = self.port_leases.prune_timeouts(conf);
+        pruned.append(&mut self.jump_leases.prune_timeouts(conf));
+
         if !pruned.is_empty() {
             if let Err(e) = self.nftables_remove_leases(conf, &pruned).await {
                 eprintln!("WARNING: Failed to remove lease(s): {e:?}");
@@ -471,7 +637,7 @@ impl FirewallMaintain for NftFirewall {
     }
 }
 
-impl FirewallOpen for NftFirewall {
+impl FirewallAction for NftFirewall {
     /// Add a lease and open the port for the specified IP address.
     /// If a lease for this port/address is already present, the timeout will be reset.
     /// Apply the rules to the kernel, if required.
@@ -483,13 +649,64 @@ impl FirewallOpen for NftFirewall {
         timeout: Option<Duration>,
     ) -> ah::Result<()> {
         assert!(!self.shutdown);
-        let id = (remote_addr, port);
-        if let Some(lease) = self.leases.get_mut(&id) {
+
+        let key = (remote_addr, port);
+        if let Some(lease) = self.port_leases.get_mut(&key) {
             lease.refresh_timeout(conf);
         } else {
-            let lease = Lease::new(conf, remote_addr, port, timeout);
+            let lease = Lease::new_port(conf, remote_addr, port, timeout);
             self.nftables_add_lease(conf, &lease).await?;
-            self.leases.insert(id, lease);
+            self.port_leases.insert(key, lease);
+            self.print_total_rule_count(conf);
+        }
+        Ok(())
+    }
+
+    async fn add_jump(
+        &mut self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        targets: &FirewallJumpTargets,
+        timeout: Option<Duration>,
+    ) -> ah::Result<()> {
+        assert!(!self.shutdown);
+
+        let mut added = false;
+        for (target_chain, match_saddr, chain) in &[
+            (
+                targets.input.as_ref(),
+                targets.input_match_saddr,
+                FirewallChain::Input,
+            ),
+            (
+                targets.forward.as_ref(),
+                targets.forward_match_saddr,
+                FirewallChain::Forward,
+            ),
+            (
+                targets.output.as_ref(),
+                targets.output_match_saddr,
+                FirewallChain::Output,
+            ),
+        ] {
+            let Some(target_chain) = target_chain else {
+                continue;
+            };
+
+            let addr = option_if(remote_addr, *match_saddr);
+            let key = (addr, *chain, (**target_chain).clone());
+
+            if let Some(lease) = self.jump_leases.get_mut(&key) {
+                lease.refresh_timeout(conf);
+            } else {
+                let lease =
+                    Lease::new_jump(conf, addr, *chain, target_chain, *match_saddr, timeout);
+                self.nftables_add_lease(conf, &lease).await?;
+                self.jump_leases.insert(key, lease);
+                added = true;
+            }
+        }
+        if added {
             self.print_total_rule_count(conf);
         }
         Ok(())
