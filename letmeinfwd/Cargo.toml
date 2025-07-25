@@ -18,6 +18,7 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 letmein-conf = { workspace = true }
 letmein-fwproto = { workspace = true }
+letmein-proto = { workspace = true }
 libc = { workspace = true }
 nftables = { workspace = true, features = [ "tokio" ] }
 nix = { workspace = true, features = [ "user" ] }
