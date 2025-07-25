@@ -132,7 +132,7 @@ fn gen_rule_comment(addr: Option<IpAddr>, port: SingleLeasePort) -> ah::Result<S
     } else {
         write!(&mut comment, "any/")?;
     }
-    write!(&mut comment, "{port}/accept/letmein/GENERATED")?;
+    write!(&mut comment, "{port}/accept/LETMEIN")?;
 
     if comment.len() > NFTNL_UDATA_COMMENT_MAXLEN {
         Err(err!(
