@@ -12,6 +12,7 @@ entry_checks()
 
 entry_checks
 stop_services
+try_systemctl restart nftables.service
 start_services
 
 # vim: ts=4 sw=4 expandtab
