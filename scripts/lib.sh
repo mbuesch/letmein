@@ -57,6 +57,10 @@ stop_services()
     try_systemctl stop letmeind.service
     try_systemctl stop letmeinfwd.socket
     try_systemctl stop letmeinfwd.service
+}
+
+disable_services()
+{
     try_systemctl disable letmeind.service
     try_systemctl disable letmeind.socket
     try_systemctl disable letmeinfwd.service

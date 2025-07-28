@@ -104,6 +104,7 @@ target="$basedir/target/$release"
 
 entry_checks
 stop_services
+disable_services
 install_dirs
 install_conf
 install_letmeinfwd
