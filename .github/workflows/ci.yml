@@ -7,6 +7,7 @@ on:
 env: 
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
+  MIRIFLAGS: -Zmiri-disable-isolation
 
 jobs:
   server_and_client:
@@ -15,7 +16,7 @@ jobs:
       matrix:
         toolchain:
           - 1.82.0 # MSRV
-          - 1.87.0
+          - 1.88.0
           - nightly
     runs-on: ubuntu-latest
     steps:
@@ -25,9 +26,10 @@ jobs:
       - run: rustup component add clippy
       - run: cargo build --verbose
       - run: sh ./tests/run-tests.sh
-      - run: if [ "${{ matrix.toolchain }}" = nightly ]; then rustup component add rust-src; fi
-      - run: if [ "${{ matrix.toolchain }}" = nightly ]; then rustup component add miri; fi
-      - run: if [ "${{ matrix.toolchain }}" = nightly ]; then MIRIFLAGS=-Zmiri-disable-isolation cargo miri test; fi
+      - if: matrix.toolchain == 'nightly'
+        run: |
+          rustup component add rust-src miri
+          cargo miri test
 
   client_only:
     name: Client only
@@ -35,7 +37,7 @@ jobs:
       matrix:
         toolchain:
           - 1.82.0 # MSRV
-          - 1.87.0
+          - 1.88.0
         os:
           - windows-latest
           - macos-latest
