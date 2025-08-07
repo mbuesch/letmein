@@ -16,7 +16,7 @@ jobs:
       matrix:
         toolchain:
           - 1.82.0 # MSRV
-          - 1.88.0
+          - 1.89.0
           - nightly
     runs-on: ubuntu-latest
     steps:
@@ -37,7 +37,7 @@ jobs:
       matrix:
         toolchain:
           - 1.82.0 # MSRV
-          - 1.88.0
+          - 1.89.0
         os:
           - windows-latest
           - macos-latest
