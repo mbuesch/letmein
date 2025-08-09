@@ -161,12 +161,17 @@ impl KnockServer<'_> {
     }
 }
 
+pub enum KnockResource {
+    Resource(ResourceId),
+    Port(u16),
+}
+
 /// Run the `knock` command.
 pub async fn run_knock(
     conf: Arc<Config>,
     verbose: bool,
     server: KnockServer<'_>,
-    knock_port: u16,
+    resource: KnockResource,
     user: Option<UserId>,
     resolve_srv: &ResSrv,
     resolve_crypt: &ResCrypt,
@@ -177,10 +182,17 @@ pub async fn run_knock(
     let Some(key) = conf.key(user) else {
         return Err(err!("No key found in {confpath:?} for user {user}"));
     };
-    let Some(resource) = conf.resource_id_by_port(knock_port, Some(user)) else {
-        return Err(err!(
-            "Port {knock_port} is not mapped to a resource in {confpath:?}"
-        ));
+
+    let resource = match resource {
+        KnockResource::Resource(id) => id,
+        KnockResource::Port(port) => {
+            let Some(resource) = conf.resource_id_by_port(port, Some(user)) else {
+                return Err(err!(
+                    "Port {port} is not mapped to a port-resource in {confpath:?}"
+                ));
+            };
+            resource
+        }
     };
 
     let control_port = server.to_control_port(&conf);
@@ -203,7 +215,7 @@ pub async fn run_knock(
         AddrMode::TryBoth => {
             if verbose {
                 println!(
-                    "Trying to knock on '{}:{knock_port}' IPv6 and IPv4.",
+                    "Trying to knock on '{}:{resource}' IPv6 and IPv4.",
                     server.addr
                 );
             }
@@ -224,20 +236,20 @@ pub async fn run_knock(
         }
         AddrMode::Both => {
             if verbose {
-                println!("Knocking on '{}:{knock_port}' IPv6 and IPv4.", server.addr);
+                println!("Knocking on '{}:{resource}' IPv6 and IPv4.", server.addr);
             }
             seq.knock_sequence(ResMode::Ipv6, false).await?;
             seq.knock_sequence(ResMode::Ipv4, false).await?;
         }
         AddrMode::Ipv6 => {
             if verbose {
-                println!("Knocking on '{}:{knock_port}' IPv6.", server.addr);
+                println!("Knocking on '{}:{resource}' IPv6.", server.addr);
             }
             seq.knock_sequence(ResMode::Ipv6, false).await?;
         }
         AddrMode::Ipv4 => {
             if verbose {
-                println!("Knocking on '{}:{knock_port}' IPv4.", server.addr);
+                println!("Knocking on '{}:{resource}' IPv4.", server.addr);
             }
             seq.knock_sequence(ResMode::Ipv4, false).await?;
         }

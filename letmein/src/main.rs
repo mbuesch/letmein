@@ -16,7 +16,7 @@ mod seccomp;
 use crate::{
     command::{
         genkey::run_genkey,
-        knock::{run_knock, KnockServer},
+        knock::{run_knock, KnockResource, KnockServer},
     },
     resolver::{ResCrypt, ResSrv},
     seccomp::install_seccomp_rules,
@@ -24,7 +24,7 @@ use crate::{
 use anyhow::{self as ah, format_err as err, Context as _};
 use clap::{Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant, Seccomp};
-use letmein_proto::UserId;
+use letmein_proto::{ResourceId, UserId};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::runtime;
 
@@ -141,7 +141,19 @@ enum Command {
         host: String,
 
         /// The port on the remote host that you want to knock open.
-        port: u16,
+        /// Also see --resource
+        ///
+        /// The resource that will be used will be looked up by this
+        /// port number from the letmein.conf configuration file.
+        ///
+        /// Alternatively you can use the --resource option to directly
+        /// specify a resource ID.
+        #[arg(conflicts_with = "resource")]
+        port: Option<u16>,
+
+        /// Specify the resource ID instead of the [PORT] to knock open.
+        #[arg(long, short = 'r', conflicts_with = "port")]
+        resource: Option<ResourceId>,
 
         /// The user identifier for authenticating the knock request.
         ///
@@ -249,6 +261,7 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
             Command::Knock {
                 host,
                 port,
+                resource,
                 user,
                 server_port,
                 server_port_tcp,
@@ -263,11 +276,20 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
                     port_tcp: server_port_tcp,
                     port_udp: server_port_udp,
                 };
+                let resource = if let Some(port) = port {
+                    KnockResource::Port(port)
+                } else if let Some(resource) = resource {
+                    KnockResource::Resource(resource)
+                } else {
+                    return Err(err!(
+                        "Neither [PORT] nor --resource command line options were provided."
+                    ));
+                };
                 run_knock(
                     conf,
                     opts.verbose,
                     server,
-                    port,
+                    resource,
                     user,
                     &opts.dns,
                     &opts.dns_crypt,
