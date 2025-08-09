@@ -49,6 +49,8 @@ const CLIENT_CONF_PATH: &str = "letmein.conf";
 const DEFAULT_CONTROL_TIMEOUT: Duration = Duration::from_millis(5_000);
 const DEFAULT_NFT_TIMEOUT: Duration = Duration::from_millis(600_000);
 
+const MAX_CHAIN_LEN: usize = 64;
+
 /// Configuration content checksum.
 #[derive(Clone, Debug, Default, Eq)]
 pub struct ConfigChecksum([u8; ConfigChecksum::SIZE]);
@@ -501,12 +503,28 @@ fn get_nft_table(ini: &Ini) -> ah::Result<String> {
     }
 }
 
-fn get_nft_chain_input(ini: &Ini) -> ah::Result<String> {
-    if let Some(nft_chain_input) = ini.get("NFTABLES", "chain-input") {
-        Ok(nft_chain_input.trim().to_string())
+fn get_nft_chain(ini: &Ini, field: &str) -> ah::Result<String> {
+    if let Some(chain) = ini.get("NFTABLES", field) {
+        let chain = chain.trim().to_string();
+        if chain.len() > MAX_CHAIN_LEN {
+            Err(err!(
+                "[NFTABLES] {} is {} bytes long. \
+                Which exceeds the maximum of {} bytes. \
+                Please choose a smaller chain name.",
+                field,
+                chain.len(),
+                MAX_CHAIN_LEN
+            ))
+        } else {
+            Ok(chain)
+        }
     } else {
         Ok("".to_string())
     }
+}
+
+fn get_nft_chain_input(ini: &Ini) -> ah::Result<String> {
+    get_nft_chain(ini, "chain-input")
 }
 
 fn get_nft_timeout(ini: &Ini) -> ah::Result<Duration> {
