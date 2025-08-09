@@ -17,7 +17,7 @@ use nftables::{
     expr::{Expression, NamedExpression, Payload, PayloadField},
     helper::{apply_ruleset_with_args_async, get_current_ruleset_with_args_async, DEFAULT_ARGS},
     schema::{Chain, FlushObject, NfCmd, NfListObject, NfObject, Rule},
-    stmt::{Match, Operator, Statement},
+    stmt::{Counter, Match, Operator, Statement},
     types::NfFamily,
 };
 use std::{borrow::Cow, fmt::Write as _, net::IpAddr, time::Duration};
@@ -117,6 +117,11 @@ fn statement_match_dport<'a>(port: SingleLeasePort) -> Statement<'a> {
     })
 }
 
+/// Create an nftables anonymous `counter` statement.
+fn statement_counter<'a>() -> Statement<'a> {
+    Statement::Counter(Counter::Anonymous(None))
+}
+
 /// Create an nftables `accept` statement.
 fn statement_accept<'a>() -> Statement<'a> {
     Statement::Accept(None)
@@ -154,11 +159,12 @@ fn gen_add_lease_cmd(
     port: SingleLeasePort,
 ) -> ah::Result<NfCmd<'_>> {
     let names = NftNames::get(conf).context("Read configuration")?;
-    let mut expr = Vec::with_capacity(3);
+    let mut expr = Vec::with_capacity(4);
     if let Some(addr) = addr {
         expr.push(statement_match_saddr(names.family, addr)?);
     }
     expr.push(statement_match_dport(port));
+    expr.push(statement_counter());
     expr.push(statement_accept());
     let mut rule = Rule {
         family: names.family,
