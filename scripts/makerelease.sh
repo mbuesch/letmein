@@ -26,7 +26,7 @@ hook_regression_tests()
 }
 
 project=letmein
-conf_upload_packages="letmein-proto letmein-fwproto letmein-conf letmein-systemd letmein-seccomp letmein letmeinfwd letmeind"
+conf_upload_packages="letmein-proto letmein-conf letmein-fwproto letmein-systemd letmein-seccomp letmein letmeinfwd letmeind"
 makerelease "$@"
 
 # vim: ts=4 sw=4 expandtab
