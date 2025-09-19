@@ -885,6 +885,9 @@ dependencies = [
 [[package]]
 name = "nft-stub"
 version = "0.0.0"
+dependencies = [
+ "anyhow",
+]
 
 [[package]]
 name = "nftables"

@@ -8,21 +8,26 @@
 
 #![forbid(unsafe_code)]
 
+use anyhow::{self as ah, format_err as err, Context as _};
 use std::{
     env,
     io::{stdin, Read as _},
 };
 
-fn main() {
+fn main() -> ah::Result<()> {
     let args: Vec<String> = env::args().collect();
-    assert_eq!(args, ["nft", "-j", "-f", "-"]);
+    if args != ["nft", "-j", "-f", "-"] {
+        return Err(err!("nft-stub: Invalid command line: {args:?}"));
+    }
 
     let mut json_raw: Vec<u8> = vec![];
-    stdin().read_to_end(&mut json_raw).unwrap();
-    let json = std::str::from_utf8(&json_raw).unwrap();
+    stdin().read_to_end(&mut json_raw).context("Read stdin")?;
+    let json = std::str::from_utf8(&json_raw).context("Parse JSON")?;
 
     //eprintln!("{json:?}");
     let _ = json; // We could have some json payload checks here...
+
+    Ok(())
 }
 
 // vim: ts=4 sw=4 expandtab

@@ -16,5 +16,6 @@ repository = { workspace = true }
 name = "nft"
 
 [dependencies]
+anyhow = { workspace = true }
 
 # vim: ts=4 sw=4 expandtab
