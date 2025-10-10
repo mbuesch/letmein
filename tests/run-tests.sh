@@ -108,6 +108,28 @@ run_tests_knock()
         localhost 42 \
         || die "letmein knock failed"
 
+    info "Knocking jump resource IPv4..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        knock \
+        --user 12345678 \
+        --ipv4 \
+        --resource aabbccdd \
+        localhost \
+        || die "letmein knock failed"
+
+    info "Knocking jump resource IPv6..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        knock \
+        --user 12345678 \
+        --ipv6 \
+        --resource aabbccdd \
+        localhost \
+        || die "letmein knock failed"
+
     kill_all_and_wait
 }
 
