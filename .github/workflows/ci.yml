@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         toolchain:
-          - 1.82.0 # MSRV
+          - 1.83.0 # MSRV
           - 1.91.0
           - nightly
     runs-on: ubuntu-latest
@@ -48,7 +48,7 @@ jobs:
     strategy:
       matrix:
         toolchain:
-          - 1.82.0 # MSRV
+          - 1.83.0 # MSRV
           - 1.91.0
         os:
           - windows-latest
