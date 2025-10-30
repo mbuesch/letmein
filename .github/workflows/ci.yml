@@ -21,6 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: ~/.rustup
+          key: rustup-${{ runner.os }}-${{ matrix.toolchain }}
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: cargo-${{ runner.os }}-${{ matrix.toolchain }}
+
       - run: rustup update ${{ matrix.toolchain }}
       - run: rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
@@ -44,6 +56,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: ~/.rustup
+          key: rustup-${{ runner.os }}-${{ matrix.toolchain }}
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: cargo-${{ runner.os }}-${{ matrix.toolchain }}
+
       - run: rustup update ${{ matrix.toolchain }}
       - run: rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
