@@ -534,7 +534,7 @@ impl NftFirewall {
             println!("nftables: All chains flushed");
         }
 
-        self.num_ctrl_rules = 0;
+        let mut num_ctrl_rules = 0;
         if !self.shutdown {
             // Open the port letmeind is listening on.
             if conf.port().tcp {
@@ -543,7 +543,7 @@ impl NftFirewall {
                 if conf.debug() {
                     println!("nftables: Adding control port rule for port={p}");
                 }
-                self.num_ctrl_rules += 1;
+                num_ctrl_rules += 1;
             }
             if conf.port().udp {
                 let p = SingleLeasePort::Udp(conf.port().port);
@@ -551,7 +551,7 @@ impl NftFirewall {
                 if conf.debug() {
                     println!("nftables: Adding control port rule for port={p}");
                 }
-                self.num_ctrl_rules += 1;
+                num_ctrl_rules += 1;
             }
 
             // Open all lease ports, restricted to the peer addresses.
@@ -563,7 +563,11 @@ impl NftFirewall {
         }
 
         // Apply all batch commands to the kernel.
-        self.nftables_apply_batch(conf, batch).await
+        self.nftables_apply_batch(conf, batch).await?;
+
+        self.num_ctrl_rules = num_ctrl_rules;
+
+        Ok(())
     }
 
     /// Generate one lease rule and apply it to the kernel.
