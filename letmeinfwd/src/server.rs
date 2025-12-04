@@ -22,10 +22,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{atomic::Ordering::Relaxed, Arc},
 };
-use tokio::{
-    net::{unix::pid_t, UnixListener, UnixStream},
-    sync::Mutex,
-};
+use tokio::net::{unix::pid_t, UnixListener, UnixStream};
 
 /// Get the actual PID of the `letmeind` daemon process.
 fn get_letmeind_pid(rundir: &Path) -> ah::Result<pid_t> {
@@ -140,7 +137,7 @@ impl FirewallConnection {
     pub async fn handle_message(
         &mut self,
         conf: &Config,
-        fw: Arc<Mutex<impl FirewallAction>>,
+        fw: Arc<impl FirewallAction>,
     ) -> ah::Result<()> {
         let Some(msg) = self.recv_msg().await? else {
             return Err(err!("Disconnected."));
@@ -198,11 +195,7 @@ impl FirewallConnection {
                 };
 
                 // Open the firewall.
-                let res = fw
-                    .lock()
-                    .await
-                    .open_port(conf, addr, lease_port, timeout)
-                    .await;
+                let res = fw.open_port(conf, addr, lease_port, timeout).await;
                 self.send_result(res).await
             }
             FirewallOperation::Jump => {
@@ -249,11 +242,7 @@ impl FirewallConnection {
                 };
 
                 // Add the jump-rules to the firewall.
-                let res = fw
-                    .lock()
-                    .await
-                    .add_jump(conf, addr, &targets, timeout)
-                    .await;
+                let res = fw.add_jump(conf, addr, &targets, timeout).await;
                 self.send_result(res).await
             }
             FirewallOperation::Ack | FirewallOperation::Nack => {

@@ -247,12 +247,12 @@ impl<K> LeaseMapOps for HashMap<K, Lease> {
 /// Firewall maintenance operations.
 pub trait FirewallMaintain {
     /// Delete all leases from the firewall.
-    async fn shutdown(&mut self, conf: &Config) -> ah::Result<()>;
+    async fn shutdown(&self, conf: &Config) -> ah::Result<()>;
 
     /// Run periodic maintenance.
     /// This shall be called in regular intervals every couple of seconds.
     /// This operation shall remove all timed-out leases.
-    async fn maintain(&mut self, conf: &Config) -> ah::Result<()>;
+    async fn maintain(&self, conf: &Config) -> ah::Result<()>;
 }
 
 /// Firewall jump targets for a jump lease.
@@ -287,7 +287,7 @@ pub trait FirewallAction {
     /// This operation shall handle the case where there already is such
     /// a rule present gracefully.
     async fn open_port(
-        &mut self,
+        &self,
         conf: &Config,
         remote_addr: IpAddr,
         port: LeasePort,
@@ -298,7 +298,7 @@ pub trait FirewallAction {
     /// This operation shall handle the case where there already is such
     /// a rule present gracefully.
     async fn add_jump(
-        &mut self,
+        &self,
         conf: &Config,
         remote_addr: IpAddr,
         targets: &FirewallJumpTargets,

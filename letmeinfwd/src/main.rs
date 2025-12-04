@@ -38,7 +38,7 @@ use std::{
 use tokio::{
     runtime,
     signal::unix::{signal, SignalKind},
-    sync::{self, Mutex, Semaphore},
+    sync::{self, Semaphore},
     task, time,
 };
 
@@ -200,7 +200,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     let conf = Arc::new(conf);
 
     // Initialize access to the firewall.
-    let fw = Arc::new(Mutex::new(NftFirewall::new(&conf).await?));
+    let fw = Arc::new(NftFirewall::new(&conf).await?);
 
     // Register unix signal handlers.
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
@@ -265,7 +265,6 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
             let mut interval = time::interval(FW_MAINTAIN_PERIOD);
             loop {
                 interval.tick().await;
-                let mut fw = fw.lock().await;
                 if let Err(e) = fw.maintain(&conf).await {
                     let _ = exit_fw_tx.send(Err(e)).await;
                     break;
@@ -304,7 +303,6 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     // Exiting...
     // Try to remove all firewall rules.
     {
-        let mut fw = fw.lock().await;
         if let Err(e) = fw.shutdown(&conf).await {
             eprintln!("WARNING: Failed to remove firewall rules: {e:?}");
             if exitcode.is_ok() {

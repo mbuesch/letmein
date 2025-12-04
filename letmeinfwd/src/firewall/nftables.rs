@@ -1,6 +1,6 @@
 // -*- coding: utf-8 -*-
 //
-// Copyright (C) 2024 Michael Büsch <m@bues.ch>
+// Copyright (C) 2024-2025 Michael Büsch <m@bues.ch>
 //
 // Licensed under the Apache License version 2.0
 // or the MIT license, at your option.
@@ -21,6 +21,7 @@ use nftables::{
     types::NfFamily,
 };
 use std::{borrow::Cow, fmt::Write as _, net::IpAddr, time::Duration};
+use tokio::sync::Mutex;
 
 const NFTNL_UDATA_COMMENT_MAXLEN: usize = 128;
 
@@ -441,14 +442,14 @@ impl ListedRuleset<'_> {
     }
 }
 
-pub struct NftFirewall {
+struct NftFirewallInner {
     port_leases: PortLeaseMap,
     jump_leases: JumpLeaseMap,
     shutdown: bool,
     num_ctrl_rules: u8,
 }
 
-impl NftFirewall {
+impl NftFirewallInner {
     /// Create a new firewall handler instance.
     /// This will also remove all rules from the kernel.
     pub async fn new(conf: &Config) -> ah::Result<Self> {
@@ -605,9 +606,7 @@ impl NftFirewall {
         }
         Ok(())
     }
-}
 
-impl FirewallMaintain for NftFirewall {
     /// Remove all leases and remove all rules from the kernel.
     async fn shutdown(&mut self, conf: &Config) -> ah::Result<()> {
         assert!(!self.shutdown);
@@ -639,9 +638,7 @@ impl FirewallMaintain for NftFirewall {
         }
         Ok(())
     }
-}
 
-impl FirewallAction for NftFirewall {
     /// Add a lease and open the port for the specified IP address.
     /// If a lease for this port/address is already present, the timeout will be reset.
     /// Apply the rules to the kernel, if required.
@@ -714,6 +711,66 @@ impl FirewallAction for NftFirewall {
             self.print_total_rule_count(conf);
         }
         Ok(())
+    }
+}
+
+pub struct NftFirewall {
+    inner: Mutex<NftFirewallInner>,
+}
+
+impl NftFirewall {
+    /// Create a new firewall handler instance.
+    /// This will also remove all rules from the kernel.
+    pub async fn new(conf: &Config) -> ah::Result<Self> {
+        Ok(Self {
+            inner: Mutex::new(NftFirewallInner::new(conf).await?),
+        })
+    }
+}
+
+impl FirewallMaintain for NftFirewall {
+    /// Remove all leases and remove all rules from the kernel.
+    async fn shutdown(&self, conf: &Config) -> ah::Result<()> {
+        self.inner.lock().await.shutdown(conf).await
+    }
+
+    /// Run the periodic maintenance of the firewall.
+    /// This will remove timed-out leases.
+    async fn maintain(&self, conf: &Config) -> ah::Result<()> {
+        self.inner.lock().await.maintain(conf).await
+    }
+}
+
+impl FirewallAction for NftFirewall {
+    /// Add a lease and open the port for the specified IP address.
+    /// If a lease for this port/address is already present, the timeout will be reset.
+    /// Apply the rules to the kernel, if required.
+    async fn open_port(
+        &self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        port: LeasePort,
+        timeout: Option<Duration>,
+    ) -> ah::Result<()> {
+        self.inner
+            .lock()
+            .await
+            .open_port(conf, remote_addr, port, timeout)
+            .await
+    }
+
+    async fn add_jump(
+        &self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        targets: &FirewallJumpTargets,
+        timeout: Option<Duration>,
+    ) -> ah::Result<()> {
+        self.inner
+            .lock()
+            .await
+            .add_jump(conf, remote_addr, targets, timeout)
+            .await
     }
 }
 
