@@ -1,6 +1,6 @@
 // -*- coding: utf-8 -*-
 //
-// Copyright (C) 2024 Michael Büsch <m@bues.ch>
+// Copyright (C) 2024-2025 Michael Büsch <m@bues.ch>
 //
 // Licensed under the Apache License version 2.0
 // or the MIT license, at your option.
@@ -14,7 +14,7 @@ use std::{
     net::SocketAddr,
     sync::{
         atomic::{self, AtomicBool},
-        Arc,
+        Arc, Mutex as StdMutex,
     },
     time::Duration,
 };
@@ -211,7 +211,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
 #[derive(Debug)]
 pub struct UdpDispatcher<const MSG_SIZE: usize, const Q_SIZE: usize> {
     /// RX connection tracking.
-    rx: Mutex<UdpDispatcherRx<MSG_SIZE, Q_SIZE>>,
+    rx: StdMutex<UdpDispatcherRx<MSG_SIZE, Q_SIZE>>,
 
     /// The UDP socket we use for sending and receiving.
     socket: UdpSocket,
@@ -231,7 +231,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
         let accept_watch = channel(());
         let recv_watch = channel(());
         Self {
-            rx: Mutex::new(UdpDispatcherRx::new(max_nr_conn)),
+            rx: StdMutex::new(UdpDispatcherRx::new(max_nr_conn)),
             socket,
             accept_watch: (accept_watch.0, Mutex::new(accept_watch.1)),
             recv_watch: (recv_watch.0, Mutex::new(recv_watch.1)),
@@ -255,11 +255,12 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
             if DEBUG {
                 println!("UDP-dispatcher: Trying accept.");
             }
-            if let Some(peer_addr) = self.rx.lock().await.try_accept(
+            let peer_addr = self.rx.lock().expect("Mutex poisoned").try_accept(
                 &self.socket,
                 &self.accept_watch.0,
                 &self.recv_watch.0,
-            ) {
+            );
+            if let Some(peer_addr) = peer_addr {
                 if DEBUG {
                     println!("UDP-dispatcher: Accepted new connection.");
                 }
@@ -284,12 +285,13 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
             if DEBUG {
                 println!("UDP-dispatcher: Trying recv.");
             }
-            if let Some(buf) = self.rx.lock().await.try_recv_from(
+            let buf = self.rx.lock().expect("Mutex poisoned").try_recv_from(
                 &self.socket,
                 peer_addr,
                 &self.accept_watch.0,
                 &self.recv_watch.0,
-            )? {
+            )?;
+            if let Some(buf) = buf {
                 if DEBUG {
                     println!("UDP-dispatcher: Received datagram.");
                 }
@@ -318,7 +320,10 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
 
     /// Disconnect the connection identified by the `peer_addr`.
     pub async fn disconnect(&self, peer_addr: SocketAddr) {
-        self.rx.lock().await.disconnect(peer_addr);
+        self.rx
+            .lock()
+            .expect("Mutex poisoned")
+            .disconnect(peer_addr);
     }
 }
 
