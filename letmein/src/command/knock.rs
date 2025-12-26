@@ -13,7 +13,7 @@ use crate::{
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_conf::{Config, ControlPort};
 use letmein_proto::{Key, Message, Operation, ResourceId, UserId};
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{path::Path, time::Duration};
 
 /// Address types to knock.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -168,7 +168,7 @@ pub enum KnockResource {
 
 /// Run the `knock` command.
 pub async fn run_knock(
-    conf: Arc<Config>,
+    conf: &Config,
     verbose: bool,
     server: KnockServer<'_>,
     resource: KnockResource,
@@ -195,7 +195,7 @@ pub async fn run_knock(
         }
     };
 
-    let control_port = server.to_control_port(&conf);
+    let control_port = server.to_control_port(conf);
 
     let control_timeout = conf.control_timeout();
 

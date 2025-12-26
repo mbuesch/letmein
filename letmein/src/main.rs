@@ -288,7 +288,7 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
                     ));
                 };
                 run_knock(
-                    conf,
+                    &conf,
                     opts.verbose,
                     server,
                     resource,
@@ -302,7 +302,7 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
                 user,
             } => {
                 run_genkey(
-                    conf,
+                    &conf,
                     user,
                 )
                 .await
