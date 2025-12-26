@@ -935,9 +935,23 @@ impl Config {
         self.seccomp
     }
 
+    /// Get a list of all configured users.
+    pub fn users(&self) -> Vec<UserId> {
+        let mut users: Vec<UserId> = self.keys.keys().cloned().collect();
+        users.sort();
+        users
+    }
+
     /// Get a key value by key identifier from the `[KEYS]` section.
     pub fn key(&self, id: UserId) -> Option<&Key> {
         self.keys.get(&id)
+    }
+
+    /// Get a list of all configured resources.
+    pub fn resources(&self) -> Vec<Resource> {
+        let mut resources: Vec<Resource> = self.resources.values().cloned().collect();
+        resources.sort_by_key(|r| r.id());
+        resources
     }
 
     /// Get a resource value by resource identifier from the `[RESOURCES]` section.
