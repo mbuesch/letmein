@@ -22,7 +22,7 @@ use crate::{
     seccomp::install_seccomp_rules,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant, Seccomp};
 use letmein_proto::{ResourceId, UserId};
 use std::{path::PathBuf, sync::Arc, time::Duration};
@@ -309,6 +309,10 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
             }
         }
     } else {
+        Opts::command()
+            .print_help()
+            .context("Failed to print help")?;
+        println!();
         Err(err!(
             "'letmein' requires a subcommand but one was not provided. \
             Please run 'letmein --help' for more information."
