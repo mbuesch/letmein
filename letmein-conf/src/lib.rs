@@ -171,6 +171,96 @@ impl Resource {
     }
 }
 
+impl std::fmt::Display for Resource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        fn write_users(
+            f: &mut std::fmt::Formatter<'_>,
+            users: &[UserId],
+        ) -> Result<(), std::fmt::Error> {
+            if !users.is_empty() {
+                write!(f, "  Users: ")?;
+                for (i, user) in users.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{user}")?;
+                }
+                writeln!(f)?;
+            }
+            Ok(())
+        }
+
+        fn write_timeout(
+            f: &mut std::fmt::Formatter<'_>,
+            timeout: &Option<Duration>,
+        ) -> Result<(), std::fmt::Error> {
+            if let Some(timeout) = timeout {
+                writeln!(f, "  timeout: {} s", timeout.as_secs())?;
+            }
+            Ok(())
+        }
+
+        fn write_chain(
+            f: &mut std::fmt::Formatter<'_>,
+            chain: &Option<String>,
+            match_saddr: bool,
+            name: &str,
+        ) -> Result<(), std::fmt::Error> {
+            if let Some(chain) = chain {
+                let match_saddr = if match_saddr { " match-saddr" } else { "" };
+                writeln!(f, "  {name}-chain: {chain}{match_saddr}")?;
+            }
+            Ok(())
+        }
+
+        match self {
+            Self::Port {
+                id,
+                port,
+                tcp,
+                udp,
+                timeout,
+                users,
+            } => {
+                let tcpudp = if *tcp && *udp {
+                    "TCP/UDP"
+                } else if *tcp {
+                    "TCP"
+                } else if *udp {
+                    "UDP"
+                } else {
+                    ""
+                };
+                writeln!(f, "Port resource:")?;
+                writeln!(f, "  id: {id}")?;
+                writeln!(f, "  port: {port} {tcpudp}")?;
+                write_timeout(f, timeout)?;
+                write_users(f, users)?;
+            }
+            Self::Jump {
+                id,
+                input,
+                input_match_saddr,
+                forward,
+                forward_match_saddr,
+                output,
+                output_match_saddr,
+                timeout,
+                users,
+            } => {
+                writeln!(f, "Jump resource:")?;
+                writeln!(f, "  id: {id}")?;
+                write_chain(f, input, *input_match_saddr, "input")?;
+                write_chain(f, forward, *forward_match_saddr, "forward")?;
+                write_chain(f, output, *output_match_saddr, "output")?;
+                write_timeout(f, timeout)?;
+                write_users(f, users)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Error reporting policy.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub enum ErrorPolicy {
