@@ -57,13 +57,13 @@ const ZERO_AUTH: Auth = [0; AUTH_SIZE];
 /// Identification number of a resource.
 ///
 /// Used in the wire protocol and in the configuration file.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ResourceId(u32);
 
 /// Identification number of a user (and a key).
 ///
 /// Used in the wire protocol and in the configuration file.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct UserId(u32);
 
 macro_rules! impl_id {
