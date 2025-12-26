@@ -198,18 +198,15 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         self.auth_state = AuthState::ChallengeResponseAuth;
 
         // Reconfigure the firewall.
+        let peer_ip_addr = self.conn.peer_addr().ip();
+        let conf_checksum = self.conf.checksum();
         match resource {
             Resource::Port { .. } => {
                 // Send an open-port request to letmeinfwd.
                 if let Err(e) = self
                     .connect_to_fw()
                     .await?
-                    .open_port(
-                        user_id,
-                        resource_id,
-                        self.conn.peer_addr().ip(),
-                        self.conf.checksum(),
-                    )
+                    .open_port(user_id, resource_id, peer_ip_addr, conf_checksum)
                     .await
                 {
                     let _ = self.send_go_away().await;
@@ -221,12 +218,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 if let Err(e) = self
                     .connect_to_fw()
                     .await?
-                    .jump(
-                        user_id,
-                        resource_id,
-                        self.conn.peer_addr().ip(),
-                        self.conf.checksum(),
-                    )
+                    .jump(user_id, resource_id, peer_ip_addr, conf_checksum)
                     .await
                 {
                     let _ = self.send_go_away().await;
@@ -234,6 +226,11 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 }
             }
         }
+
+        println!(
+            "[{peer_ip_addr}]: Resource {resource_id} successfully knocked. \
+             Firewall rules applied.",
+        );
 
         // Send a come-in message.
         let comein = Message::new(Operation::ComeIn, user_id, resource_id);
