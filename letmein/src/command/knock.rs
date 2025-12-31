@@ -38,6 +38,7 @@ impl From<(bool, bool)> for AddrMode {
 
 /// Knock protocol sequence - client side.
 struct KnockSeq<'a> {
+    pub initial_oper: Operation,
     pub verbose: bool,
     pub addr: &'a str,
     pub resolve_srv: &'a ResSrv,
@@ -100,27 +101,27 @@ impl KnockSeq<'_> {
         .context("Client init")?;
 
         if self.verbose {
-            println!("Sending 'Knock' packet.");
+            println!("Sending '{:?}' packet.", self.initial_oper);
         }
-        let mut knock = Message::new(Operation::Knock, self.user, self.resource);
+        let mut knock = Message::new(self.initial_oper, self.user, self.resource);
         knock.generate_auth_no_challenge(self.key);
         client.send_msg(knock).await.context("Send knock")?;
 
         if self.verbose {
-            println!("Receiving 'Challenge' packet.");
+            println!("Receiving '{:?}' packet.", Operation::Challenge);
         }
         let challenge = client.recv_specific_msg(Operation::Challenge).await?;
         self.check_reply(&challenge)?;
 
         if self.verbose {
-            println!("Sending 'Response' packet.");
+            println!("Sending '{:?}' packet.", Operation::Response);
         }
         let mut response = Message::new(Operation::Response, self.user, self.resource);
         response.generate_auth(self.key, challenge);
         client.send_msg(response).await.context("Send response")?;
 
         if self.verbose {
-            println!("Receiving 'ComeIn' packet.");
+            println!("Receiving '{:?}' packet.", Operation::ComeIn);
         }
         let comein = client.recv_specific_msg(Operation::ComeIn).await?;
         self.check_reply(&comein)?;
@@ -166,8 +167,9 @@ pub enum KnockResource {
     Port(u16),
 }
 
-/// Run the `knock` command.
-pub async fn run_knock(
+#[allow(clippy::too_many_arguments)]
+async fn run_knock_or_revoke(
+    initial_oper: Operation,
     conf: &Config,
     verbose: bool,
     server: KnockServer<'_>,
@@ -200,6 +202,7 @@ pub async fn run_knock(
     let control_timeout = conf.control_timeout();
 
     let seq = KnockSeq {
+        initial_oper,
         verbose,
         addr: server.addr,
         resolve_srv,
@@ -255,6 +258,52 @@ pub async fn run_knock(
         }
     }
     Ok(())
+}
+
+/// Run the `knock` command.
+pub async fn run_knock(
+    conf: &Config,
+    verbose: bool,
+    server: KnockServer<'_>,
+    resource: KnockResource,
+    user: Option<UserId>,
+    resolve_srv: &ResSrv,
+    resolve_crypt: &ResCrypt,
+) -> ah::Result<()> {
+    run_knock_or_revoke(
+        Operation::Knock,
+        conf,
+        verbose,
+        server,
+        resource,
+        user,
+        resolve_srv,
+        resolve_crypt,
+    )
+    .await
+}
+
+/// Run the `revoke` command.
+pub async fn run_revoke(
+    conf: &Config,
+    verbose: bool,
+    server: KnockServer<'_>,
+    resource: KnockResource,
+    user: Option<UserId>,
+    resolve_srv: &ResSrv,
+    resolve_crypt: &ResCrypt,
+) -> ah::Result<()> {
+    run_knock_or_revoke(
+        Operation::Revoke,
+        conf,
+        verbose,
+        server,
+        resource,
+        user,
+        resolve_srv,
+        resolve_crypt,
+    )
+    .await
 }
 
 // vim: ts=4 sw=4 expandtab

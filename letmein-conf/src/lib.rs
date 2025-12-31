@@ -169,6 +169,13 @@ impl Resource {
             users.contains(&id)
         }
     }
+
+    pub fn timeout(&self) -> Option<Duration> {
+        match self {
+            Self::Port { timeout, .. } => *timeout,
+            Self::Jump { timeout, .. } => *timeout,
+        }
+    }
 }
 
 impl std::fmt::Display for Resource {

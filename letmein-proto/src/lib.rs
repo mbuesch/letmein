@@ -166,6 +166,11 @@ pub enum Operation {
     ///
     /// This message is not MiM-safe and not replay-safe by design.
     GoAway,
+
+    /// `Revoke` a previously successfully knocked resource.
+    ///
+    /// This message is not replay-safe by design.
+    Revoke,
 }
 
 impl TryFrom<u32> for Operation {
@@ -177,12 +182,14 @@ impl TryFrom<u32> for Operation {
         const OPERATION_RESPONSE: u32 = Operation::Response as u32;
         const OPERATION_COMEIN: u32 = Operation::ComeIn as u32;
         const OPERATION_GOAWAY: u32 = Operation::GoAway as u32;
+        const OPERATION_REVOKE: u32 = Operation::Revoke as u32;
         match value {
             OPERATION_KNOCK => Ok(Self::Knock),
             OPERATION_CHALLENGE => Ok(Self::Challenge),
             OPERATION_RESPONSE => Ok(Self::Response),
             OPERATION_COMEIN => Ok(Self::ComeIn),
             OPERATION_GOAWAY => Ok(Self::GoAway),
+            OPERATION_REVOKE => Ok(Self::Revoke),
             _ => Err(err!("Invalid Message/Operation value")),
         }
     }
@@ -303,7 +310,7 @@ impl Message {
     #[must_use]
     pub fn check_auth_ok_no_challenge(&self, shared_key: &[u8]) -> bool {
         #[cfg(not(test))]
-        assert_eq!(self.operation(), Operation::Knock);
+        assert!(self.operation() == Operation::Knock || self.operation() == Operation::Revoke);
         self.auth
             .ct_eq(&self.authenticate_no_challenge(shared_key))
             .into()
@@ -322,7 +329,7 @@ impl Message {
     /// with the provided `shared_key`
     /// and store it in this message.
     pub fn generate_auth_no_challenge(&mut self, shared_key: &[u8]) {
-        assert_eq!(self.operation(), Operation::Knock);
+        assert!(self.operation() == Operation::Knock || self.operation() == Operation::Revoke);
         self.auth = self.authenticate_no_challenge(shared_key);
     }
 
@@ -438,13 +445,12 @@ mod tests {
         assert_eq!(*msg, msg_de);
     }
 
-    #[test]
     #[rustfmt::skip]
-    fn test_msg_knock() {
+    fn test_msg_knock_or_revoke(initial_operation: Operation) {
         let key = [0x9E; 32];
 
         let make_knock = || -> Message {
-            let mut msg = Message::new(Operation::Knock, 0xA423DDA7.into(), 0xBC5D8077.into());
+            let mut msg = Message::new(initial_operation, 0xA423DDA7.into(), 0xBC5D8077.into());
             assert_ne!(msg.salt, [0; 8]);
             msg.salt = [0x4A; 8]; // override random salt
             msg.generate_auth_no_challenge(&key);
@@ -453,25 +459,42 @@ mod tests {
 
         // Create a knock message and check the authentication.
         let msg = make_knock();
-        assert_eq!(msg.operation(), Operation::Knock);
+        assert_eq!(msg.operation(), initial_operation);
         assert_eq!(msg.user(), 0xA423DDA7.into());
         assert_eq!(msg.resource(), 0xBC5D8077.into());
-        assert_eq!(
-            msg.auth,
-            [
-                99, 153, 229, 224, 255, 22, 33, 154, 94, 191, 98, 153, 196, 29, 202, 24, 154, 47,
-                118, 25, 189, 10, 178, 234, 95, 129, 184, 174, 249, 254, 6, 0
-            ]
-        );
+        if initial_operation == Operation::Knock {
+            assert_eq!(
+                msg.auth,
+                [
+                    99, 153, 229, 224, 255, 22, 33, 154, 94, 191, 98, 153, 196, 29, 202, 24, 154, 47,
+                    118, 25, 189, 10, 178, 234, 95, 129, 184, 174, 249, 254, 6, 0
+                ]
+            );
+        } else if initial_operation == Operation::Revoke {
+            assert_eq!(
+                msg.auth,
+                [
+                    180, 187, 122, 144, 91, 82, 239, 157, 126, 221, 187, 3, 10, 127, 123, 215, 93,
+                    86, 90, 136, 15, 243, 203, 131, 165, 78, 100, 166, 118, 130, 142, 248
+                ]
+            );
+        } else {
+            panic!("Unknown operation");
+        }
         assert!(msg.check_auth_ok_no_challenge(&key));
 
         // Serialize the knock message and check the raw bytes.
         let bytes = msg.msg_serialize().unwrap();
+        let oper_lsb = if initial_operation == Operation::Knock {
+            0x00
+        } else {
+            0x05
+        };
         assert_eq!(
             bytes,
             [
                 0x3B, 0x1B, 0xB7, 0x19, // magic
-                0x00, 0x00, 0x00, 0x00, // operation
+                0x00, 0x00, 0x00, oper_lsb, // operation
                 0xA4, 0x23, 0xDD, 0xA7, // user
                 0xBC, 0x5D, 0x80, 0x77, // resource
                 0x4A, 0x4A, 0x4A, 0x4A, 0x4A, 0x4A, 0x4A, 0x4A, // salt
@@ -511,6 +534,16 @@ mod tests {
         let mut msg = make_knock();
         msg.auth[20] = 0;
         assert!(!msg.check_auth_ok_no_challenge(&key));
+    }
+
+    #[test]
+    fn test_msg_knock() {
+        test_msg_knock_or_revoke(Operation::Knock);
+    }
+
+    #[test]
+    fn test_msg_revoke() {
+        test_msg_knock_or_revoke(Operation::Revoke);
     }
 
     #[test]
@@ -676,7 +709,7 @@ mod tests {
     fn test_msg_raw_invalid_operation() {
         let bytes = [
             0x3B, 0x1B, 0xB7, 0x19, // magic
-            0x00, 0x00, 0x00, 0x05, // operation
+            0x00, 0x00, 0x00, 0x06, // operation
             0xF9, 0x02, 0x01, 0xB2, // user
             0xB3, 0xE4, 0x6B, 0x6C, // resource
             0x9A, 0x9A, 0x9A, 0x9A, 0x9A, 0x9A, 0x9A, 0x9A, // salt
