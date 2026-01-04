@@ -349,8 +349,11 @@ impl TryFrom<Resource> for FirewallJumpTargets {
 /// Firewall action operations.
 pub trait FirewallAction {
     /// Add a rule to open the specified `port` for the specified `remote_addr`.
+    ///
     /// This operation shall handle the case where there already is such
     /// a rule present gracefully.
+    ///
+    /// Warning: This function is *not* async cancel safe.
     async fn open_port(
         &self,
         conf: &Config,
@@ -360,8 +363,11 @@ pub trait FirewallAction {
     ) -> ah::Result<()>;
 
     /// Revoke/remove a port rule.
+    ///
     /// This operation shall handle the case where there is no such
     /// rule present gracefully.
+    ///
+    /// Warning: This function is *not* async cancel safe.
     async fn revoke_port(
         &self,
         conf: &Config,
@@ -370,8 +376,11 @@ pub trait FirewallAction {
     ) -> ah::Result<()>;
 
     /// Add jump rules to jump to the specified processing rule chains.
+    ///
     /// This operation shall handle the case where there already is such
     /// a rule present gracefully.
+    ///
+    /// Warning: This function is *not* async cancel safe.
     async fn add_jump(
         &self,
         conf: &Config,
@@ -381,8 +390,11 @@ pub trait FirewallAction {
     ) -> ah::Result<()>;
 
     /// Revoke/remove a jump rule.
+    ///
     /// This operation shall handle the case where there is no such
     /// rule present gracefully.
+    ///
+    /// Warning: This function is *not* async cancel safe.
     async fn revoke_jump(
         &self,
         conf: &Config,
