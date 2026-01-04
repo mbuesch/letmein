@@ -55,23 +55,26 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
             .map_err(|_| err!("RX communication with peer timed out"))??
         {
             if !expect_operation.contains(&msg.operation()) {
-                let _ = self.send_go_away().await;
-                return Err(err!(
-                    "Invalid reply message operation. Expected {:?}, got {:?}",
-                    expect_operation,
-                    msg.operation()
-                ));
+                return self
+                    .send_go_away(Err(err!(
+                        "Invalid reply message operation. Expected {:?}, got {:?}",
+                        expect_operation,
+                        msg.operation()
+                    )))
+                    .await;
             }
             if let Some(user_id) = self.user_id {
                 if msg.user() != user_id {
-                    let _ = self.send_go_away().await;
-                    return Err(err!("Received message user mismatch"));
+                    return self
+                        .send_go_away(Err(err!("Received message user mismatch")))
+                        .await;
                 }
             }
             if let Some(resource_id) = self.resource_id {
                 if msg.resource() != resource_id {
-                    let _ = self.send_go_away().await;
-                    return Err(err!("Received message resource mismatch"));
+                    return self
+                        .send_go_away(Err(err!("Received message resource mismatch")))
+                        .await;
                 }
             }
             Ok(msg)
@@ -86,39 +89,42 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
             .map_err(|_| err!("TX communication with peer timed out"))?
     }
 
-    async fn send_go_away(&mut self) -> ah::Result<()> {
+    async fn send_go_away<T>(&mut self, res: ah::Result<T>) -> ah::Result<T> {
         // Check if we are allowed to send the error message.
-        match self.conf.control_error_policy() {
-            ErrorPolicy::Always => (),
+        let reply_allowed = match self.conf.control_error_policy() {
+            ErrorPolicy::Always => true,
             ErrorPolicy::BasicAuth => {
-                if self.auth_state != AuthState::BasicAuth
-                    && self.auth_state != AuthState::ChallengeResponseAuth
-                {
-                    return Ok(());
-                }
+                self.auth_state == AuthState::BasicAuth
+                    || self.auth_state == AuthState::ChallengeResponseAuth
             }
-            ErrorPolicy::FullAuth => {
-                if self.auth_state != AuthState::ChallengeResponseAuth {
-                    return Ok(());
-                }
+            ErrorPolicy::FullAuth => self.auth_state == AuthState::ChallengeResponseAuth,
+        };
+
+        if reply_allowed {
+            // Send the error message.
+            if let Err(e) = self
+                .send_msg(&Message::new(
+                    Operation::GoAway,
+                    self.user_id.unwrap_or(u32::MAX.into()),
+                    self.resource_id.unwrap_or(u32::MAX.into()),
+                ))
+                .await
+            {
+                // Only print a log message and ignore the error.
+                eprintln!("Failed to send GoAway reply: {e}");
             }
         }
 
-        // Send the error message.
-        self.send_msg(&Message::new(
-            Operation::GoAway,
-            self.user_id.unwrap_or(u32::MAX.into()),
-            self.resource_id.unwrap_or(u32::MAX.into()),
-        ))
-        .await
+        res
     }
 
     async fn connect_to_fw(&mut self) -> ah::Result<FirewallClient> {
         assert_eq!(self.auth_state, AuthState::ChallengeResponseAuth);
         match FirewallClient::new(self.rundir).await {
             Err(e) => {
-                let _ = self.send_go_away().await;
-                Err(err!("Failed to connect to letmeinfwd: {e}"))
+                return self
+                    .send_go_away(Err(err!("Failed to connect to letmeinfwd: {e}")))
+                    .await;
             }
             Ok(fw) => Ok(fw),
         }
@@ -144,30 +150,34 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Get the shared key.
         let Some(key) = self.conf.key(user_id) else {
-            let _ = self.send_go_away().await;
-            return Err(err!("Unknown user: {user_id}"));
+            return self
+                .send_go_away(Err(err!("Unknown user: {user_id}")))
+                .await;
         };
 
         // Authenticate the received message.
         // This check is not replay-safe. But that's fine.
         if !initial_message.check_auth_ok_no_challenge(key) {
-            let _ = self.send_go_away().await;
-            return Err(err!("Knock: Authentication failed"));
+            return self
+                .send_go_away(Err(err!("Knock: Authentication failed")))
+                .await;
         }
         self.auth_state = AuthState::BasicAuth;
 
         // Get the requested resource from the configuration.
         let Some(resource) = self.conf.resource(resource_id) else {
-            let _ = self.send_go_away().await;
-            return Err(err!("Unknown resource: {resource_id}"));
+            return self
+                .send_go_away(Err(err!("Unknown resource: {resource_id}")))
+                .await;
         };
 
         // Check if the authenticating user is allowed to access this resource.
         if !resource.contains_user(user_id) {
-            let _ = self.send_go_away().await;
-            return Err(err!(
-                "Resource {resource_id} not allowed for user {user_id}"
-            ));
+            return self
+                .send_go_away(Err(err!(
+                    "Resource {resource_id} not allowed for user {user_id}"
+                )))
+                .await;
         }
 
         // Check if trying to knock/revoke the control port.
@@ -176,11 +186,12 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 // The control port is never allowed.
                 let control_port = self.conf.port().port;
                 if *port == control_port {
-                    let _ = self.send_go_away().await;
-                    return Err(err!(
-                        "Incorrect configuration: The resource {resource_id} uses the \
+                    return self
+                        .send_go_away(Err(err!(
+                            "Incorrect configuration: The resource {resource_id} uses the \
                          letmein control port {control_port}. That is not allowed."
-                    ));
+                        )))
+                        .await;
                 }
             }
             Resource::Jump { .. } => (),
@@ -196,8 +207,9 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Authenticate the challenge-response.
         if !response.check_auth_ok(key, challenge) {
-            let _ = self.send_go_away().await;
-            return Err(err!("Response: Authentication failed"));
+            return self
+                .send_go_away(Err(err!("Response: Authentication failed")))
+                .await;
         }
         self.auth_state = AuthState::ChallengeResponseAuth;
 
@@ -227,8 +239,9 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                     | Operation::GoAway => unreachable!(),
                 };
                 if let Err(e) = ret {
-                    let _ = self.send_go_away().await;
-                    return Err(err!("letmeinfwd firewall open: {e}"));
+                    return self
+                        .send_go_away(Err(err!("letmeinfwd firewall open: {e}")))
+                        .await;
                 }
             }
             Resource::Jump { .. } => {
@@ -253,8 +266,9 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                     | Operation::GoAway => unreachable!(),
                 };
                 if let Err(e) = ret {
-                    let _ = self.send_go_away().await;
-                    return Err(err!("letmeinfwd firewall jump: {e}"));
+                    return self
+                        .send_go_away(Err(err!("letmeinfwd firewall jump: {e}")))
+                        .await;
                 }
             }
         }
