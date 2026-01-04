@@ -39,7 +39,7 @@ impl FirewallClient {
         match msg_reply.operation() {
             FirewallOperation::Ack => Ok(()),
             FirewallOperation::Nack => Err(err!("The firewall rejected the request")),
-            FirewallOperation::Open | FirewallOperation::Jump => {
+            FirewallOperation::Open | FirewallOperation::Jump | FirewallOperation::Revoke => {
                 Err(err!("Received invalid reply"))
             }
         }
@@ -76,6 +76,24 @@ impl FirewallClient {
             .send(&mut self.stream)
             .await
             .context("Send add-jump message")?;
+
+        // Receive the acknowledge reply.
+        self.recv_ack().await
+    }
+
+    /// Send a request to revoke a firewall rule.
+    pub async fn revoke(
+        &mut self,
+        user: UserId,
+        resource: ResourceId,
+        addr: IpAddr,
+        conf_cs: &ConfigChecksum,
+    ) -> ah::Result<()> {
+        // Send a revoke request to the firewall daemon.
+        FirewallMessage::new_revoke(user, resource, addr, conf_cs)
+            .send(&mut self.stream)
+            .await
+            .context("Send revoke message")?;
 
         // Receive the acknowledge reply.
         self.recv_ack().await

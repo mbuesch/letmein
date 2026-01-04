@@ -26,6 +26,7 @@ It has been randomly chosen.
 | 2            | RESPONSE       |
 | 3            | COMEIN         |
 | 4            | GOAWAY         |
+| 5            | REVOKE         |
 
 This field defines the message type.
 Only certain types of operations are allowed during different states of the communication.
@@ -164,6 +165,16 @@ The `OPERATION` field of this message shall be `GOAWAY`.
 The `USER` and `RESOURCE` fields of this message are always set to the same values used in the `KNOCK` message.
 
 The `SALT` and `AUTH` fields of this message are ignored.
+
+## Message: REVOKE
+
+The `OPERATION` field of this message shall be `REVOKE`.
+
+All other fields of the message shall be equal these of the `KNOCK` message type.
+
+The communication flow of a `REVOKE` communication is equal to that of a `KNOCK` communication.
+
+But the server reacts to `REVOKE` by closing/removing the resource instead of opening/adding it.
 
 ## Generate AUTH token
 

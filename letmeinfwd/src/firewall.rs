@@ -8,8 +8,8 @@
 
 pub mod nftables;
 
-use anyhow as ah;
-use letmein_conf::Config;
+use anyhow::{self as ah, format_err as err};
+use letmein_conf::{Config, Resource};
 use std::{
     collections::HashMap,
     net::IpAddr,
@@ -51,6 +51,41 @@ impl std::fmt::Display for LeasePort {
             Self::Tcp(p) => write!(f, "{p}/TCP"),
             Self::Udp(p) => write!(f, "{p}/UDP"),
             Self::TcpUdp(p) => write!(f, "{p}/TCP+UDP"),
+        }
+    }
+}
+
+impl TryFrom<Resource> for LeasePort {
+    type Error = ah::Error;
+
+    fn try_from(res: Resource) -> ah::Result<Self> {
+        if let Resource::Port {
+            id: _,
+            port,
+            tcp,
+            udp,
+            timeout: _,
+            users: _,
+        } = res
+        {
+            match (tcp, udp) {
+                (true, false) => Ok(Self::Tcp(port)),
+                (false, true) => Ok(Self::Udp(port)),
+                (true, true) => Ok(Self::TcpUdp(port)),
+                (false, false) => Err(err!("LeasePort: Invalid port info in config.")),
+            }
+        } else {
+            Err(err!("LeasePort: Resource is not a Port resource"))
+        }
+    }
+}
+
+impl LeasePort {
+    pub fn port(&self) -> u16 {
+        match self {
+            Self::Tcp(port) => *port,
+            Self::Udp(port) => *port,
+            Self::TcpUdp(port) => *port,
         }
     }
 }
@@ -281,6 +316,36 @@ impl std::fmt::Display for FirewallJumpTargets {
     }
 }
 
+impl TryFrom<Resource> for FirewallJumpTargets {
+    type Error = ah::Error;
+
+    fn try_from(res: Resource) -> ah::Result<Self> {
+        if let Resource::Jump {
+            id: _,
+            input,
+            input_match_saddr,
+            forward,
+            forward_match_saddr,
+            output,
+            output_match_saddr,
+            timeout: _,
+            users: _,
+        } = res
+        {
+            Ok(Self {
+                input,
+                input_match_saddr,
+                forward,
+                forward_match_saddr,
+                output,
+                output_match_saddr,
+            })
+        } else {
+            Err(err!("FirewallJumpTargets: Resource is not a Jump resource"))
+        }
+    }
+}
+
 /// Firewall action operations.
 pub trait FirewallAction {
     /// Add a rule to open the specified `port` for the specified `remote_addr`.
@@ -294,6 +359,16 @@ pub trait FirewallAction {
         timeout: Option<Duration>,
     ) -> ah::Result<()>;
 
+    /// Revoke/remove a port rule.
+    /// This operation shall handle the case where there is no such
+    /// rule present gracefully.
+    async fn revoke_port(
+        &self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        port: LeasePort,
+    ) -> ah::Result<()>;
+
     /// Add jump rules to jump to the specified processing rule chains.
     /// This operation shall handle the case where there already is such
     /// a rule present gracefully.
@@ -303,6 +378,16 @@ pub trait FirewallAction {
         remote_addr: IpAddr,
         targets: &FirewallJumpTargets,
         timeout: Option<Duration>,
+    ) -> ah::Result<()>;
+
+    /// Revoke/remove a jump rule.
+    /// This operation shall handle the case where there is no such
+    /// rule present gracefully.
+    async fn revoke_jump(
+        &self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        targets: &FirewallJumpTargets,
     ) -> ah::Result<()>;
 }
 

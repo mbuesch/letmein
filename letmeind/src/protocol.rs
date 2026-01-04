@@ -49,12 +49,12 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         }
     }
 
-    async fn recv_msg(&mut self, expect_operation: Operation) -> ah::Result<Message> {
+    async fn recv_msg(&mut self, expect_operation: &[Operation]) -> ah::Result<Message> {
         if let Some(msg) = timeout(self.conf.control_timeout(), self.conn.recv_msg())
             .await
             .map_err(|_| err!("RX communication with peer timed out"))??
         {
-            if msg.operation() != expect_operation {
+            if !expect_operation.contains(&msg.operation()) {
                 let _ = self.send_go_away().await;
                 return Err(err!(
                     "Invalid reply message operation. Expected {:?}, got {:?}",
@@ -129,13 +129,17 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         self.resource_id = None;
         self.auth_state = AuthState::NotAuth;
 
-        // Receive the initial knock message.
-        let knock = self.recv_msg(Operation::Knock).await?;
+        // Receive the initial knock/revoke message.
+        let initial_message = self
+            .recv_msg(&[Operation::Knock, Operation::Revoke])
+            .await?;
 
-        let user_id = knock.user();
+        let initial_operation = initial_message.operation();
+
+        let user_id = initial_message.user();
         self.user_id = Some(user_id);
 
-        let resource_id = knock.resource();
+        let resource_id = initial_message.resource();
         self.resource_id = Some(resource_id);
 
         // Get the shared key.
@@ -146,7 +150,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Authenticate the received message.
         // This check is not replay-safe. But that's fine.
-        if !knock.check_auth_ok_no_challenge(key) {
+        if !initial_message.check_auth_ok_no_challenge(key) {
             let _ = self.send_go_away().await;
             return Err(err!("Knock: Authentication failed"));
         }
@@ -166,7 +170,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
             ));
         }
 
-        // Check if trying to knock the control port.
+        // Check if trying to knock/revoke the control port.
         match resource {
             Resource::Port { port, .. } => {
                 // The control port is never allowed.
@@ -188,7 +192,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         self.send_msg(&challenge).await?;
 
         // Receive the response.
-        let response = self.recv_msg(Operation::Response).await?;
+        let response = self.recv_msg(&[Operation::Response]).await?;
 
         // Authenticate the challenge-response.
         if !response.check_auth_ok(key, challenge) {
@@ -202,34 +206,67 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         let conf_checksum = self.conf.checksum();
         match resource {
             Resource::Port { .. } => {
-                // Send an open-port request to letmeinfwd.
-                if let Err(e) = self
-                    .connect_to_fw()
-                    .await?
-                    .open_port(user_id, resource_id, peer_ip_addr, conf_checksum)
-                    .await
-                {
+                let ret = match initial_operation {
+                    Operation::Knock => {
+                        // Send an open-port request to letmeinfwd.
+                        self.connect_to_fw()
+                            .await?
+                            .open_port(user_id, resource_id, peer_ip_addr, conf_checksum)
+                            .await
+                    }
+                    Operation::Revoke => {
+                        // Send an revoke request to letmeinfwd.
+                        self.connect_to_fw()
+                            .await?
+                            .revoke(user_id, resource_id, peer_ip_addr, conf_checksum)
+                            .await
+                    }
+                    Operation::Challenge
+                    | Operation::Response
+                    | Operation::ComeIn
+                    | Operation::GoAway => unreachable!(),
+                };
+                if let Err(e) = ret {
                     let _ = self.send_go_away().await;
                     return Err(err!("letmeinfwd firewall open: {e}"));
                 }
             }
             Resource::Jump { .. } => {
-                // Send an add-jump request to letmeinfwd.
-                if let Err(e) = self
-                    .connect_to_fw()
-                    .await?
-                    .jump(user_id, resource_id, peer_ip_addr, conf_checksum)
-                    .await
-                {
+                let ret = match initial_operation {
+                    Operation::Knock => {
+                        // Send an add-jump request to letmeinfwd.
+                        self.connect_to_fw()
+                            .await?
+                            .jump(user_id, resource_id, peer_ip_addr, conf_checksum)
+                            .await
+                    }
+                    Operation::Revoke => {
+                        // Send an revoke request to letmeinfwd.
+                        self.connect_to_fw()
+                            .await?
+                            .revoke(user_id, resource_id, peer_ip_addr, conf_checksum)
+                            .await
+                    }
+                    Operation::Challenge
+                    | Operation::Response
+                    | Operation::ComeIn
+                    | Operation::GoAway => unreachable!(),
+                };
+                if let Err(e) = ret {
                     let _ = self.send_go_away().await;
                     return Err(err!("letmeinfwd firewall jump: {e}"));
                 }
             }
         }
 
+        let logaction = if initial_operation == Operation::Knock {
+            "knocked"
+        } else {
+            "revoked"
+        };
         println!(
-            "[{peer_ip_addr}]: Resource {resource_id} successfully knocked. \
-             Firewall rules applied.",
+            "[{peer_ip_addr}]: Resource {resource_id} successfully {logaction}. \
+             Firewall rules changed.",
         );
 
         // Send a come-in message.

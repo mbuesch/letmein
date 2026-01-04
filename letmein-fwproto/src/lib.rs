@@ -45,6 +45,8 @@ pub enum FirewallOperation {
     Open,
     /// Add a jump rule.
     Jump,
+    /// Revoke rules.
+    Revoke,
 }
 
 impl TryFrom<u16> for FirewallOperation {
@@ -55,11 +57,13 @@ impl TryFrom<u16> for FirewallOperation {
         const OPERATION_ACK: u16 = FirewallOperation::Ack as u16;
         const OPERATION_OPEN: u16 = FirewallOperation::Open as u16;
         const OPERATION_JUMP: u16 = FirewallOperation::Jump as u16;
+        const OPERATION_REVOKE: u16 = FirewallOperation::Revoke as u16;
         match value {
             OPERATION_NACK => Ok(Self::Nack),
             OPERATION_ACK => Ok(Self::Ack),
             OPERATION_OPEN => Ok(Self::Open),
             OPERATION_JUMP => Ok(Self::Jump),
+            OPERATION_REVOKE => Ok(Self::Revoke),
             _ => Err(err!("Invalid FirewallMessage/Operation value")),
         }
     }
@@ -198,6 +202,23 @@ impl FirewallMessage {
         }
     }
 
+    pub fn new_revoke(
+        user: UserId,
+        resource: ResourceId,
+        addr: IpAddr,
+        conf_cs: &ConfigChecksum,
+    ) -> Self {
+        let (addr_type, addr) = addr_to_octets(addr);
+        Self {
+            operation: FirewallOperation::Revoke,
+            user,
+            resource,
+            addr_type,
+            addr,
+            conf_cs: conf_cs.clone(),
+        }
+    }
+
     /// Construct a new acknowledge message.
     pub fn new_ack() -> Self {
         Self {
@@ -232,7 +253,7 @@ impl FirewallMessage {
     /// Get the `IpAddr` from this message.
     pub fn addr(&self) -> Option<IpAddr> {
         match self.operation {
-            FirewallOperation::Open | FirewallOperation::Jump => {
+            FirewallOperation::Open | FirewallOperation::Jump | FirewallOperation::Revoke => {
                 Some(octets_to_addr(self.addr_type, &self.addr))
             }
             FirewallOperation::Ack | FirewallOperation::Nack => None,
@@ -242,7 +263,9 @@ impl FirewallMessage {
     /// Get the configuration checksum from this message.
     pub fn conf_checksum(&self) -> Option<&ConfigChecksum> {
         match self.operation {
-            FirewallOperation::Open | FirewallOperation::Jump => Some(&self.conf_cs),
+            FirewallOperation::Open | FirewallOperation::Jump | FirewallOperation::Revoke => {
+                Some(&self.conf_cs)
+            }
             FirewallOperation::Ack | FirewallOperation::Nack => None,
         }
     }

@@ -20,7 +20,7 @@ use nftables::{
     stmt::{Counter, JumpTarget, Match, Operator, Statement},
     types::NfFamily,
 };
-use std::{borrow::Cow, fmt::Write as _, net::IpAddr, time::Duration};
+use std::{borrow::Cow, fmt::Write as _, net::IpAddr, slice, time::Duration};
 use tokio::sync::Mutex;
 
 const NFTNL_UDATA_COMMENT_MAXLEN: usize = 128;
@@ -586,7 +586,11 @@ impl NftFirewallInner {
     }
 
     /// Remove an existing lease rule from the kernel.
-    async fn nftables_remove_leases(&mut self, conf: &Config, leases: &[Lease]) -> ah::Result<()> {
+    async fn nftables_remove_leases_no_rebuild(
+        &mut self,
+        conf: &Config,
+        leases: &[Lease],
+    ) -> ah::Result<()> {
         if !leases.is_empty() {
             let names = NftNames::get(conf).context("Read configuration")?;
 
@@ -603,6 +607,17 @@ impl NftFirewallInner {
 
             // Apply all batch commands to the kernel.
             self.nftables_apply_batch(conf, batch).await?;
+        }
+        Ok(())
+    }
+
+    /// Remove an existing lease rule from the kernel
+    /// and rebuild the whole table on failure.
+    async fn nftables_remove_leases(&mut self, conf: &Config, leases: &[Lease]) -> ah::Result<()> {
+        if let Err(e) = self.nftables_remove_leases_no_rebuild(conf, leases).await {
+            eprintln!("WARNING: Failed to remove lease(s): {e:?}");
+            eprintln!("Trying full rebuild.");
+            self.nftables_full_rebuild(conf).await?;
         }
         Ok(())
     }
@@ -629,11 +644,7 @@ impl NftFirewallInner {
         pruned.append(&mut self.jump_leases.prune_timeouts(conf));
 
         if !pruned.is_empty() {
-            if let Err(e) = self.nftables_remove_leases(conf, &pruned).await {
-                eprintln!("WARNING: Failed to remove lease(s): {e:?}");
-                eprintln!("Trying full rebuild.");
-                self.nftables_full_rebuild(conf).await?;
-            }
+            self.nftables_remove_leases(conf, &pruned).await?;
             self.print_total_rule_count(conf);
         }
         Ok(())
@@ -658,6 +669,29 @@ impl NftFirewallInner {
             let lease = Lease::new_port(conf, remote_addr, port, timeout);
             self.nftables_add_lease(conf, &lease).await?;
             self.port_leases.insert(key, lease);
+            self.print_total_rule_count(conf);
+        }
+        Ok(())
+    }
+
+    async fn revoke_port(
+        &mut self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        port: LeasePort,
+    ) -> ah::Result<()> {
+        assert!(!self.shutdown);
+
+        let key = (remote_addr, port);
+        if let Some(lease) = self.port_leases.remove(&key) {
+            if let Err(e) = self
+                .nftables_remove_leases(conf, slice::from_ref(&lease))
+                .await
+            {
+                // Removal from kernel failed. Add it back into our map.
+                self.port_leases.insert(key, lease);
+                return Err(e);
+            }
             self.print_total_rule_count(conf);
         }
         Ok(())
@@ -712,6 +746,57 @@ impl NftFirewallInner {
         }
         Ok(())
     }
+
+    async fn revoke_jump(
+        &mut self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        targets: &FirewallJumpTargets,
+    ) -> ah::Result<()> {
+        assert!(!self.shutdown);
+
+        let mut removed = false;
+        for (target_chain, match_saddr, chain) in &[
+            (
+                targets.input.as_ref(),
+                targets.input_match_saddr,
+                FirewallChain::Input,
+            ),
+            (
+                targets.forward.as_ref(),
+                targets.forward_match_saddr,
+                FirewallChain::Forward,
+            ),
+            (
+                targets.output.as_ref(),
+                targets.output_match_saddr,
+                FirewallChain::Output,
+            ),
+        ] {
+            let Some(target_chain) = target_chain else {
+                continue;
+            };
+
+            let addr = option_if(remote_addr, *match_saddr);
+            let key = (addr, *chain, (**target_chain).clone());
+
+            if let Some(lease) = self.jump_leases.remove(&key) {
+                if let Err(e) = self
+                    .nftables_remove_leases(conf, slice::from_ref(&lease))
+                    .await
+                {
+                    // Removal from kernel failed. Add it back into our map.
+                    self.jump_leases.insert(key, lease);
+                    return Err(e);
+                }
+                removed = true;
+            }
+        }
+        if removed {
+            self.print_total_rule_count(conf);
+        }
+        Ok(())
+    }
 }
 
 pub struct NftFirewall {
@@ -742,9 +827,6 @@ impl FirewallMaintain for NftFirewall {
 }
 
 impl FirewallAction for NftFirewall {
-    /// Add a lease and open the port for the specified IP address.
-    /// If a lease for this port/address is already present, the timeout will be reset.
-    /// Apply the rules to the kernel, if required.
     async fn open_port(
         &self,
         conf: &Config,
@@ -759,6 +841,19 @@ impl FirewallAction for NftFirewall {
             .await
     }
 
+    async fn revoke_port(
+        &self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        port: LeasePort,
+    ) -> ah::Result<()> {
+        self.inner
+            .lock()
+            .await
+            .revoke_port(conf, remote_addr, port)
+            .await
+    }
+
     async fn add_jump(
         &self,
         conf: &Config,
@@ -770,6 +865,19 @@ impl FirewallAction for NftFirewall {
             .lock()
             .await
             .add_jump(conf, remote_addr, targets, timeout)
+            .await
+    }
+
+    async fn revoke_jump(
+        &self,
+        conf: &Config,
+        remote_addr: IpAddr,
+        targets: &FirewallJumpTargets,
+    ) -> ah::Result<()> {
+        self.inner
+            .lock()
+            .await
+            .revoke_jump(conf, remote_addr, targets)
             .await
     }
 }

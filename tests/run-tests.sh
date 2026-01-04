@@ -52,7 +52,7 @@ run_tests_genkey()
     [ "$user" = "12345678" ] || die "Got invalid user"
 }
 
-run_tests_knock()
+run_tests_knock_revoke()
 {
     local test_type="$1"
 
@@ -79,6 +79,10 @@ run_tests_knock()
     wait_for_pidfile letmeinfwd "$pid_letmeinfwd"
     wait_for_pidfile letmeind "$pid_letmeind"
 
+    ########################
+    ### PORT resource
+
+    echo "\n"
     info "Knocking IPv6 + IPv4..."
     "$target/letmein" \
         --verbose \
@@ -88,6 +92,17 @@ run_tests_knock()
         localhost 42 \
         || die "letmein knock failed"
 
+    echo "\n"
+    info "Revoking IPv6 + IPv4..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        revoke \
+        --user 12345678 \
+        localhost 42 \
+        || die "letmein revoke failed"
+
+    echo "\n"
     info "Knocking IPv4..."
     "$target/letmein" \
         --verbose \
@@ -98,6 +113,18 @@ run_tests_knock()
         localhost 42 \
         || die "letmein knock failed"
 
+    echo "\n"
+    info "Revoking IPv4..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        revoke \
+        --user 12345678 \
+        --ipv4 \
+        localhost 42 \
+        || die "letmein revoke failed"
+
+    echo "\n"
     info "Knocking IPv6..."
     "$target/letmein" \
         --verbose \
@@ -108,6 +135,21 @@ run_tests_knock()
         localhost 42 \
         || die "letmein knock failed"
 
+    echo "\n"
+    info "Revoke IPv6..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        revoke \
+        --user 12345678 \
+        --ipv6 \
+        localhost 42 \
+        || die "letmein revoke failed"
+
+    ########################
+    ### JUMP resource
+
+    echo "\n"
     info "Knocking jump resource IPv4..."
     "$target/letmein" \
         --verbose \
@@ -119,6 +161,19 @@ run_tests_knock()
         localhost \
         || die "letmein knock failed"
 
+    echo "\n"
+    info "Revoking jump resource IPv4..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        revoke \
+        --user 12345678 \
+        --ipv4 \
+        --resource aabbccdd \
+        localhost \
+        || die "letmein revoke failed"
+
+    echo "\n"
     info "Knocking jump resource IPv6..."
     "$target/letmein" \
         --verbose \
@@ -129,6 +184,18 @@ run_tests_knock()
         --resource aabbccdd \
         localhost \
         || die "letmein knock failed"
+
+    echo "\n"
+    info "Revoking jump resource IPv6..."
+    "$target/letmein" \
+        --verbose \
+        --config "$conf" \
+        revoke \
+        --user 12345678 \
+        --ipv6 \
+        --resource aabbccdd \
+        localhost \
+        || die "letmein revoke failed"
 
     kill_all_and_wait
 }
@@ -214,8 +281,8 @@ info "Temporary directory is: $tmpdir"
 build_project
 cargo_clippy
 run_tests_genkey
-run_tests_knock tcp
-run_tests_knock udp
+run_tests_knock_revoke tcp
+run_tests_knock_revoke udp
 info "All tests Ok."
 
 # vim: ts=4 sw=4 expandtab

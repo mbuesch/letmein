@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::{
-    firewall::{FirewallAction, FirewallJumpTargets, LeasePort},
+    firewall::{FirewallAction, LeasePort},
     set_owner_mode, Opts, LETMEIND_GID, LETMEIND_UID,
 };
 use anyhow::{self as ah, format_err as err, Context as _};
@@ -69,7 +69,7 @@ impl FirewallConnection {
         msg.send(&mut self.stream).await
     }
 
-    async fn send_result(&mut self, res: ah::Result<()>) -> ah::Result<()> {
+    async fn send_result<T>(&mut self, res: ah::Result<T>) -> ah::Result<T> {
         if res.is_ok() {
             self.send_msg(&FirewallMessage::new_ack()).await?;
         } else {
@@ -99,12 +99,12 @@ impl FirewallConnection {
     async fn get_addr(&mut self, msg: &FirewallMessage) -> ah::Result<IpAddr> {
         let Some(addr) = msg.addr() else {
             let res = Err(err!("No address in message."));
-            return self.send_result(res).await.map(|_| unreachable!());
+            return self.send_result(res).await;
         };
         // Check if addr is valid.
         if !addr_check(&addr) {
             let res = Err(err!("Invalid address in message."));
-            return self.send_result(res).await.map(|_| unreachable!());
+            return self.send_result(res).await;
         }
         Ok(addr)
     }
@@ -119,7 +119,7 @@ impl FirewallConnection {
             let res = Err(err!(
                 "The resource {resource_id} is not configured in letmeind.conf."
             ));
-            return self.send_result(res).await.map(|_| unreachable!());
+            return self.send_result(res).await;
         };
 
         // Check if the user is allowed to use the resource.
@@ -127,7 +127,7 @@ impl FirewallConnection {
             let res = Err(err!(
                 "The resource {resource_id} is not allowed for user {user_id}."
             ));
-            return self.send_result(res).await.map(|_| unreachable!());
+            return self.send_result(res).await;
         }
 
         Ok(resource.clone())
@@ -142,109 +142,70 @@ impl FirewallConnection {
         let Some(msg) = self.recv_msg().await? else {
             return Err(err!("Disconnected."));
         };
+
+        // Compare the configuration checksum to ensure that
+        // letmeind and letmeinfwd have the same view of the configuration.
+        self.check_conf_checksum(conf, &msg).await?;
+
+        // Get the address from the socket message.
+        let addr = self.get_addr(&msg).await?;
+
+        // Get the resource from the socket message.
+        let resource = self.get_resource(conf, &msg).await?;
+
         match msg.operation() {
             FirewallOperation::Open => {
-                // Compare the configuration checksum to ensure that
-                // letmeind and letmeinfwd have the same view of the configuration.
-                self.check_conf_checksum(conf, &msg).await?;
-
-                // Get the address from the socket message.
-                let addr = self.get_addr(&msg).await?;
-
-                // Get the resource from the socket message.
-                let resource = self.get_resource(conf, &msg).await?;
-
-                // Get the port information.
-                let (lease_port, timeout) = match resource {
-                    Resource::Port {
-                        id: _,
-                        port,
-                        tcp,
-                        udp,
-                        timeout,
-                        users: _,
-                    } => {
-                        // Don't allow the user to manage the control port.
-                        if port == conf.port().port {
-                            // Whoops, letmeind should never send us a request for the
-                            // control port. Did some other process write to the unix socket?
-                            let res =
-                                Err(err!("The knocked port {port} is the letmein control port."));
-                            return self.send_result(res).await;
-                        }
-
-                        let lease_port = match (tcp, udp) {
-                            (true, false) => LeasePort::Tcp(port),
-                            (false, true) => LeasePort::Udp(port),
-                            (true, true) => LeasePort::TcpUdp(port),
-                            (false, false) => {
-                                let res = Err(err!("Invalid port info in config."));
-                                return self.send_result(res).await;
-                            }
-                        };
-
-                        (lease_port, timeout)
-                    }
-                    _ => {
-                        let res = Err(err!(
-                            "The resource {} is not a port resource.",
-                            msg.resource()
-                        ));
-                        return self.send_result(res).await;
+                let port: LeasePort = match resource.clone().try_into() {
+                    Ok(t) => t,
+                    Err(e) => {
+                        return self
+                            .send_result(Err(e).context("Convert resource to LeasePort"))
+                            .await;
                     }
                 };
 
+                // Don't allow the user to manage the control port.
+                if port.port() == conf.port().port {
+                    // Whoops, letmeind should never send us a request for the
+                    // control port. Did some other process write to the unix socket?
+                    let res = Err(err!("The knocked port {port} is the letmein control port."));
+                    return self.send_result(res).await;
+                }
+
                 // Open the firewall.
-                let res = fw.open_port(conf, addr, lease_port, timeout).await;
+                let res = fw.open_port(conf, addr, port, resource.timeout()).await;
                 self.send_result(res).await
             }
             FirewallOperation::Jump => {
-                // Compare the configuration checksum to ensure that
-                // letmeind and letmeinfwd have the same view of the configuration.
-                self.check_conf_checksum(conf, &msg).await?;
-
-                // Get the address from the socket message.
-                let addr = self.get_addr(&msg).await?;
-
-                // Get the resource from the socket message.
-                let resource = self.get_resource(conf, &msg).await?;
-
-                let (targets, timeout) = match resource {
-                    Resource::Jump {
-                        id: _,
-                        input,
-                        input_match_saddr,
-                        forward,
-                        forward_match_saddr,
-                        output,
-                        output_match_saddr,
-                        timeout,
-                        users: _,
-                    } => {
-                        let targets = FirewallJumpTargets {
-                            input,
-                            input_match_saddr,
-                            forward,
-                            forward_match_saddr,
-                            output,
-                            output_match_saddr,
-                        };
-
-                        (targets, timeout)
-                    }
-                    _ => {
-                        let res = Err(err!(
-                            "The resource {} is not a jump resource.",
-                            msg.resource()
-                        ));
-                        return self.send_result(res).await;
+                let targets = match resource.clone().try_into() {
+                    Ok(t) => t,
+                    Err(e) => {
+                        return self
+                            .send_result(Err(e).context("Convert resource to jump targets"))
+                            .await;
                     }
                 };
 
                 // Add the jump-rules to the firewall.
-                let res = fw.add_jump(conf, addr, &targets, timeout).await;
+                let res = fw.add_jump(conf, addr, &targets, resource.timeout()).await;
                 self.send_result(res).await
             }
+            FirewallOperation::Revoke => match &resource {
+                Resource::Port { .. } => {
+                    let lease_port = resource.try_into().expect("Not a port resource");
+
+                    // Close the port.
+                    let res = fw.revoke_port(conf, addr, lease_port).await;
+                    self.send_result(res).await
+                }
+                Resource::Jump { .. } => {
+                    let targets = resource.try_into().expect("Not a jump resource");
+
+                    // Remove the jump-rules from the firewall.
+                    let res = fw.revoke_jump(conf, addr, &targets).await;
+                    self.send_result(res).await
+                }
+            },
             FirewallOperation::Ack | FirewallOperation::Nack => {
                 Err(err!("Received invalid message"))
             }

@@ -16,7 +16,7 @@ mod seccomp;
 use crate::{
     command::{
         genkey::run_genkey,
-        knock::{run_knock, KnockResource, KnockServer},
+        knock::{run_knock, run_revoke, KnockResource, KnockServer},
     },
     resolver::{ResCrypt, ResSrv},
     seccomp::install_seccomp_rules,
@@ -133,104 +133,146 @@ impl Opts {
     }
 }
 
+#[derive(Parser, Debug)]
+struct KnockOrRevokeOpts {
+    /// The host name, IPv4 or IPv6 address that you want to knock on.
+    host: String,
+
+    /// The port on the remote host that you want to knock open.
+    /// Also see --resource
+    ///
+    /// The resource that will be used will be looked up by this
+    /// port number from the letmein.conf configuration file.
+    ///
+    /// Alternatively you can use the --resource option to directly
+    /// specify a resource ID.
+    #[arg(conflicts_with = "resource")]
+    port: Option<u16>,
+
+    /// Specify the resource ID instead of the [PORT] to knock open.
+    ///
+    /// This can be used to knock open a `jump` resource.
+    #[arg(long, short = 'r', conflicts_with = "port")]
+    resource: Option<ResourceId>,
+
+    /// The user identifier for authenticating the knock request.
+    ///
+    /// The user identifier is a 8 digits hex number.
+    ///
+    /// The authentication key associated with this user identifier
+    /// will be fetched from the letmein.conf configuration file.
+    ///
+    /// If not given, then the `[CLIENT] default_user` from the
+    /// configuration file will be used instead.
+    /// If the configuration is not available, user 00000000 will
+    /// be used instead.
+    #[arg(short, long)]
+    user: Option<UserId>,
+
+    /// letmein server port number.
+    ///
+    /// You normally don't have to use this option.
+    ///
+    /// Set the letmein server port number to use when contacting the letmein server.
+    ///
+    /// If not given, then the `[GENERAL] port` from the
+    /// letmein.conf configuration file will be used instead.
+    /// If the configuration is not available, port 5800 will
+    /// be used instead.
+    #[arg(short = 'P', long)]
+    server_port: Option<u16>,
+
+    /// Enforce TCP connection to letmein server port.
+    ///
+    /// You normally don't have to use this option.
+    ///
+    /// If not given, then the `[GENERAL] port` from the
+    /// letmein.conf configuration file will be used instead.
+    /// TCP will be preferred, if both TCP and UDP are specified.
+    #[arg(short = 'T', long)]
+    server_port_tcp: bool,
+
+    /// Enforce UDP connection to letmein server port.
+    ///
+    /// You normally don't have to use this option.
+    ///
+    /// If not given, then the `[GENERAL] port` from the
+    /// letmein.conf configuration file will be used instead.
+    /// TCP will be preferred, if both TCP and UDP are specified.
+    #[arg(short = 'U', long)]
+    server_port_udp: bool,
+
+    /// Resolve HOST into an IPv4 address.
+    ///
+    /// Resolve the HOST into an IPv4 address and knock on that address.
+    ///
+    /// If none of the --ipv4 and --ipv6 options are given,
+    /// then knocking on both IPv4 and IPv6 is tried, but no error is
+    /// shown, if one of them failed.
+    ///
+    /// If both of the --ipv4 and --ipv6 options are given,
+    /// then knocking on both IPv4 and IPv6 is done and an error is shown,
+    /// if any one fails.
+    #[arg(short = '4', long)]
+    ipv4: bool,
+
+    /// Resolve HOST into an IPv6 address.
+    ///
+    /// Resolve the HOST into an IPv6 address and knock on that address.
+    ///
+    /// If none of the --ipv4 and --ipv6 options are given,
+    /// then knocking on both IPv4 and IPv6 is tried, but no error is
+    /// shown, if one of them failed.
+    ///
+    /// If both of the --ipv4 and --ipv6 options are given,
+    /// then knocking on both IPv4 and IPv6 is done and an error is shown,
+    /// if any one fails.
+    #[arg(short = '6', long)]
+    ipv6: bool,
+}
+
+impl KnockOrRevokeOpts {
+    pub fn get_server(&self) -> KnockServer<'_> {
+        KnockServer {
+            addr: &self.host,
+            addr_mode: (self.ipv4, self.ipv6).into(),
+            port: self.server_port,
+            port_tcp: self.server_port_tcp,
+            port_udp: self.server_port_udp,
+        }
+    }
+
+    pub fn get_resource(&self) -> ah::Result<KnockResource> {
+        if let Some(port) = self.port {
+            Ok(KnockResource::Port(port))
+        } else if let Some(resource) = self.resource {
+            Ok(KnockResource::Resource(resource))
+        } else {
+            Err(err!(
+                "Neither [PORT] nor --resource command line options were provided."
+            ))
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Knock a port open on a server.
+    /// Knock a resource on a server.
+    ///
+    /// This opens the port in the firewall or adds jump rules to the firewall,
+    /// depending on the resource type. See configuration.
     Knock {
-        /// The host name, IPv4 or IPv6 address that you want to knock on.
-        host: String,
+        #[command(flatten)]
+        knock: KnockOrRevokeOpts,
+    },
 
-        /// The port on the remote host that you want to knock open.
-        /// Also see --resource
-        ///
-        /// The resource that will be used will be looked up by this
-        /// port number from the letmein.conf configuration file.
-        ///
-        /// Alternatively you can use the --resource option to directly
-        /// specify a resource ID.
-        #[arg(conflicts_with = "resource")]
-        port: Option<u16>,
-
-        /// Specify the resource ID instead of the [PORT] to knock open.
-        ///
-        /// This can be used to knock open a `jump` resource.
-        #[arg(long, short = 'r', conflicts_with = "port")]
-        resource: Option<ResourceId>,
-
-        /// The user identifier for authenticating the knock request.
-        ///
-        /// The user identifier is a 8 digits hex number.
-        ///
-        /// The authentication key associated with this user identifier
-        /// will be fetched from the letmein.conf configuration file.
-        ///
-        /// If not given, then the `[CLIENT] default_user` from the
-        /// configuration file will be used instead.
-        /// If the configuration is not available, user 00000000 will
-        /// be used instead.
-        #[arg(short, long)]
-        user: Option<UserId>,
-
-        /// letmein server port number.
-        ///
-        /// You normally don't have to use this option.
-        ///
-        /// Set the letmein server port number to use when contacting the letmein server.
-        ///
-        /// If not given, then the `[GENERAL] port` from the
-        /// letmein.conf configuration file will be used instead.
-        /// If the configuration is not available, port 5800 will
-        /// be used instead.
-        #[arg(short = 'P', long)]
-        server_port: Option<u16>,
-
-        /// Enforce TCP connection to letmein server port.
-        ///
-        /// You normally don't have to use this option.
-        ///
-        /// If not given, then the `[GENERAL] port` from the
-        /// letmein.conf configuration file will be used instead.
-        /// TCP will be preferred, if both TCP and UDP are specified.
-        #[arg(short = 'T', long)]
-        server_port_tcp: bool,
-
-        /// Enforce UDP connection to letmein server port.
-        ///
-        /// You normally don't have to use this option.
-        ///
-        /// If not given, then the `[GENERAL] port` from the
-        /// letmein.conf configuration file will be used instead.
-        /// TCP will be preferred, if both TCP and UDP are specified.
-        #[arg(short = 'U', long)]
-        server_port_udp: bool,
-
-        /// Resolve HOST into an IPv4 address.
-        ///
-        /// Resolve the HOST into an IPv4 address and knock on that address.
-        ///
-        /// If none of the --ipv4 and --ipv6 options are given,
-        /// then knocking on both IPv4 and IPv6 is tried, but no error is
-        /// shown, if one of them failed.
-        ///
-        /// If both of the --ipv4 and --ipv6 options are given,
-        /// then knocking on both IPv4 and IPv6 is done and an error is shown,
-        /// if any one fails.
-        #[arg(short = '4', long)]
-        ipv4: bool,
-
-        /// Resolve HOST into an IPv6 address.
-        ///
-        /// Resolve the HOST into an IPv6 address and knock on that address.
-        ///
-        /// If none of the --ipv4 and --ipv6 options are given,
-        /// then knocking on both IPv4 and IPv6 is tried, but no error is
-        /// shown, if one of them failed.
-        ///
-        /// If both of the --ipv4 and --ipv6 options are given,
-        /// then knocking on both IPv4 and IPv6 is done and an error is shown,
-        /// if any one fails.
-        #[arg(short = '6', long)]
-        ipv6: bool,
+    /// Revoke a resource on a server.
+    ///
+    /// This closes the port in the firewall or removes jump rules from the firewall,
+    /// depending on the resource type. See configuration.
+    Revoke {
+        #[command(flatten)]
+        revoke: KnockOrRevokeOpts,
     },
 
     /// Generate a new shared secret key.
@@ -260,39 +302,25 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
     // Run the user specified command.
     if let Some(command) = opts.command {
         match command {
-            Command::Knock {
-                host,
-                port,
-                resource,
-                user,
-                server_port,
-                server_port_tcp,
-                server_port_udp,
-                ipv4,
-                ipv6,
-            } => {
-                let server = KnockServer {
-                    addr: &host,
-                    addr_mode: (ipv4, ipv6).into(),
-                    port: server_port,
-                    port_tcp: server_port_tcp,
-                    port_udp: server_port_udp,
-                };
-                let resource = if let Some(port) = port {
-                    KnockResource::Port(port)
-                } else if let Some(resource) = resource {
-                    KnockResource::Resource(resource)
-                } else {
-                    return Err(err!(
-                        "Neither [PORT] nor --resource command line options were provided."
-                    ));
-                };
+            Command::Knock { knock } => {
                 run_knock(
                     &conf,
                     opts.verbose,
-                    server,
-                    resource,
-                    user,
+                    knock.get_server(),
+                    knock.get_resource()?,
+                    knock.user,
+                    &opts.dns,
+                    &opts.dns_crypt,
+                )
+                .await
+            }
+            Command::Revoke { revoke } => {
+                run_revoke(
+                    &conf,
+                    opts.verbose,
+                    revoke.get_server(),
+                    revoke.get_resource()?,
+                    revoke.user,
                     &opts.dns,
                     &opts.dns_crypt,
                 )
