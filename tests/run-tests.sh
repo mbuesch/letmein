@@ -34,6 +34,7 @@ build_project()
 
 cargo_clippy()
 {
+    export LETMEIN_CONF_PREFIX="/opt/letmein"
     cargo clippy -- --deny warnings || die "cargo clippy failed"
     cargo clippy --tests -- --deny warnings || die "cargo clippy --tests failed"
 }
