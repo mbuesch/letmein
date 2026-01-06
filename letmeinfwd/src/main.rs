@@ -208,8 +208,8 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     let mut sighup = signal(SignalKind::hangup()).unwrap();
 
     // Create async IPC channels.
-    let (exit_sock_tx, mut exit_sock_rx) = sync::mpsc::channel(1);
-    let (exit_fw_tx, mut exit_fw_rx) = sync::mpsc::channel(1);
+    let (exit_tx, mut exit_rx) = sync::mpsc::channel(1);
+    let exit_tx = Arc::new(exit_tx);
 
     // Start the firewall unix domain socket listener.
     let srv = FirewallServer::new(opts.no_systemd, &opts)
@@ -228,6 +228,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
         let conf = Arc::clone(&conf);
         let opts = Arc::clone(&opts);
         let fw = Arc::clone(&fw);
+        let exit_tx = Arc::clone(&exit_tx);
 
         async move {
             let conn_semaphore = Arc::new(Semaphore::new(opts.num_connections));
@@ -248,7 +249,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                         }
                     }
                     Err(e) => {
-                        let _ = exit_sock_tx.send(Err(e)).await;
+                        let _ = exit_tx.send(Err(e)).await;
                         break;
                     }
                 }
@@ -260,13 +261,14 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     task::spawn({
         let conf = Arc::clone(&conf);
         let fw = Arc::clone(&fw);
+        let exit_tx = Arc::clone(&exit_tx);
 
         async move {
             let mut interval = time::interval(FW_MAINTAIN_PERIOD);
             loop {
                 interval.tick().await;
                 if let Err(e) = fw.maintain(&conf).await {
-                    let _ = exit_fw_tx.send(Err(e)).await;
+                    let _ = exit_tx.send(Err(e)).await;
                     break;
                 }
             }
@@ -286,10 +288,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
             _ = sighup.recv() => {
                 eprintln!("SIGHUP: Reloading is not supported. Please restart letmeinfwd instead.");
             }
-            code = exit_sock_rx.recv() => {
-                break code.unwrap_or_else(|| Err(err!("Unknown error code.")));
-            }
-            code = exit_fw_rx.recv() => {
+            code = exit_rx.recv() => {
                 break code.unwrap_or_else(|| Err(err!("Unknown error code.")));
             }
         }

@@ -135,7 +135,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     let mut sighup = signal(SignalKind::hangup()).unwrap();
 
     // Create async IPC channels.
-    let (exit_sock_tx, mut exit_sock_rx) = sync::mpsc::channel(1);
+    let (exit_tx, mut exit_rx) = sync::mpsc::channel(1);
 
     // Start the TCP control port listener.
     let mut srv = Server::new(&conf, opts.no_systemd, opts.num_connections)
@@ -184,7 +184,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                         }
                     }
                     Err(e) => {
-                        let _ = exit_sock_tx.send(Err(e)).await;
+                        let _ = exit_tx.send(Err(e)).await;
                         break;
                     }
                 }
@@ -205,7 +205,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
             _ = sighup.recv() => {
                 eprintln!("SIGHUP: Reloading is not supported. Please restart letmeind instead.");
             }
-            code = exit_sock_rx.recv() => {
+            code = exit_rx.recv() => {
                 break code.unwrap_or_else(|| Err(err!("Unknown error code.")));
             }
         }
