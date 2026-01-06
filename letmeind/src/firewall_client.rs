@@ -53,11 +53,11 @@ impl FirewallClient {
         addr: IpAddr,
         conf_cs: &ConfigChecksum,
     ) -> ah::Result<()> {
-        // Send an open-port request to the firewall daemon.
+        // Send an install-rules request to the firewall daemon.
         FirewallMessage::new_install(user, resource, addr, conf_cs)
             .send(&mut self.stream)
             .await
-            .context("Send port-open message")?;
+            .context("Send install-rules message")?;
 
         // Receive the acknowledge reply.
         self.recv_ack().await
@@ -71,11 +71,11 @@ impl FirewallClient {
         addr: IpAddr,
         conf_cs: &ConfigChecksum,
     ) -> ah::Result<()> {
-        // Send a revoke request to the firewall daemon.
+        // Send a revoke-rules request to the firewall daemon.
         FirewallMessage::new_revoke(user, resource, addr, conf_cs)
             .send(&mut self.stream)
             .await
-            .context("Send revoke message")?;
+            .context("Send revoke-rules message")?;
 
         // Receive the acknowledge reply.
         self.recv_ack().await

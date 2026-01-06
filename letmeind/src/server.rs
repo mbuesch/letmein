@@ -25,7 +25,7 @@ use tokio::{
 
 async fn sleep_forever() -> Infallible {
     loop {
-        time::sleep(Duration::from_secs(60)).await;
+        time::sleep(Duration::from_secs(31536000000)).await;
     }
 }
 

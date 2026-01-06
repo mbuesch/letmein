@@ -274,31 +274,26 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     });
 
     // Task: Main loop.
-    let mut exitcode;
-    loop {
+    let mut exitcode = loop {
         tokio::select! {
             _ = sigterm.recv() => {
                 eprintln!("SIGTERM: Terminating.");
-                exitcode = Ok(());
-                break;
+                break Ok(());
             }
             _ = sigint.recv() => {
-                exitcode = Err(err!("Interrupted by SIGINT."));
-                break;
+                break Err(err!("Interrupted by SIGINT."));
             }
             _ = sighup.recv() => {
                 eprintln!("SIGHUP: Reloading is not supported. Please restart letmeinfwd instead.");
             }
             code = exit_sock_rx.recv() => {
-                exitcode = code.unwrap_or_else(|| Err(err!("Unknown error code.")));
-                break;
+                break code.unwrap_or_else(|| Err(err!("Unknown error code.")));
             }
             code = exit_fw_rx.recv() => {
-                exitcode = code.unwrap_or_else(|| Err(err!("Unknown error code.")));
-                break;
+                break code.unwrap_or_else(|| Err(err!("Unknown error code.")));
             }
         }
-    }
+    };
 
     // Exiting...
     // Try to remove all firewall rules.
