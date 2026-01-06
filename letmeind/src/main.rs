@@ -195,18 +195,19 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     // Task: Main loop.
     loop {
         tokio::select! {
-            _ = sigterm.recv() => {
-                eprintln!("SIGTERM: Terminating.");
-                break Ok(());
+            biased;
+            code = exit_rx.recv() => {
+                break code.unwrap_or_else(|| Err(err!("Unknown error code.")));
             }
             _ = sigint.recv() => {
                 break Err(err!("Interrupted by SIGINT."));
             }
+            _ = sigterm.recv() => {
+                eprintln!("SIGTERM: Terminating.");
+                break Ok(());
+            }
             _ = sighup.recv() => {
                 eprintln!("SIGHUP: Reloading is not supported. Please restart letmeind instead.");
-            }
-            code = exit_rx.recv() => {
-                break code.unwrap_or_else(|| Err(err!("Unknown error code.")));
             }
         }
     }
