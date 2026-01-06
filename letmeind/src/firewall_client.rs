@@ -39,14 +39,14 @@ impl FirewallClient {
         match msg_reply.operation() {
             FirewallOperation::Ack => Ok(()),
             FirewallOperation::Nack => Err(err!("The firewall rejected the request")),
-            FirewallOperation::Open | FirewallOperation::Jump | FirewallOperation::Revoke => {
+            FirewallOperation::Install | FirewallOperation::Revoke => {
                 Err(err!("Received invalid reply"))
             }
         }
     }
 
-    /// Send a request to open a firewall `port` for the specified `addr`.
-    pub async fn open_port(
+    /// Send a request to install firewall rules for the specified `addr`.
+    pub async fn install_rules(
         &mut self,
         user: UserId,
         resource: ResourceId,
@@ -54,7 +54,7 @@ impl FirewallClient {
         conf_cs: &ConfigChecksum,
     ) -> ah::Result<()> {
         // Send an open-port request to the firewall daemon.
-        FirewallMessage::new_open(user, resource, addr, conf_cs)
+        FirewallMessage::new_install(user, resource, addr, conf_cs)
             .send(&mut self.stream)
             .await
             .context("Send port-open message")?;
@@ -63,26 +63,8 @@ impl FirewallClient {
         self.recv_ack().await
     }
 
-    /// Send a request to add a firewall "jump" rule.
-    pub async fn jump(
-        &mut self,
-        user: UserId,
-        resource: ResourceId,
-        addr: IpAddr,
-        conf_cs: &ConfigChecksum,
-    ) -> ah::Result<()> {
-        // Send an add-jump request to the firewall daemon.
-        FirewallMessage::new_jump(user, resource, addr, conf_cs)
-            .send(&mut self.stream)
-            .await
-            .context("Send add-jump message")?;
-
-        // Receive the acknowledge reply.
-        self.recv_ack().await
-    }
-
-    /// Send a request to revoke a firewall rule.
-    pub async fn revoke(
+    /// Send a request to revoke firewall rules for the specified `addr`.
+    pub async fn revoke_rules(
         &mut self,
         user: UserId,
         resource: ResourceId,

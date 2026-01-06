@@ -216,61 +216,29 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         // Reconfigure the firewall.
         let peer_ip_addr = self.conn.peer_addr().ip();
         let conf_checksum = self.conf.checksum();
-        match resource {
-            Resource::Port { .. } => {
-                let ret = match initial_operation {
-                    Operation::Knock => {
-                        // Send an open-port request to letmeinfwd.
-                        self.connect_to_fw()
-                            .await?
-                            .open_port(user_id, resource_id, peer_ip_addr, conf_checksum)
-                            .await
-                    }
-                    Operation::Revoke => {
-                        // Send an revoke request to letmeinfwd.
-                        self.connect_to_fw()
-                            .await?
-                            .revoke(user_id, resource_id, peer_ip_addr, conf_checksum)
-                            .await
-                    }
-                    Operation::Challenge
-                    | Operation::Response
-                    | Operation::ComeIn
-                    | Operation::GoAway => unreachable!(),
-                };
-                if let Err(e) = ret {
-                    return self
-                        .send_go_away(Err(err!("letmeinfwd firewall open: {e}")))
-                        .await;
-                }
+        let ret = match initial_operation {
+            Operation::Knock => {
+                // Send an install-rules request to letmeinfwd.
+                self.connect_to_fw()
+                    .await?
+                    .install_rules(user_id, resource_id, peer_ip_addr, conf_checksum)
+                    .await
             }
-            Resource::Jump { .. } => {
-                let ret = match initial_operation {
-                    Operation::Knock => {
-                        // Send an add-jump request to letmeinfwd.
-                        self.connect_to_fw()
-                            .await?
-                            .jump(user_id, resource_id, peer_ip_addr, conf_checksum)
-                            .await
-                    }
-                    Operation::Revoke => {
-                        // Send an revoke request to letmeinfwd.
-                        self.connect_to_fw()
-                            .await?
-                            .revoke(user_id, resource_id, peer_ip_addr, conf_checksum)
-                            .await
-                    }
-                    Operation::Challenge
-                    | Operation::Response
-                    | Operation::ComeIn
-                    | Operation::GoAway => unreachable!(),
-                };
-                if let Err(e) = ret {
-                    return self
-                        .send_go_away(Err(err!("letmeinfwd firewall jump: {e}")))
-                        .await;
-                }
+            Operation::Revoke => {
+                // Send an revoke-rules request to letmeinfwd.
+                self.connect_to_fw()
+                    .await?
+                    .revoke_rules(user_id, resource_id, peer_ip_addr, conf_checksum)
+                    .await
             }
+            Operation::Challenge | Operation::Response | Operation::ComeIn | Operation::GoAway => {
+                unreachable!()
+            }
+        };
+        if let Err(e) = ret {
+            return self
+                .send_go_away(Err(err!("letmeinfwd firewall: {e}")))
+                .await;
         }
 
         let logaction = if initial_operation == Operation::Knock {

@@ -41,11 +41,9 @@ pub enum FirewallOperation {
     Nack,
     /// Acknowledge message.
     Ack,
-    /// Open a port.
-    Open,
-    /// Add a jump rule.
-    Jump,
-    /// Revoke rules.
+    /// Add port-open or jump rules.
+    Install,
+    /// Revoke port-open or jump rules.
     Revoke,
 }
 
@@ -55,14 +53,12 @@ impl TryFrom<u16> for FirewallOperation {
     fn try_from(value: u16) -> Result<Self, Self::Error> {
         const OPERATION_NACK: u16 = FirewallOperation::Nack as u16;
         const OPERATION_ACK: u16 = FirewallOperation::Ack as u16;
-        const OPERATION_OPEN: u16 = FirewallOperation::Open as u16;
-        const OPERATION_JUMP: u16 = FirewallOperation::Jump as u16;
+        const OPERATION_INSTALL: u16 = FirewallOperation::Install as u16;
         const OPERATION_REVOKE: u16 = FirewallOperation::Revoke as u16;
         match value {
             OPERATION_NACK => Ok(Self::Nack),
             OPERATION_ACK => Ok(Self::Ack),
-            OPERATION_OPEN => Ok(Self::Open),
-            OPERATION_JUMP => Ok(Self::Jump),
+            OPERATION_INSTALL => Ok(Self::Install),
             OPERATION_REVOKE => Ok(Self::Revoke),
             _ => Err(err!("Invalid FirewallMessage/Operation value")),
         }
@@ -167,8 +163,8 @@ fn octets_to_addr(addr_type: AddrType, addr: &[u8; ADDR_SIZE]) -> IpAddr {
 }
 
 impl FirewallMessage {
-    /// Construct a new message that requests installing a firewall-port-open rule.
-    pub fn new_open(
+    /// Construct a new message to install firewall rules for a resource.
+    pub fn new_install(
         user: UserId,
         resource: ResourceId,
         addr: IpAddr,
@@ -176,7 +172,7 @@ impl FirewallMessage {
     ) -> Self {
         let (addr_type, addr) = addr_to_octets(addr);
         Self {
-            operation: FirewallOperation::Open,
+            operation: FirewallOperation::Install,
             user,
             resource,
             addr_type,
@@ -185,23 +181,7 @@ impl FirewallMessage {
         }
     }
 
-    pub fn new_jump(
-        user: UserId,
-        resource: ResourceId,
-        addr: IpAddr,
-        conf_cs: &ConfigChecksum,
-    ) -> Self {
-        let (addr_type, addr) = addr_to_octets(addr);
-        Self {
-            operation: FirewallOperation::Jump,
-            user,
-            resource,
-            addr_type,
-            addr,
-            conf_cs: conf_cs.clone(),
-        }
-    }
-
+    /// Construct a new message to revoke firewall rule for a resource.
     pub fn new_revoke(
         user: UserId,
         resource: ResourceId,
@@ -253,7 +233,7 @@ impl FirewallMessage {
     /// Get the `IpAddr` from this message.
     pub fn addr(&self) -> Option<IpAddr> {
         match self.operation {
-            FirewallOperation::Open | FirewallOperation::Jump | FirewallOperation::Revoke => {
+            FirewallOperation::Install | FirewallOperation::Revoke => {
                 Some(octets_to_addr(self.addr_type, &self.addr))
             }
             FirewallOperation::Ack | FirewallOperation::Nack => None,
@@ -263,9 +243,7 @@ impl FirewallMessage {
     /// Get the configuration checksum from this message.
     pub fn conf_checksum(&self) -> Option<&ConfigChecksum> {
         match self.operation {
-            FirewallOperation::Open | FirewallOperation::Jump | FirewallOperation::Revoke => {
-                Some(&self.conf_cs)
-            }
+            FirewallOperation::Install | FirewallOperation::Revoke => Some(&self.conf_cs),
             FirewallOperation::Ack | FirewallOperation::Nack => None,
         }
     }
@@ -428,18 +406,18 @@ mod tests {
     }
 
     #[test]
-    fn test_msg_open_v6() {
-        let msg = FirewallMessage::new_open(
+    fn test_msg_install_v6() {
+        let msg = FirewallMessage::new_install(
             0x66773322.into(),
             0xAABB9988.into(),
             "::1".parse().unwrap(),
             &ConfigChecksum::calculate(b"foo"),
         );
-        assert_eq!(msg.operation(), FirewallOperation::Open);
+        assert_eq!(msg.operation(), FirewallOperation::Install);
         assert_eq!(msg.addr(), Some("::1".parse().unwrap()));
         check_ser_de(&msg);
 
-        let msg = FirewallMessage::new_open(
+        let msg = FirewallMessage::new_install(
             0x66773322.into(),
             0xAABB9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
@@ -462,7 +440,7 @@ mod tests {
             ]
         );
 
-        let msg = FirewallMessage::new_open(
+        let msg = FirewallMessage::new_install(
             0x66773322.into(),
             0xAABB9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
@@ -485,7 +463,7 @@ mod tests {
             ]
         );
 
-        let msg = FirewallMessage::new_open(
+        let msg = FirewallMessage::new_install(
             0x66773322.into(),
             0xAABB9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
@@ -510,14 +488,14 @@ mod tests {
     }
 
     #[test]
-    fn test_msg_open_v4() {
-        let msg = FirewallMessage::new_open(
+    fn test_msg_install_v4() {
+        let msg = FirewallMessage::new_install(
             0x66773322.into(),
             0xAABB9988.into(),
             "1.2.3.4".parse().unwrap(),
             &ConfigChecksum::calculate(b"foo"),
         );
-        assert_eq!(msg.operation(), FirewallOperation::Open);
+        assert_eq!(msg.operation(), FirewallOperation::Install);
         assert_eq!(msg.addr(), Some("1.2.3.4".parse().unwrap()));
         check_ser_de(&msg);
 
@@ -526,6 +504,69 @@ mod tests {
             bytes,
             [
                 0x00, 0x02, // operation
+                0x66, 0x77, 0x33, 0x22, // user
+                0xAA, 0xBB, 0x99, 0x88, // resource
+                0x00, 0x01, // addr_type
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // addr
+                0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, // addr
+                0xA9, 0x14, 0x20, 0xEB, 0x27, 0x9B, 0xD1, 0x96, // conf_cs
+                0x15, 0x04, 0x9D, 0x00, 0xD6, 0x07, 0x07, 0x35, // conf_cs
+                0xAF, 0xF1, 0xE9, 0x28, 0xC1, 0xBF, 0x9C, 0x65, // conf_cs
+                0x3F, 0x29, 0x22, 0x33, 0x11, 0xDD, 0x4C, 0xAA, // conf_cs
+            ]
+        );
+    }
+
+    #[test]
+    fn test_msg_revoke_v6() {
+        let msg = FirewallMessage::new_revoke(
+            0x66773322.into(),
+            0xAABB9988.into(),
+            "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
+            &ConfigChecksum::calculate(b"foo"),
+        );
+        assert_eq!(msg.operation(), FirewallOperation::Revoke);
+        assert_eq!(
+            msg.addr(),
+            Some("0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap())
+        );
+        check_ser_de(&msg);
+
+        let bytes = msg.msg_serialize().unwrap();
+        assert_eq!(
+            bytes,
+            [
+                0x00, 0x03, // operation
+                0x66, 0x77, 0x33, 0x22, // user
+                0xAA, 0xBB, 0x99, 0x88, // resource
+                0x00, 0x00, // addr_type
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // addr
+                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, // addr
+                0xA9, 0x14, 0x20, 0xEB, 0x27, 0x9B, 0xD1, 0x96, // conf_cs
+                0x15, 0x04, 0x9D, 0x00, 0xD6, 0x07, 0x07, 0x35, // conf_cs
+                0xAF, 0xF1, 0xE9, 0x28, 0xC1, 0xBF, 0x9C, 0x65, // conf_cs
+                0x3F, 0x29, 0x22, 0x33, 0x11, 0xDD, 0x4C, 0xAA, // conf_cs
+            ]
+        );
+    }
+
+    #[test]
+    fn test_msg_revoke_v4() {
+        let msg = FirewallMessage::new_revoke(
+            0x66773322.into(),
+            0xAABB9988.into(),
+            "1.2.3.4".parse().unwrap(),
+            &ConfigChecksum::calculate(b"foo"),
+        );
+        assert_eq!(msg.operation(), FirewallOperation::Revoke);
+        assert_eq!(msg.addr(), Some("1.2.3.4".parse().unwrap()));
+        check_ser_de(&msg);
+
+        let bytes = msg.msg_serialize().unwrap();
+        assert_eq!(
+            bytes,
+            [
+                0x00, 0x03, // operation
                 0x66, 0x77, 0x33, 0x22, // user
                 0xAA, 0xBB, 0x99, 0x88, // resource
                 0x00, 0x01, // addr_type

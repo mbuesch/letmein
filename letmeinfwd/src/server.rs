@@ -152,44 +152,33 @@ impl FirewallConnection {
 
         // Get the resource from the socket message.
         let resource = self.get_resource(conf, &msg).await?;
+        let timeout = resource.timeout();
 
         match msg.operation() {
-            FirewallOperation::Open => {
-                let port: LeasePort = match resource.clone().try_into() {
-                    Ok(t) => t,
-                    Err(e) => {
-                        return self
-                            .send_result(Err(e).context("Convert resource to LeasePort"))
-                            .await;
-                    }
-                };
+            FirewallOperation::Install => match &resource {
+                Resource::Port { .. } => {
+                    let port: LeasePort = resource.try_into().expect("Not a port resource");
 
-                // Don't allow the user to manage the control port.
-                if port.port() == conf.port().port {
-                    // Whoops, letmeind should never send us a request for the
-                    // control port. Did some other process write to the unix socket?
-                    let res = Err(err!("The knocked port {port} is the letmein control port."));
-                    return self.send_result(res).await;
+                    // Don't allow the user to manage the control port.
+                    if port.port() == conf.port().port {
+                        // Whoops, letmeind should never send us a request for the
+                        // control port. Did some other process write to the unix socket?
+                        let res = Err(err!("The knocked port {port} is the letmein control port."));
+                        return self.send_result(res).await;
+                    }
+
+                    // Open the firewall.
+                    let res = fw.open_port(conf, addr, port, timeout).await;
+                    self.send_result(res).await
                 }
+                Resource::Jump { .. } => {
+                    let targets = resource.try_into().expect("Not a jump resource");
 
-                // Open the firewall.
-                let res = fw.open_port(conf, addr, port, resource.timeout()).await;
-                self.send_result(res).await
-            }
-            FirewallOperation::Jump => {
-                let targets = match resource.clone().try_into() {
-                    Ok(t) => t,
-                    Err(e) => {
-                        return self
-                            .send_result(Err(e).context("Convert resource to jump targets"))
-                            .await;
-                    }
-                };
-
-                // Add the jump-rules to the firewall.
-                let res = fw.add_jump(conf, addr, &targets, resource.timeout()).await;
-                self.send_result(res).await
-            }
+                    // Add the jump-rules to the firewall.
+                    let res = fw.add_jump(conf, addr, &targets, timeout).await;
+                    self.send_result(res).await
+                }
+            },
             FirewallOperation::Revoke => match &resource {
                 Resource::Port { .. } => {
                     let lease_port = resource.try_into().expect("Not a port resource");
