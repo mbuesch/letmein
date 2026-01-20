@@ -36,8 +36,10 @@ const INET46: [Option<libc::c_int>; 2] = [Some(libc::AF_INET), Some(libc::AF_INE
 fn is_socket(fd: RawFd) -> bool {
     // SAFETY: Initializing `libc::stat64` structure with zero is an allowed pattern.
     let mut stat: libc::stat64 = unsafe { std::mem::zeroed() };
+
     // SAFETY: The `fd` is valid and `stat` is initialized and valid.
-    let ret = unsafe { libc::fstat64(fd, &mut stat) };
+    let ret = unsafe { libc::fstat64(fd, &raw mut stat) };
+
     if ret == 0 {
         const S_IFMT: libc::mode_t = libc::S_IFMT as libc::mode_t;
         const S_IFSOCK: libc::mode_t = libc::S_IFSOCK as libc::mode_t;
@@ -54,16 +56,18 @@ fn is_socket(fd: RawFd) -> bool {
 unsafe fn get_socket_type(fd: RawFd) -> Option<libc::c_int> {
     let mut sotype: libc::c_int = 0;
     let mut len: libc::socklen_t = size_of_val(&sotype) as _;
+
     // SAFETY: The `fd` is valid, `sotype` and `len` are initialized and valid.
     let ret = unsafe {
         libc::getsockopt(
             fd,
             libc::SOL_SOCKET,
             libc::SO_TYPE,
-            &mut sotype as *mut _ as _,
-            &mut len,
+            &raw mut sotype as _,
+            &raw mut len,
         )
     };
+
     if ret == 0 && len >= size_of_val(&sotype) as _ {
         Some(sotype)
     } else {
@@ -79,8 +83,10 @@ unsafe fn get_socket_family(fd: RawFd) -> Option<libc::c_int> {
     // SAFETY: Initializing `libc::sockaddr` structure with zero is an allowed pattern.
     let mut saddr: libc::sockaddr = unsafe { std::mem::zeroed() };
     let mut len: libc::socklen_t = size_of_val(&saddr) as _;
+
     // SAFETY: The `fd` is valid, `saddr` and `len` are initialized and valid.
-    let ret = unsafe { libc::getsockname(fd, &mut saddr, &mut len) };
+    let ret = unsafe { libc::getsockname(fd, &raw mut saddr, &raw mut len) };
+
     if ret == 0 && len >= size_of_val(&saddr) as _ {
         Some(saddr.sa_family.into())
     } else {
