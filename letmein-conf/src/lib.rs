@@ -201,7 +201,7 @@ impl std::fmt::Display for Resource {
 
         fn write_timeout(
             f: &mut std::fmt::Formatter<'_>,
-            timeout: &Option<Duration>,
+            timeout: Option<&Duration>,
         ) -> Result<(), std::fmt::Error> {
             if let Some(timeout) = timeout {
                 writeln!(f, "  timeout: {} s", timeout.as_secs())?;
@@ -211,7 +211,7 @@ impl std::fmt::Display for Resource {
 
         fn write_chain(
             f: &mut std::fmt::Formatter<'_>,
-            chain: &Option<String>,
+            chain: Option<&str>,
             match_saddr: bool,
             name: &str,
         ) -> Result<(), std::fmt::Error> {
@@ -243,7 +243,7 @@ impl std::fmt::Display for Resource {
                 writeln!(f, "Port resource:")?;
                 writeln!(f, "  id: {id}")?;
                 writeln!(f, "  port: {port} {tcpudp}")?;
-                write_timeout(f, timeout)?;
+                write_timeout(f, timeout.as_ref())?;
                 write_users(f, users)?;
             }
             Self::Jump {
@@ -259,10 +259,10 @@ impl std::fmt::Display for Resource {
             } => {
                 writeln!(f, "Jump resource:")?;
                 writeln!(f, "  id: {id}")?;
-                write_chain(f, input, *input_match_saddr, "input")?;
-                write_chain(f, forward, *forward_match_saddr, "forward")?;
-                write_chain(f, output, *output_match_saddr, "output")?;
-                write_timeout(f, timeout)?;
+                write_chain(f, input.as_deref(), *input_match_saddr, "input")?;
+                write_chain(f, forward.as_deref(), *forward_match_saddr, "forward")?;
+                write_chain(f, output.as_deref(), *output_match_saddr, "output")?;
+                write_timeout(f, timeout.as_ref())?;
                 write_users(f, users)?;
             }
         }
