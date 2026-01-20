@@ -161,7 +161,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 eprintln!("UDP-dispatcher: try_recv error during try_accept: {e:?}");
             }
             return None;
-        };
+        }
         for conn in &mut self.conn.values_mut() {
             if !conn.accepted {
                 conn.accepted = true;

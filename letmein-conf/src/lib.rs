@@ -695,7 +695,7 @@ fn get_resources(ini: &Ini) -> ah::Result<HashMap<ResourceId, Resource>> {
                 return Err(err!(
                     "[RESOURCE] Resource ID '{id}' is not a 'port' resource."
                 ));
-            };
+            }
         }
     }
     Ok(resources)
