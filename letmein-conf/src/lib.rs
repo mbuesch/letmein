@@ -724,7 +724,7 @@ fn get_nft_family(ini: &Ini) -> ah::Result<String> {
         }
         .to_string())
     } else {
-        Ok("".to_string())
+        Ok(String::new())
     }
 }
 
@@ -733,7 +733,7 @@ fn get_nft_table(ini: &Ini) -> ah::Result<String> {
     if let Some(nft_table) = ini.get("NFTABLES", "table") {
         Ok(nft_table.trim().to_string())
     } else {
-        Ok("".to_string())
+        Ok(String::new())
     }
 }
 
@@ -753,7 +753,7 @@ fn get_nft_chain(ini: &Ini, field: &str) -> ah::Result<String> {
             Ok(chain)
         }
     } else {
-        Ok("".to_string())
+        Ok(String::new())
     }
 }
 
