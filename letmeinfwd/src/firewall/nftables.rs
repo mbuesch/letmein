@@ -484,6 +484,7 @@ impl NftFirewallInner {
     }
 
     /// Print the number of rules required for all leases.
+    #[allow(clippy::match_wildcard_for_single_variants)]
     fn print_total_rule_count(&self, conf: &Config) {
         if conf.debug() {
             let mut count: usize = self.num_ctrl_rules.into();

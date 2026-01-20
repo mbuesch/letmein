@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 #![forbid(unsafe_code)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::cast_possible_wrap)]
 
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 std::compile_error!("letmeind server and letmein-seccomp do not support non-Linux platforms.");
@@ -30,8 +32,11 @@ macro_rules! sys {
 }
 
 #[cfg(has_seccomp_support)]
-fn seccomp_cond(idx: u8, value: u64, bit_width: u8) -> ah::Result<seccompiler::SeccompCondition> {
+#[allow(clippy::cast_sign_loss)]
+fn seccomp_cond(idx: u8, value: i64, bit_width: u8) -> ah::Result<seccompiler::SeccompCondition> {
     use seccompiler::{SeccompCmpArgLen, SeccompCmpOp, SeccompCondition};
+
+    let value = value as u64;
 
     let bit_width = match bit_width {
         PTR => {
@@ -48,7 +53,11 @@ fn seccomp_cond(idx: u8, value: u64, bit_width: u8) -> ah::Result<seccompiler::S
 
     let arglen = match bit_width {
         32 => {
-            assert_eq!(value & 0xFFFF_FFFF_0000_0000, 0);
+            if value & 0x8000_0000 == 0 {
+                assert_eq!(value & 0xFFFF_FFFF_0000_0000, 0);
+            } else {
+                assert_eq!(value & 0xFFFF_FFFF_0000_0000, 0xFFFF_FFFF_0000_0000);
+            }
             SeccompCmpArgLen::Dword
         }
         64 => SeccompCmpArgLen::Qword,

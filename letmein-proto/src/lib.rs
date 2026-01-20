@@ -31,7 +31,7 @@ const DEBUG: bool = false;
 pub const PORT: u16 = 5800;
 
 /// Magic code in the message header.
-const MAGIC: u32 = 0x3B1BB719;
+const MAGIC: u32 = 0x3B1B_B719;
 
 /// Size of the message salt, in bytes.
 const SALT_SIZE: usize = 8;
@@ -460,7 +460,7 @@ mod tests {
         let key = [0x9E; 32];
 
         let make_knock = || -> Message {
-            let mut msg = Message::new(initial_operation, 0xA423DDA7.into(), 0xBC5D8077.into());
+            let mut msg = Message::new(initial_operation, 0xA423_DDA7.into(), 0xBC5D_8077.into());
             assert_ne!(msg.salt, [0; 8]);
             msg.salt = [0x4A; 8]; // override random salt
             msg.generate_auth_no_challenge(&key);
@@ -470,8 +470,8 @@ mod tests {
         // Create a knock message and check the authentication.
         let msg = make_knock();
         assert_eq!(msg.operation(), initial_operation);
-        assert_eq!(msg.user(), 0xA423DDA7.into());
-        assert_eq!(msg.resource(), 0xBC5D8077.into());
+        assert_eq!(msg.user(), 0xA423_DDA7.into());
+        assert_eq!(msg.resource(), 0xBC5D_8077.into());
         if initial_operation == Operation::Knock {
             assert_eq!(
                 msg.auth,
@@ -562,7 +562,7 @@ mod tests {
 
         let make_challenge = || -> Message {
             let mut challenge =
-                Message::new(Operation::Challenge, 0x280D04F3.into(), 0xE2EE7397.into());
+                Message::new(Operation::Challenge, 0x280D_04F3.into(), 0xE2EE_7397.into());
             assert_ne!(challenge.salt, [0; 8]);
             challenge.salt = [0x91; 8]; // override random salt
             challenge.generate_challenge();
@@ -584,16 +584,16 @@ mod tests {
         // Create a challenge.
         let challenge = make_challenge();
         assert_eq!(challenge.operation(), Operation::Challenge);
-        assert_eq!(challenge.user(), 0x280D04F3.into());
-        assert_eq!(challenge.resource(), 0xE2EE7397.into());
+        assert_eq!(challenge.user(), 0x280D_04F3.into());
+        assert_eq!(challenge.resource(), 0xE2EE_7397.into());
         check_ser_de(&challenge);
 
         // Create a response and authenticate it against the challenge.
         let challenge = make_challenge();
         let response = make_response();
         assert_eq!(response.operation(), Operation::Response);
-        assert_eq!(response.user(), 0x280D04F3.into());
-        assert_eq!(response.resource(), 0xE2EE7397.into());
+        assert_eq!(response.user(), 0x280D_04F3.into());
+        assert_eq!(response.resource(), 0xE2EE_7397.into());
         assert_eq!(
             response.auth,
             [
@@ -637,31 +637,31 @@ mod tests {
 
     #[test]
     fn test_msg_comein() {
-        let mut msg = Message::new(Operation::ComeIn, 0xF90201B2.into(), 0xB3E46B6C.into());
+        let mut msg = Message::new(Operation::ComeIn, 0xF902_01B2.into(), 0xB3E4_6B6C.into());
         assert_ne!(msg.salt, [0; 8]);
         msg.salt = [0xEB; 8]; // override random salt
         assert_eq!(msg.operation(), Operation::ComeIn);
-        assert_eq!(msg.user(), 0xF90201B2.into());
-        assert_eq!(msg.resource(), 0xB3E46B6C.into());
+        assert_eq!(msg.user(), 0xF902_01B2.into());
+        assert_eq!(msg.resource(), 0xB3E4_6B6C.into());
         assert_eq!(msg.auth, [0; 32]);
         check_ser_de(&msg);
     }
 
     #[test]
     fn test_msg_goaway() {
-        let mut msg = Message::new(Operation::GoAway, 0x0F52E045.into(), 0x9AF4EFA0.into());
+        let mut msg = Message::new(Operation::GoAway, 0x0F52_E045.into(), 0x9AF4_EFA0.into());
         assert_ne!(msg.salt, [0; 8]);
         msg.salt = [0x8C; 8]; // override random salt
         assert_eq!(msg.operation(), Operation::GoAway);
-        assert_eq!(msg.user(), 0x0F52E045.into());
-        assert_eq!(msg.resource(), 0x9AF4EFA0.into());
+        assert_eq!(msg.user(), 0x0F52_E045.into());
+        assert_eq!(msg.resource(), 0x9AF4_EFA0.into());
         assert_eq!(msg.auth, [0; 32]);
         check_ser_de(&msg);
     }
 
     #[test]
     fn test_msg_raw() {
-        let mut msg = Message::new(Operation::ComeIn, 0xF90201B2.into(), 0xB3E46B6C.into());
+        let mut msg = Message::new(Operation::ComeIn, 0xF902_01B2.into(), 0xB3E4_6B6C.into());
         msg.salt = [0x9A; 8]; // override random salt
         let bytes = msg.msg_serialize().unwrap();
         assert_eq!(
@@ -733,11 +733,11 @@ mod tests {
 
     #[test]
     fn test_userid() {
-        let a: UserId = 0x12345678.into();
-        assert_eq!(a.0, 0x12345678);
-        assert_eq!(a, UserId(0x12345678));
+        let a: UserId = 0x1234_5678.into();
+        assert_eq!(a.0, 0x1234_5678);
+        assert_eq!(a, UserId(0x1234_5678));
         let b: u32 = a.into();
-        assert_eq!(b, 0x12345678);
+        assert_eq!(b, 0x1234_5678);
         assert_eq!(format!("{a}"), "12345678");
         let c: UserId = Default::default();
         assert_eq!(c.0, 0);
@@ -745,11 +745,11 @@ mod tests {
 
     #[test]
     fn test_resourceid() {
-        let a: ResourceId = 0x12345678.into();
-        assert_eq!(a.0, 0x12345678);
-        assert_eq!(a, ResourceId(0x12345678));
+        let a: ResourceId = 0x1234_5678.into();
+        assert_eq!(a.0, 0x1234_5678);
+        assert_eq!(a, ResourceId(0x1234_5678));
         let b: u32 = a.into();
-        assert_eq!(b, 0x12345678);
+        assert_eq!(b, 0x1234_5678);
         assert_eq!(format!("{a}"), "12345678");
     }
 }

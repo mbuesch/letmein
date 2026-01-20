@@ -222,8 +222,7 @@ impl std::fmt::Display for Lease {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         let addr = self
             .addr()
-            .map(|a| a.to_string())
-            .unwrap_or_else(|| "any".to_string());
+            .map_or_else(|| "any".to_string(), |a| a.to_string());
         write!(f, "Lease(addr={addr}, {})", self.type_())
     }
 }

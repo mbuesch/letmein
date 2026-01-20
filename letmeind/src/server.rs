@@ -25,7 +25,7 @@ use tokio::{
 
 async fn sleep_forever() -> Infallible {
     loop {
-        time::sleep(Duration::from_secs(31536000000)).await;
+        time::sleep(Duration::from_secs(31_536_000_000)).await;
     }
 }
 
@@ -121,7 +121,7 @@ impl Server {
 
         // Get socket from systemd?
         if !no_systemd {
-            for socket in SystemdSocket::get_all()?.into_iter() {
+            for socket in SystemdSocket::get_all()? {
                 match socket {
                     SystemdSocket::Tcp(listener) => {
                         if tcp.is_some() {

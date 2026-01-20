@@ -418,8 +418,8 @@ mod tests {
     #[test]
     fn test_msg_install_v6() {
         let msg = FirewallMessage::new_install(
-            0x66773322.into(),
-            0xAABB9988.into(),
+            0x6677_3322.into(),
+            0xAABB_9988.into(),
             "::1".parse().unwrap(),
             &ConfigChecksum::calculate(b"foo"),
         );
@@ -428,8 +428,8 @@ mod tests {
         check_ser_de(&msg);
 
         let msg = FirewallMessage::new_install(
-            0x66773322.into(),
-            0xAABB9988.into(),
+            0x6677_3322.into(),
+            0xAABB_9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
             &ConfigChecksum::calculate(b"foo"),
         );
@@ -451,8 +451,8 @@ mod tests {
         );
 
         let msg = FirewallMessage::new_install(
-            0x66773322.into(),
-            0xAABB9988.into(),
+            0x6677_3322.into(),
+            0xAABB_9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
             &ConfigChecksum::calculate(b"foo"),
         );
@@ -474,8 +474,8 @@ mod tests {
         );
 
         let msg = FirewallMessage::new_install(
-            0x66773322.into(),
-            0xAABB9988.into(),
+            0x6677_3322.into(),
+            0xAABB_9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
             &ConfigChecksum::calculate(b"bar"),
         );
@@ -500,8 +500,8 @@ mod tests {
     #[test]
     fn test_msg_install_v4() {
         let msg = FirewallMessage::new_install(
-            0x66773322.into(),
-            0xAABB9988.into(),
+            0x6677_3322.into(),
+            0xAABB_9988.into(),
             "1.2.3.4".parse().unwrap(),
             &ConfigChecksum::calculate(b"foo"),
         );
@@ -530,8 +530,8 @@ mod tests {
     #[test]
     fn test_msg_revoke_v6() {
         let msg = FirewallMessage::new_revoke(
-            0x66773322.into(),
-            0xAABB9988.into(),
+            0x6677_3322.into(),
+            0xAABB_9988.into(),
             "0102:0304:0506:0708:090A:0B0C:0D0E:0F10".parse().unwrap(),
             &ConfigChecksum::calculate(b"foo"),
         );
@@ -563,8 +563,8 @@ mod tests {
     #[test]
     fn test_msg_revoke_v4() {
         let msg = FirewallMessage::new_revoke(
-            0x66773322.into(),
-            0xAABB9988.into(),
+            0x6677_3322.into(),
+            0xAABB_9988.into(),
             "1.2.3.4".parse().unwrap(),
             &ConfigChecksum::calculate(b"foo"),
         );

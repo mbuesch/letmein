@@ -491,7 +491,7 @@ fn extract_resource_port(
                     if !users.is_empty() {
                         return Err(err!("[RESOURCE] multiple 'users' values"));
                     }
-                    users = vs.clone();
+                    users.clone_from(vs);
                 } else {
                     return Err(err!("[RESOURCE] unknown option: {k}"));
                 }
@@ -618,7 +618,7 @@ fn extract_resource_jump(
                     if !users.is_empty() {
                         return Err(err!("[RESOURCE] multiple 'users' values"));
                     }
-                    users = vs.clone();
+                    users.clone_from(vs);
                 } else {
                     return Err(err!("[RESOURCE] unknown option: {k}"));
                 }
@@ -825,6 +825,7 @@ impl Config {
 
     /// Get the default configuration file path.
     #[must_use]
+    #[allow(clippy::single_match_else)]
     pub fn get_default_path(variant: ConfigVariant) -> PathBuf {
         // The build-time environment variable LETMEIN_CONF_PREFIX can be
         // used to give an additional prefix.
@@ -973,7 +974,7 @@ impl Config {
     #[must_use]
     pub fn resources(&self) -> Vec<Resource> {
         let mut resources: Vec<Resource> = self.resources.values().cloned().collect();
-        resources.sort_by_key(|r| r.id());
+        resources.sort_by_key(Resource::id);
         resources
     }
 
@@ -1153,7 +1154,7 @@ mod tests {
         .unwrap();
         let keys = get_keys(&ini).unwrap();
         assert_eq!(
-            keys.get(&0xABCD1234.into()).unwrap(),
+            keys.get(&0xABCD_1234.into()).unwrap(),
             &[
                 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99, 0x88, 0x77, 0x66,
                 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22,
@@ -1169,9 +1170,9 @@ mod tests {
             .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
-            resources.get(&0x9876ABCD.into()).unwrap(),
+            resources.get(&0x9876_ABCD.into()).unwrap(),
             &Resource::Port {
-                id: 0x9876ABCD.into(),
+                id: 0x9876_ABCD.into(),
                 port: 4096,
                 tcp: true,
                 udp: false,
@@ -1185,9 +1186,9 @@ mod tests {
             .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
-            resources.get(&0x9876ABCD.into()).unwrap(),
+            resources.get(&0x9876_ABCD.into()).unwrap(),
             &Resource::Port {
-                id: 0x9876ABCD.into(),
+                id: 0x9876_ABCD.into(),
                 port: 4096,
                 tcp: true,
                 udp: false,
@@ -1201,9 +1202,9 @@ mod tests {
             .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
-            resources.get(&0x9876ABCD.into()).unwrap(),
+            resources.get(&0x9876_ABCD.into()).unwrap(),
             &Resource::Port {
-                id: 0x9876ABCD.into(),
+                id: 0x9876_ABCD.into(),
                 port: 4096,
                 tcp: false,
                 udp: true,
@@ -1217,9 +1218,9 @@ mod tests {
             .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
-            resources.get(&0x9876ABCD.into()).unwrap(),
+            resources.get(&0x9876_ABCD.into()).unwrap(),
             &Resource::Port {
-                id: 0x9876ABCD.into(),
+                id: 0x9876_ABCD.into(),
                 port: 4096,
                 tcp: true,
                 udp: true,
@@ -1236,9 +1237,9 @@ mod tests {
             .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
-            resources.get(&0x1234FEDC.into()).unwrap(),
+            resources.get(&0x1234_FEDC.into()).unwrap(),
             &Resource::Jump {
-                id: 0x1234FEDC.into(),
+                id: 0x1234_FEDC.into(),
                 input: Some("FOO".to_string()),
                 input_match_saddr: false,
                 forward: None,
@@ -1257,9 +1258,9 @@ mod tests {
         .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
-            resources.get(&0x1234FEDC.into()).unwrap(),
+            resources.get(&0x1234_FEDC.into()).unwrap(),
             &Resource::Jump {
-                id: 0x1234FEDC.into(),
+                id: 0x1234_FEDC.into(),
                 input: Some("FOO".to_string()),
                 input_match_saddr: true,
                 forward: Some("BAR".to_string()),
@@ -1276,9 +1277,9 @@ mod tests {
             .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
-            resources.get(&0x1234FEDC.into()).unwrap(),
+            resources.get(&0x1234_FEDC.into()).unwrap(),
             &Resource::Jump {
-                id: 0x1234FEDC.into(),
+                id: 0x1234_FEDC.into(),
                 input: Some("FOO".to_string()),
                 input_match_saddr: false,
                 forward: Some("BAR".to_string()),
@@ -1297,9 +1298,9 @@ mod tests {
         .unwrap();
         let resources = get_resources(&ini).unwrap();
         assert_eq!(
-            resources.get(&0x1234FEDC.into()).unwrap(),
+            resources.get(&0x1234_FEDC.into()).unwrap(),
             &Resource::Jump {
-                id: 0x1234FEDC.into(),
+                id: 0x1234_FEDC.into(),
                 input: None,
                 input_match_saddr: false,
                 forward: Some("BAR".to_string()),
