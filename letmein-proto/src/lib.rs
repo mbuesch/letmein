@@ -303,6 +303,7 @@ impl Message {
     /// Check if the authentication token in this message is valid
     /// given the provided `shared_key` and `challenge`.
     #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn check_auth_ok(&self, shared_key: &[u8], challenge: Message) -> bool {
         assert_eq!(challenge.operation(), Operation::Challenge);
         #[cfg(not(test))]
@@ -326,6 +327,7 @@ impl Message {
     /// Generate a new authentication token
     /// with the provided `shared_key` and `challenge`
     /// and store it in this message.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn generate_auth(&mut self, shared_key: &[u8], challenge: Message) {
         assert_eq!(challenge.operation(), Operation::Challenge);
         assert_eq!(self.operation(), Operation::Response);

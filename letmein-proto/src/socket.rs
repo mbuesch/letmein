@@ -104,7 +104,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 assert!(conn.rx_queue.len() <= Q_SIZE);
                 if conn.rx_queue.len() == Q_SIZE {
                     self.conn.remove(&peer_addr); // Close connection.
-                    return Err(err!("UDP socket read: RX queue overflow (max={}).", Q_SIZE));
+                    return Err(err!("UDP socket read: RX queue overflow (max={Q_SIZE})."));
                 }
                 conn.rx_queue.push_back(buf);
                 let accepted = conn.accepted;
@@ -319,6 +319,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
     }
 
     /// Disconnect the connection identified by the `peer_addr`.
+    #[allow(clippy::unused_async)]
     pub async fn disconnect(&self, peer_addr: SocketAddr) {
         self.rx
             .lock()
