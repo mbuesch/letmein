@@ -155,16 +155,14 @@ impl Resource {
     #[must_use]
     pub fn id(&self) -> ResourceId {
         match self {
-            Self::Port { id, .. } => *id,
-            Self::Jump { id, .. } => *id,
+            Self::Port { id, .. } | Self::Jump { id, .. } => *id,
         }
     }
 
     #[must_use]
     pub fn contains_user(&self, id: UserId) -> bool {
         let users = match self {
-            Self::Port { users, .. } => users,
-            Self::Jump { users, .. } => users,
+            Self::Port { users, .. } | Self::Jump { users, .. } => users,
         };
         if users.is_empty() {
             // This resource is unrestricted.
@@ -177,8 +175,7 @@ impl Resource {
     #[must_use]
     pub fn timeout(&self) -> Option<Duration> {
         match self {
-            Self::Port { timeout, .. } => *timeout,
-            Self::Jump { timeout, .. } => *timeout,
+            Self::Port { timeout, .. } | Self::Jump { timeout, .. } => *timeout,
         }
     }
 }

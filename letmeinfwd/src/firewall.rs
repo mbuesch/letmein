@@ -83,9 +83,7 @@ impl TryFrom<Resource> for LeasePort {
 impl LeasePort {
     pub fn port(&self) -> u16 {
         match self {
-            Self::Tcp(port) => *port,
-            Self::Udp(port) => *port,
-            Self::TcpUdp(port) => *port,
+            Self::Tcp(port) | Self::Udp(port) | Self::TcpUdp(port) => *port,
         }
     }
 }
@@ -158,9 +156,7 @@ impl Lease {
         assert_ne!(
             conf.port().port,
             match port {
-                LeasePort::Tcp(p) => p,
-                LeasePort::Udp(p) => p,
-                LeasePort::TcpUdp(p) => p,
+                LeasePort::Tcp(p) | LeasePort::Udp(p) | LeasePort::TcpUdp(p) => p,
             }
         );
         Self::new(conf, Some(addr), LeaseType::Port { port }, timeout)
