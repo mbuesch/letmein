@@ -224,7 +224,7 @@ pub struct UdpDispatcher<const MSG_SIZE: usize, const Q_SIZE: usize> {
 }
 
 impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE> {
-    /// Create a new [UdpDispatcher]
+    /// Create a new [`UdpDispatcher`]
     /// with the given UDP socket and
     /// with the given maximum possible number of connections.
     pub fn new(socket: UdpSocket, max_nr_conn: usize) -> Self {
@@ -331,7 +331,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
 /// over a TCP connection.
 #[derive(Debug)]
 pub struct NetSocketTcp {
-    /// The [TcpStream] of this TCP connection.
+    /// The [`TcpStream`] of this TCP connection.
     stream: TcpStream,
 
     /// Closed-flag. Note that this does *not* mean that the `stream` is closed.
@@ -364,7 +364,7 @@ pub enum NetSocket<const MSG_SIZE: usize, const Q_SIZE: usize> {
 }
 
 impl<const MSG_SIZE: usize, const Q_SIZE: usize> NetSocket<MSG_SIZE, Q_SIZE> {
-    /// Create a new [NetSocket] from a [TcpStream] connection.
+    /// Create a new [`NetSocket`] from a [`TcpStream`] connection.
     pub fn from_tcp(stream: TcpStream) -> ah::Result<Self> {
         // Disable Nagle's algorithm.
         // We want to send our small packets as quickly as possible.
@@ -376,7 +376,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> NetSocket<MSG_SIZE, Q_SIZE> {
         }))
     }
 
-    /// Create a new [NetSocket] from a [UdpDispatcher]
+    /// Create a new [`NetSocket`] from a [`UdpDispatcher`]
     /// and the specified connected `peer_addr`.
     pub fn from_udp(
         disp: Arc<UdpDispatcher<MSG_SIZE, Q_SIZE>>,

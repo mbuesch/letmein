@@ -102,10 +102,10 @@ impl_id!(UserId);
 /// Maximum size of the UDP receive queue.
 const UDP_RX_QUEUE_SIZE: usize = 4;
 
-/// [NetSocket] for sending and receiving a [Message] over TCP or UDP.
+/// [`NetSocket`] for sending and receiving a [`Message`] over TCP or UDP.
 pub type MsgNetSocket = NetSocket<MSG_SIZE, UDP_RX_QUEUE_SIZE>;
 
-/// [UdpDispatcher] for sending and receiving a [Message] over UDP.
+/// [`UdpDispatcher`] for sending and receiving a [`Message`] over UDP.
 pub type MsgUdpDispatcher = UdpDispatcher<MSG_SIZE, UDP_RX_QUEUE_SIZE>;
 
 /// Generate a cryptographically secure random token.
@@ -401,7 +401,7 @@ impl Message {
         })
     }
 
-    /// Send this message over a [MsgNetSocket].
+    /// Send this message over a [`MsgNetSocket`].
     pub async fn send(&self, sock: &MsgNetSocket) -> ah::Result<()> {
         sock.send(self.msg_serialize()?).await?;
         if DEBUG {
@@ -410,7 +410,7 @@ impl Message {
         Ok(())
     }
 
-    /// Try to receive a message from a [MsgNetSocket].
+    /// Try to receive a message from a [`MsgNetSocket`].
     pub async fn recv(sock: &MsgNetSocket) -> ah::Result<Option<Self>> {
         let buf: Option<[u8; MSG_SIZE]> = sock.recv().await?;
         if let Some(buf) = buf {

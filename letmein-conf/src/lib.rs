@@ -788,7 +788,7 @@ pub enum ConfigVariant {
     Client,
 }
 
-/// Parsed letmein.conf or letmeind.conf. (See [ConfigVariant]).
+/// Parsed letmein.conf or letmeind.conf. (See [`ConfigVariant`]).
 #[derive(Clone, Default, Debug)]
 pub struct Config {
     checksum: ConfigChecksum,

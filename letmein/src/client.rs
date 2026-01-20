@@ -83,7 +83,7 @@ impl Client {
     /// Receive a specific message type from the TCP control connection.
     ///
     /// Returns an error, if another message type is received.
-    /// Returns an error, if a [Operation::GoAway] type Message is received.
+    /// Returns an error, if a [`Operation::GoAway`] type Message is received.
     pub async fn recv_specific_msg(&mut self, expect_operation: Operation) -> ah::Result<Message> {
         let reply = self.recv_msg().await.context("Receive knock reply")?;
         let Some(reply) = reply else {
