@@ -67,8 +67,8 @@ pub fn parse_hex<const SIZE: usize>(s: &str) -> ah::Result<[u8; SIZE]> {
     }
     let mut ret = [0; SIZE];
     for i in 0..SIZE {
-        ret[i] = parse_hexdigit(&s[i * 2..i * 2 + 1])? << 4;
-        ret[i] |= parse_hexdigit(&s[i * 2 + 1..i * 2 + 2])?;
+        ret[i] = parse_hexdigit(&s[(i * 2)..=(i * 2)])? << 4;
+        ret[i] |= parse_hexdigit(&s[(i * 2 + 1)..=(i * 2 + 1)])?;
     }
     Ok(ret)
 }
