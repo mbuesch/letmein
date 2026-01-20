@@ -50,6 +50,14 @@ letmein-systemd = { version = "12", path = "./letmein-systemd" }
 [workspace.lints.clippy]
 cargo = "warn"
 multiple-crate-versions = { level = "allow", priority = 1 }
+
+pedantic = "warn"
+default_trait_access = { level = "allow", priority = 1 }
+missing-errors-doc = { level = "allow", priority = 1 }
+missing-panics-doc = { level = "allow", priority = 1 }
+similar-names = { level = "allow", priority = 1 }
+struct-excessive-bools = { level = "allow", priority = 1 }
+
 undocumented_unsafe_blocks = "warn"
 
 [profile.dev]
