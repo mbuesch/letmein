@@ -182,7 +182,10 @@ async fn run_knock_or_revoke(
 
     let user = user.unwrap_or_else(|| conf.default_user());
     let Some(key) = conf.key(user) else {
-        return Err(err!("No key found in {confpath:?} for user {user}"));
+        return Err(err!(
+            "No key found in {} for user {user}",
+            confpath.display()
+        ));
     };
 
     let resource = match resource {
@@ -190,7 +193,8 @@ async fn run_knock_or_revoke(
         KnockResource::Port(port) => {
             let Some(resource) = conf.resource_id_by_port(port, Some(user)) else {
                 return Err(err!(
-                    "Port {port} is not mapped to a port-resource in {confpath:?}"
+                    "Port {port} is not mapped to a port-resource in {}",
+                    confpath.display()
                 ));
             };
             resource

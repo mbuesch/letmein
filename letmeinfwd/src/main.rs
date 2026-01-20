@@ -57,7 +57,10 @@ fn create_dir_if_not_exists(path: &Path) -> ah::Result<()> {
             const S_IFMT: u32 = libc::S_IFMT as _;
             const S_IFDIR: u32 = libc::S_IFDIR as _;
             if (meta.mode() & S_IFMT) != S_IFDIR {
-                return Err(err!("Path '{path:?}' exists, but is not a directory."));
+                return Err(err!(
+                    "Path '{}' exists, but is not a directory.",
+                    path.display()
+                ));
             }
         }
     }

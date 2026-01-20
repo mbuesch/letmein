@@ -864,7 +864,7 @@ impl Config {
         if let Ok(ini) = Ini::new_from_file(path) {
             self.load_ini(&ini)?;
         } else if self.variant == ConfigVariant::Server {
-            return Err(err!("Failed to load configuration {path:?}"));
+            return Err(err!("Failed to load configuration {}", path.display()));
         }
         self.path = Some(path.to_path_buf());
         Ok(())
