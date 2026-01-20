@@ -81,9 +81,9 @@ impl TryFrom<Resource> for LeasePort {
 }
 
 impl LeasePort {
-    pub fn port(&self) -> u16 {
+    pub fn port(self) -> u16 {
         match self {
-            Self::Tcp(port) | Self::Udp(port) | Self::TcpUdp(port) => *port,
+            Self::Tcp(port) | Self::Udp(port) | Self::TcpUdp(port) => port,
         }
     }
 }

@@ -959,7 +959,7 @@ impl Config {
     /// Get a list of all configured users.
     #[must_use]
     pub fn users(&self) -> Vec<UserId> {
-        let mut users: Vec<UserId> = self.keys.keys().cloned().collect();
+        let mut users: Vec<UserId> = self.keys.keys().copied().collect();
         users.sort();
         users
     }
