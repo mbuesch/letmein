@@ -64,7 +64,7 @@ unsafe fn get_socket_type(fd: RawFd) -> Option<libc::c_int> {
             fd,
             libc::SOL_SOCKET,
             libc::SO_TYPE,
-            &raw mut sotype as _,
+            (&raw mut sotype).cast(),
             &raw mut len,
         )
     };
@@ -83,12 +83,13 @@ unsafe fn get_socket_type(fd: RawFd) -> Option<libc::c_int> {
 unsafe fn get_socket_family(fd: RawFd) -> Option<libc::c_int> {
     // SAFETY: Initializing `libc::sockaddr` structure with zero is an allowed pattern.
     let mut saddr: libc::sockaddr = unsafe { std::mem::zeroed() };
-    let mut len: libc::socklen_t = size_of_val(&saddr) as _;
+    let sizeof_saddr: u32 = size_of_val(&saddr).try_into().expect("libc::sockaddr size");
+    let mut len: libc::socklen_t = sizeof_saddr as _;
 
     // SAFETY: The `fd` is valid, `saddr` and `len` are initialized and valid.
     let ret = unsafe { libc::getsockname(fd, &raw mut saddr, &raw mut len) };
 
-    if ret == 0 && len >= size_of_val(&saddr) as _ {
+    if ret == 0 && len >= sizeof_saddr as _ {
         Some(saddr.sa_family.into())
     } else {
         None
