@@ -72,6 +72,7 @@ macro_rules! args {
 }
 
 /// Returns `true` if seccomp is supported on this platform.
+#[must_use]
 pub fn seccomp_supported() -> bool {
     cfg!(any(has_seccomp_support))
 }
