@@ -112,6 +112,7 @@ pub type MsgUdpDispatcher = UdpDispatcher<MSG_SIZE, UDP_RX_QUEUE_SIZE>;
 ///
 /// This function can only generate tokens longer than 7 bytes.
 /// Returns an array of random bytes.
+#[must_use]
 pub fn secure_random<const SZ: usize>() -> [u8; SZ] {
     // For lengths bigger than 8 bytes the likelyhood of the sanity checks below
     // triggering on good generator is low enough.
@@ -236,6 +237,7 @@ pub struct Message {
 
 impl Message {
     /// Create a new message instance.
+    #[must_use]
     pub fn new(operation: Operation, user: UserId, resource: ResourceId) -> Self {
         Self {
             magic: MAGIC,
@@ -248,16 +250,19 @@ impl Message {
     }
 
     /// Get the [Operation] of this message.
+    #[must_use]
     pub fn operation(&self) -> Operation {
         self.operation
     }
 
     /// Get the user identification of this message.
+    #[must_use]
     pub fn user(&self) -> UserId {
         self.user
     }
 
     /// Get the resource identification of this message.
+    #[must_use]
     pub fn resource(&self) -> ResourceId {
         self.resource
     }
