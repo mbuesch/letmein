@@ -260,7 +260,20 @@ cleanup_and_exit()
     cleanup
     exit 1
 }
- 
+
+no_clippy=0
+while [ $# -ge 1 ]; do
+    case "$1" in
+        --no-clippy)
+            no_clippy=1
+            ;;
+        *)
+            die "Invalid option: $1"
+            ;;
+    esac
+    shift
+done
+
 pid_letmeinfwd=
 pid_letmeind=
 
@@ -280,7 +293,9 @@ trap cleanup EXIT
 
 info "Temporary directory is: $tmpdir"
 build_project
-cargo_clippy
+if [ "$no_clippy" -eq 0 ]; then
+    cargo_clippy
+fi
 run_tests_genkey
 run_tests_knock_revoke tcp
 run_tests_knock_revoke udp

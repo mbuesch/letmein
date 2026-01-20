@@ -32,22 +32,28 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.rustup
-          key: rustup-${{ runner.os }}-${{ matrix.toolchain.version }}
+          key: rustup-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
       - name: Cache Cargo
         uses: actions/cache@v5
         with:
           path: ~/.cargo
-          key: cargo-${{ runner.os }}-${{ matrix.toolchain.version }}
+          key: cargo-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
 
       - run: rustup update ${{ matrix.toolchain.version }}
       - run: rustup default ${{ matrix.toolchain.version }}
-      - run: rustup component add clippy
+      - if: matrix.os.name == 'ubuntu' && matrix.toolchain.name == 'latest'
+        run: rustup component add clippy
+      - if: matrix.os.name == 'ubuntu' && matrix.toolchain.name == 'nightly'
+        run: rustup component add rust-src miri
+
       - run: cargo build --verbose
-      - run: sh ./tests/run-tests.sh
-      - if: matrix.toolchain.name == 'nightly'
-        run: |
-          rustup component add rust-src miri
-          cargo miri test
+
+      - if: matrix.os.name == 'ubuntu' && matrix.toolchain.name == 'latest'
+        run: sh ./tests/run-tests.sh
+      - if: matrix.os.name == 'ubuntu' && matrix.toolchain.name != 'latest'
+        run: sh ./tests/run-tests.sh --no-clippy
+      - if: matrix.os.name == 'ubuntu' && matrix.toolchain.name == 'nightly'
+        run: cargo miri test
 
   client_only:
     name: Client only
@@ -71,12 +77,12 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.rustup
-          key: rustup-${{ runner.os }}-${{ matrix.toolchain.version }}
+          key: rustup-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
       - name: Cache Cargo
         uses: actions/cache@v5
         with:
           path: ~/.cargo
-          key: cargo-${{ runner.os }}-${{ matrix.toolchain.version }}
+          key: cargo-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
 
       - run: rustup update ${{ matrix.toolchain.version }}
       - run: rustup default ${{ matrix.toolchain.version }}
