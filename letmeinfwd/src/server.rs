@@ -228,9 +228,8 @@ impl FirewallServer {
                     listener,
                     rundir: opts.rundir.clone(),
                 });
-            } else {
-                return Err(err!("Received an unusable socket from systemd."));
             }
+            return Err(err!("Received an unusable socket from systemd."));
         }
 
         // Without systemd.

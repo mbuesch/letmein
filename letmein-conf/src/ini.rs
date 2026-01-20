@@ -144,9 +144,8 @@ impl Ini {
                     sections.insert(sname.to_string(), IniSection::new());
                     in_section = Some(sname.to_string());
                     continue;
-                } else {
-                    return Err(err!("Invalid section name: '{line}'"));
                 }
+                return Err(err!("Invalid section name: '{line}'"));
             }
 
             // Are we inside of a section?
