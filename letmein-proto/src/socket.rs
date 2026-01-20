@@ -27,7 +27,7 @@ use tokio::{
     time::sleep,
 };
 
-/// One connection for use by [UdpDispatcherRx].
+/// One connection for use by [`UdpDispatcherRx`].
 #[derive(Debug)]
 struct UdpConn<const MSG_SIZE: usize, const Q_SIZE: usize> {
     /// The receive-queue for this connection.
@@ -66,7 +66,7 @@ struct UdpDispatcherRx<const MSG_SIZE: usize, const Q_SIZE: usize> {
 }
 
 impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZE> {
-    /// Create a new [UdpDispatcherRx]
+    /// Create a new [`UdpDispatcherRx`]
     /// with the given maximum possible number of connections.
     fn new(max_nr_conn: usize) -> Self {
         UdpDispatcherRx {
