@@ -10,8 +10,8 @@ env:
   MIRIFLAGS: -Zmiri-disable-isolation
 
 jobs:
-  server_and_client:
-    name: Server and client
+  main:
+    name: Main
     strategy:
       matrix:
         toolchain:
@@ -22,54 +22,14 @@ jobs:
           - name: nightly
             version: nightly
         os:
-          - name: ubuntu
+          - name: linux
             version: ubuntu-latest
-    runs-on: ${{ matrix.os.version }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Cache Rust
-        uses: actions/cache@v5
-        with:
-          path: ~/.rustup
-          key: rustup-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
-      - name: Cache Cargo
-        uses: actions/cache@v5
-        with:
-          path: ~/.cargo
-          key: cargo-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
-
-      - run: rustup update ${{ matrix.toolchain.version }}
-      - run: rustup default ${{ matrix.toolchain.version }}
-      - if: matrix.os.name == 'ubuntu' && matrix.toolchain.name == 'latest'
-        run: rustup component add clippy
-      - if: matrix.os.name == 'ubuntu' && matrix.toolchain.name == 'nightly'
-        run: rustup component add rust-src miri
-
-      - run: cargo build --verbose
-
-      - if: matrix.os.name == 'ubuntu' && matrix.toolchain.name == 'latest'
-        run: sh ./tests/run-tests.sh
-      - if: matrix.os.name == 'ubuntu' && matrix.toolchain.name != 'latest'
-        run: sh ./tests/run-tests.sh --no-clippy
-      - if: matrix.os.name == 'ubuntu' && matrix.toolchain.name == 'nightly'
-        run: cargo miri test
-
-  client_only:
-    name: Client only
-    strategy:
-      matrix:
-        toolchain:
-          - name: msrv
-            version: 1.83.0
-          - name: latest
-            version: 1.92.0
-        os:
           - name: windows
             version: windows-latest
           - name: macos
             version: macos-latest
     runs-on: ${{ matrix.os.version }}
+
     steps:
       - uses: actions/checkout@v6
 
@@ -84,14 +44,34 @@ jobs:
           path: ~/.cargo
           key: cargo-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
 
+      # Install toolchain
       - run: rustup update ${{ matrix.toolchain.version }}
       - run: rustup default ${{ matrix.toolchain.version }}
-      - run: rustup component add clippy
-      - run: cargo build --verbose --package letmein
-      - run: cargo clippy --package letmein -- --deny warnings
-      - run: cargo clippy --tests --package letmein -- --deny warnings
-      - run: cargo test --package letmein
-      - run: cargo test --package letmein-conf
-      - run: cargo test --package letmein-proto
+      - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'latest'
+        run: rustup component add clippy
+      - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'nightly'
+        run: rustup component add rust-src miri
+
+      # Build
+      - if: matrix.os.name == 'linux'
+        run: cargo build --verbose
+      - if: matrix.os.name != 'linux'
+        run: cargo build --verbose --package letmein
+
+      # Run tests on Linux
+      - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'latest'
+        run: sh ./tests/run-tests.sh
+      - if: matrix.os.name == 'linux' && matrix.toolchain.name != 'latest'
+        run: sh ./tests/run-tests.sh --no-clippy
+      - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'nightly'
+        run: cargo miri test
+
+      # Run tests on non-Linux
+      - if: matrix.os.name != 'linux'
+        run: cargo test --package letmein
+      - if: matrix.os.name != 'linux'
+        run: cargo test --package letmein-conf
+      - if: matrix.os.name != 'linux'
+        run: cargo test --package letmein-proto
 
 # vim: ts=2 sw=2 expandtab
