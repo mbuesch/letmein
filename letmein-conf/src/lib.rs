@@ -60,6 +60,7 @@ impl ConfigChecksum {
     pub const SIZE: usize = 32;
 
     /// Calculate the checksum from a raw byte stream.
+    #[must_use]
     pub fn calculate(content: &[u8]) -> Self {
         let mut hash = Sha3_256::new();
         hash.update((content.len() as u64).to_be_bytes());
@@ -69,6 +70,7 @@ impl ConfigChecksum {
     }
 
     /// Get the calculated checksum digest.
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8; ConfigChecksum::SIZE] {
         &self.0
     }
@@ -150,6 +152,7 @@ pub enum Resource {
 }
 
 impl Resource {
+    #[must_use]
     pub fn id(&self) -> ResourceId {
         match self {
             Self::Port { id, .. } => *id,
@@ -157,6 +160,7 @@ impl Resource {
         }
     }
 
+    #[must_use]
     pub fn contains_user(&self, id: UserId) -> bool {
         let users = match self {
             Self::Port { users, .. } => users,
@@ -170,6 +174,7 @@ impl Resource {
         }
     }
 
+    #[must_use]
     pub fn timeout(&self) -> Option<Duration> {
         match self {
             Self::Port { timeout, .. } => *timeout,
@@ -808,6 +813,7 @@ pub struct Config {
 
 impl Config {
     /// Create a new configuration instance with all-default values.
+    #[must_use]
     pub fn new(variant: ConfigVariant) -> Self {
         Self {
             checksum: Default::default(),
@@ -819,6 +825,7 @@ impl Config {
     }
 
     /// Get the default configuration file path.
+    #[must_use]
     pub fn get_default_path(variant: ConfigVariant) -> PathBuf {
         // The build-time environment variable LETMEIN_CONF_PREFIX can be
         // used to give an additional prefix.
@@ -847,6 +854,7 @@ impl Config {
     }
 
     /// Get the actual path the configuration was read from.
+    #[must_use]
     pub fn get_path(&self) -> Option<&Path> {
         self.path.as_deref()
     }
@@ -913,36 +921,43 @@ impl Config {
     }
 
     /// Calculate a checksum that represents the content.
+    #[must_use]
     pub fn checksum(&self) -> &ConfigChecksum {
         &self.checksum
     }
 
     /// Get the `debug` option from `[GENERAL]` section.
+    #[must_use]
     pub fn debug(&self) -> bool {
         self.debug
     }
 
     /// Get the `port` option from `[GENERAL]` section.
+    #[must_use]
     pub fn port(&self) -> ControlPort {
         self.port
     }
 
     /// Get the `control-timeout` option from `[GENERAL]` section.
+    #[must_use]
     pub fn control_timeout(&self) -> Duration {
         self.control_timeout
     }
 
     /// Get the `control-error-policy` option from `[GENERAL]` section.
+    #[must_use]
     pub fn control_error_policy(&self) -> ErrorPolicy {
         self.control_error_policy
     }
 
     /// Get the `seccomp` option from `[GENERAL]` section.
+    #[must_use]
     pub fn seccomp(&self) -> Seccomp {
         self.seccomp
     }
 
     /// Get a list of all configured users.
+    #[must_use]
     pub fn users(&self) -> Vec<UserId> {
         let mut users: Vec<UserId> = self.keys.keys().cloned().collect();
         users.sort();
@@ -950,11 +965,13 @@ impl Config {
     }
 
     /// Get a key value by key identifier from the `[KEYS]` section.
+    #[must_use]
     pub fn key(&self, id: UserId) -> Option<&Key> {
         self.keys.get(&id)
     }
 
     /// Get a list of all configured resources.
+    #[must_use]
     pub fn resources(&self) -> Vec<Resource> {
         let mut resources: Vec<Resource> = self.resources.values().cloned().collect();
         resources.sort_by_key(|r| r.id());
@@ -962,11 +979,13 @@ impl Config {
     }
 
     /// Get a resource value by resource identifier from the `[RESOURCES]` section.
+    #[must_use]
     pub fn resource(&self, id: ResourceId) -> Option<&Resource> {
         self.resources.get(&id)
     }
 
     /// Lookup a resource id by a port number in the `[RESOURCES]` section.
+    #[must_use]
     pub fn resource_id_by_port(&self, port: u16, user_id: Option<UserId>) -> Option<ResourceId> {
         for (k, v) in &self.resources {
             match v {
@@ -988,41 +1007,49 @@ impl Config {
     }
 
     /// Get the `default-user` option from `[CLIENT]` section.
+    #[must_use]
     pub fn default_user(&self) -> UserId {
         self.default_user
     }
 
     /// Get the `exe` option from `[NFTABLES]` section.
+    #[must_use]
     pub fn nft_exe(&self) -> &Path {
         &self.nft_exe
     }
 
     /// Get the `family` option from `[NFTABLES]` section.
+    #[must_use]
     pub fn nft_family(&self) -> &str {
         &self.nft_family
     }
 
     /// Get the `table` option from `[NFTABLES]` section.
+    #[must_use]
     pub fn nft_table(&self) -> &str {
         &self.nft_table
     }
 
     /// Get the `chain-input` option from `[NFTABLES]` section.
+    #[must_use]
     pub fn nft_chain_input(&self) -> &str {
         &self.nft_chain_input
     }
 
     /// Get the `chain-forward` option from `[NFTABLES]` section.
+    #[must_use]
     pub fn nft_chain_forward(&self) -> &str {
         &self.nft_chain_forward
     }
 
     /// Get the `chain-output` option from `[NFTABLES]` section.
+    #[must_use]
     pub fn nft_chain_output(&self) -> &str {
         &self.nft_chain_output
     }
 
     /// Get the `timeout` option from `[NFTABLES]` section.
+    #[must_use]
     pub fn nft_timeout(&self) -> Duration {
         self.nft_timeout
     }

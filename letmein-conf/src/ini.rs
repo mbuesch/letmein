@@ -50,6 +50,7 @@ pub struct Ini {
 
 impl Ini {
     /// Create a new empty parser state.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             checksum: Default::default(),
@@ -179,6 +180,7 @@ impl Ini {
     }
 
     /// Get the value of an option from the given section.
+    #[must_use]
     pub fn get(&self, section: &str, option: &str) -> Option<&str> {
         if let Some(sect) = self.sections.get(section) {
             if let Some(opt) = sect.options().get(option) {
@@ -189,11 +191,13 @@ impl Ini {
     }
 
     /// Get an iterator over all option name-value tuples from a section.
+    #[must_use]
     pub fn options_iter(&self, section: &str) -> Option<IniSectionIter<'_>> {
         self.sections.get(section).map(|s| s.iter())
     }
 
     /// Get the content checksum.
+    #[must_use]
     pub fn checksum(&self) -> &ConfigChecksum {
         &self.checksum
     }
