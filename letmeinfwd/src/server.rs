@@ -225,7 +225,7 @@ impl FirewallServer {
 
                 return Ok(Self {
                     listener,
-                    rundir: opts.rundir.to_owned(),
+                    rundir: opts.rundir.clone(),
                 });
             } else {
                 return Err(err!("Received an unusable socket from systemd."));
@@ -259,7 +259,7 @@ impl FirewallServer {
 
         Ok(Self {
             listener,
-            rundir: opts.rundir.to_owned(),
+            rundir: opts.rundir.clone(),
         })
     }
 

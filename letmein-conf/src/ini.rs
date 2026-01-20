@@ -161,7 +161,7 @@ impl Ini {
                             .get_mut(section)
                             .unwrap()
                             .options_mut()
-                            .insert(opt_name.to_string(), opt_value);
+                            .insert(opt_name.clone(), opt_value);
                         cur_opt_name = Some(opt_name);
                     } else {
                         return Err(err!("Option has no name before equal sign '=': '{line}'"));
