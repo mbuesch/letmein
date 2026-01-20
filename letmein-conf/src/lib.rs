@@ -708,6 +708,7 @@ fn get_default_user(ini: &Ini) -> ah::Result<UserId> {
     Ok(Default::default())
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn get_nft_exe(ini: &Ini) -> ah::Result<PathBuf> {
     if let Some(nft_exe) = ini.get("NFTABLES", "exe") {
         return Ok(nft_exe.trim().into());
@@ -730,6 +731,7 @@ fn get_nft_family(ini: &Ini) -> ah::Result<String> {
     }
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn get_nft_table(ini: &Ini) -> ah::Result<String> {
     if let Some(nft_table) = ini.get("NFTABLES", "table") {
         Ok(nft_table.trim().to_string())

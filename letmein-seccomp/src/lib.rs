@@ -133,6 +133,8 @@ impl Filter {
     }
 
     #[cfg(has_seccomp_support)]
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::items_after_statements)]
     pub fn compile_for_arch(allow: &[Allow], deny_action: Action, arch: &str) -> ah::Result<Self> {
         assert!(!allow.is_empty());
 

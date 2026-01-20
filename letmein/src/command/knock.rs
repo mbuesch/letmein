@@ -52,6 +52,7 @@ struct KnockSeq<'a> {
 
 impl KnockSeq<'_> {
     /// Check if the server replied with a valid message.
+    #[allow(clippy::unnecessary_wraps)]
     fn check_reply(&self, msg: &Message) -> ah::Result<()> {
         if msg.user() != self.user {
             eprintln!(

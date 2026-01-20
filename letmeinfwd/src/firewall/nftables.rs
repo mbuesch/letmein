@@ -72,6 +72,7 @@ impl<'a> NftNames<'a> {
         })
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn get_chain_input(&self) -> ah::Result<&'a str> {
         Ok(self.chain_input)
     }
@@ -315,6 +316,7 @@ fn gen_add_lease_cmds<'a>(
 }
 
 /// Generate the nftables flush-chain command to delete the contents of a chain.
+#[allow(clippy::unnecessary_wraps)]
 fn gen_flush_chain_cmd<'a>(names: &'a NftNames<'a>, chain: &'a str) -> ah::Result<NfCmd<'a>> {
     Ok(NfCmd::Flush(FlushObject::Chain(Chain {
         family: names.family,

@@ -57,8 +57,8 @@ pub struct FirewallConnection {
 }
 
 impl FirewallConnection {
-    fn new(stream: UnixStream) -> ah::Result<Self> {
-        Ok(Self { stream })
+    fn new(stream: UnixStream) -> Self {
+        Self { stream }
     }
 
     async fn recv_msg(&mut self) -> ah::Result<Option<FirewallMessage>> {
@@ -208,6 +208,7 @@ pub struct FirewallServer {
 }
 
 impl FirewallServer {
+    #[allow(clippy::unused_async)]
     pub async fn new(no_systemd: bool, opts: &Opts) -> ah::Result<Self> {
         // Get socket from systemd?
         if !no_systemd {
@@ -309,7 +310,7 @@ impl FirewallServer {
             }
         }
 
-        FirewallConnection::new(stream)
+        Ok(FirewallConnection::new(stream))
     }
 }
 

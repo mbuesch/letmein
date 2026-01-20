@@ -285,6 +285,7 @@ impl FirewallMessage {
     }
 
     /// Try to deserialize a byte stream into a message.
+    #[allow(clippy::items_after_statements)]
     pub fn try_msg_deserialize(buf: &[u8]) -> ah::Result<Self> {
         if buf.len() != FWMSG_SIZE {
             return Err(err!("Deserialize: Raw message size mismatch."));
