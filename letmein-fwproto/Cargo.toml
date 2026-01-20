@@ -20,4 +20,7 @@ letmein-conf = { workspace = true }
 letmein-proto = { workspace = true }
 tokio = { workspace = true, features = [ "net" ] }
 
+[lints]
+workspace = true
+
 # vim: ts=4 sw=4 expandtab

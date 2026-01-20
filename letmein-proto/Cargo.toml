@@ -22,4 +22,7 @@ sha3 = { workspace = true }
 subtle = { workspace = true }
 tokio = { workspace = true, features = [ "net", "sync", "macros", "time" ] }
 
+[lints]
+workspace = true
+
 # vim: ts=4 sw=4 expandtab

@@ -26,4 +26,7 @@ tokio = { workspace = true, features = [ "rt", "net", "macros", "time", ] }
 [target.'cfg(any(target_os="linux", target_os="android"))'.dependencies]
 letmein-seccomp = { workspace = true }
 
+[lints]
+workspace = true
+
 # vim: ts=4 sw=4 expandtab

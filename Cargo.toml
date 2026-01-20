@@ -47,6 +47,9 @@ letmein-proto = { version = "12", path = "./letmein-proto" }
 letmein-seccomp = { version = "12", path = "./letmein-seccomp" }
 letmein-systemd = { version = "12", path = "./letmein-systemd" }
 
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "warn"
+
 [profile.dev]
 debug = "limited"
 panic = "abort"

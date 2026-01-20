@@ -27,4 +27,7 @@ tokio = { workspace = true, features = [ "rt", "net", "macros", "signal", "sync"
 letmein-seccomp = { workspace = true }
 letmein-systemd = { workspace = true, features = [ "udp", "tcp" ] }
 
+[lints]
+workspace = true
+
 # vim: ts=4 sw=4 expandtab

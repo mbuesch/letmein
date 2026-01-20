@@ -19,4 +19,7 @@ anyhow = { workspace = true }
 libc = { workspace = true }
 seccompiler = { workspace = true }
 
+[lints]
+workspace = true
+
 # vim: ts=4 sw=4 expandtab
