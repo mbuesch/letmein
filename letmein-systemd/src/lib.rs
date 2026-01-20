@@ -55,7 +55,8 @@ fn is_socket(fd: RawFd) -> bool {
 #[cfg(any(feature = "udp", feature = "tcp", feature = "unix"))]
 unsafe fn get_socket_type(fd: RawFd) -> Option<libc::c_int> {
     let mut sotype: libc::c_int = 0;
-    let mut len: libc::socklen_t = size_of_val(&sotype) as _;
+    let sizeof_sotype: u32 = size_of_val(&sotype).try_into().expect("libc::c_int size");
+    let mut len: libc::socklen_t = sizeof_sotype as _;
 
     // SAFETY: The `fd` is valid, `sotype` and `len` are initialized and valid.
     let ret = unsafe {
@@ -68,7 +69,7 @@ unsafe fn get_socket_type(fd: RawFd) -> Option<libc::c_int> {
         )
     };
 
-    if ret == 0 && len >= size_of_val(&sotype) as _ {
+    if ret == 0 && len == sizeof_sotype as _ {
         Some(sotype)
     } else {
         None
