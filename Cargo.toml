@@ -48,6 +48,8 @@ letmein-seccomp = { version = "12", path = "./letmein-seccomp" }
 letmein-systemd = { version = "12", path = "./letmein-systemd" }
 
 [workspace.lints.clippy]
+cargo = "warn"
+multiple-crate-versions = { level = "allow", priority = 1 }
 undocumented_unsafe_blocks = "warn"
 
 [profile.dev]
