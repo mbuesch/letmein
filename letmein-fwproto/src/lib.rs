@@ -164,6 +164,7 @@ fn octets_to_addr(addr_type: AddrType, addr: &[u8; ADDR_SIZE]) -> IpAddr {
 
 impl FirewallMessage {
     /// Construct a new message to install firewall rules for a resource.
+    #[must_use]
     pub fn new_install(
         user: UserId,
         resource: ResourceId,
@@ -182,6 +183,7 @@ impl FirewallMessage {
     }
 
     /// Construct a new message to revoke firewall rule for a resource.
+    #[must_use]
     pub fn new_revoke(
         user: UserId,
         resource: ResourceId,
@@ -200,6 +202,7 @@ impl FirewallMessage {
     }
 
     /// Construct a new acknowledge message.
+    #[must_use]
     pub fn new_ack() -> Self {
         Self {
             operation: FirewallOperation::Ack,
@@ -208,6 +211,7 @@ impl FirewallMessage {
     }
 
     /// Construct a new not-acknowledge message.
+    #[must_use]
     pub fn new_nack() -> Self {
         Self {
             operation: FirewallOperation::Nack,
@@ -216,21 +220,25 @@ impl FirewallMessage {
     }
 
     /// Get the operation type from this message.
+    #[must_use]
     pub fn operation(&self) -> FirewallOperation {
         self.operation
     }
 
     /// Get the user ID from this message.
+    #[must_use]
     pub fn user(&self) -> UserId {
         self.user
     }
 
     /// Get the resource ID from this message.
+    #[must_use]
     pub fn resource(&self) -> ResourceId {
         self.resource
     }
 
     /// Get the `IpAddr` from this message.
+    #[must_use]
     pub fn addr(&self) -> Option<IpAddr> {
         match self.operation {
             FirewallOperation::Install | FirewallOperation::Revoke => {
@@ -241,6 +249,7 @@ impl FirewallMessage {
     }
 
     /// Get the configuration checksum from this message.
+    #[must_use]
     pub fn conf_checksum(&self) -> Option<&ConfigChecksum> {
         match self.operation {
             FirewallOperation::Install | FirewallOperation::Revoke => Some(&self.conf_cs),
