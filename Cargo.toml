@@ -48,9 +48,11 @@ letmein-seccomp = { version = "12", path = "./letmein-seccomp" }
 letmein-systemd = { version = "12", path = "./letmein-systemd" }
 
 [workspace.lints.clippy]
+# Lints from `cargo` group
 cargo = "warn"
 multiple-crate-versions = { level = "allow", priority = 1 }
 
+# Lints from `pedantic` group
 pedantic = "warn"
 default_trait_access = { level = "allow", priority = 1 }
 missing-errors-doc = { level = "allow", priority = 1 }
@@ -58,7 +60,18 @@ missing-panics-doc = { level = "allow", priority = 1 }
 similar-names = { level = "allow", priority = 1 }
 struct-excessive-bools = { level = "allow", priority = 1 }
 
+# Lints from `restriction` group
+clone_on_ref_ptr = "warn"
+dbg_macro = "warn"
+mem_forget = "warn"
+precedence_bits = "warn"
+todo = "warn"
+try_err = "warn"
 undocumented_unsafe_blocks = "warn"
+unimplemented = "warn"
+unseparated_literal_suffix = "warn"
+unused_result_ok = "warn"
+unused_trait_names = "warn"
 
 [profile.dev]
 debug = "limited"
