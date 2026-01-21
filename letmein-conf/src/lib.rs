@@ -24,7 +24,7 @@ use crate::{
 };
 use anyhow::{self as ah, format_err as err, Context as _};
 use letmein_proto::{Key, ResourceId, UserId, PORT};
-use sha3::{Digest, Sha3_256};
+use sha3::{Digest as _, Sha3_256};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},

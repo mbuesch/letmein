@@ -16,7 +16,7 @@ mod seccomp;
 mod server;
 
 use crate::{
-    firewall::{nftables::NftFirewall, FirewallMaintain},
+    firewall::{nftables::NftFirewall, FirewallMaintain as _},
     seccomp::install_seccomp_rules,
     server::FirewallServer,
 };
