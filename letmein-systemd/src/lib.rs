@@ -69,7 +69,7 @@ unsafe fn get_socket_type(fd: RawFd) -> Option<libc::c_int> {
         )
     };
 
-    if ret == 0 && len == sizeof_sotype as _ {
+    if ret == 0 && len == sizeof_sotype as libc::socklen_t {
         Some(sotype)
     } else {
         None
