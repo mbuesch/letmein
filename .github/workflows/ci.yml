@@ -18,7 +18,7 @@ jobs:
           - name: msrv
             version: 1.83.0
           - name: latest
-            version: 1.92.0
+            version: 1.93.0
           - name: nightly
             version: nightly
         os:
