@@ -7,22 +7,23 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::{
+    LETMEIND_GID, LETMEIND_UID, Opts,
     firewall::{FirewallAction, LeasePort},
-    set_owner_mode, Opts, LETMEIND_GID, LETMEIND_UID,
+    set_owner_mode,
 };
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::{Config, Resource};
 use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
-use letmein_systemd::{systemd_notify_ready, SystemdSocket};
+use letmein_systemd::{SystemdSocket, systemd_notify_ready};
 use std::{
-    fs::{metadata, remove_file, OpenOptions},
+    fs::{OpenOptions, metadata, remove_file},
     io::Read as _,
     net::IpAddr,
     os::unix::fs::MetadataExt as _,
     path::{Path, PathBuf},
-    sync::{atomic::Ordering::Relaxed, Arc},
+    sync::{Arc, atomic::Ordering::Relaxed},
 };
-use tokio::net::{unix::pid_t, UnixListener, UnixStream};
+use tokio::net::{UnixListener, UnixStream, unix::pid_t};
 
 /// Get the actual PID of the `letmeind` daemon process.
 fn get_letmeind_pid(rundir: &Path) -> ah::Result<pid_t> {

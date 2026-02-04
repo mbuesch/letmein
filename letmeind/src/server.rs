@@ -6,10 +6,10 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::Config;
 use letmein_proto::{Message, MsgNetSocket, MsgUdpDispatcher};
-use letmein_systemd::{systemd_notify_ready, SystemdSocket};
+use letmein_systemd::{SystemdSocket, systemd_notify_ready};
 use std::{
     convert::Infallible,
     net::{Ipv6Addr, SocketAddr},

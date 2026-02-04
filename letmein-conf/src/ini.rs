@@ -7,9 +7,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::ConfigChecksum;
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use std::{
-    collections::{hash_map, HashMap},
+    collections::{HashMap, hash_map},
     io::Read as _,
     path::Path,
 };
@@ -103,19 +103,20 @@ impl Ini {
         for line in content.lines() {
             // Check if this is an option content multi-line continuation.
             if let Some(opt_name) = &cur_opt_name {
-                if let Some(section) = &in_section {
-                    if line.starts_with([' ', '\t']) && !line.trim().is_empty() {
-                        // Append to the value.
-                        let opt_value = sections
-                            .get_mut(section)
-                            .unwrap()
-                            .options_mut()
-                            .get_mut(opt_name)
-                            .unwrap();
-                        opt_value.push(' ');
-                        opt_value.push_str(line.trim_start());
-                        continue;
-                    }
+                if let Some(section) = &in_section
+                    && line.starts_with([' ', '\t'])
+                    && !line.trim().is_empty()
+                {
+                    // Append to the value.
+                    let opt_value = sections
+                        .get_mut(section)
+                        .unwrap()
+                        .options_mut()
+                        .get_mut(opt_name)
+                        .unwrap();
+                    opt_value.push(' ');
+                    opt_value.push_str(line.trim_start());
+                    continue;
                 }
                 cur_opt_name = None;
             }
@@ -181,10 +182,10 @@ impl Ini {
     /// Get the value of an option from the given section.
     #[must_use]
     pub fn get(&self, section: &str, option: &str) -> Option<&str> {
-        if let Some(sect) = self.sections.get(section) {
-            if let Some(opt) = sect.options().get(option) {
-                return Some(opt);
-            }
+        if let Some(sect) = self.sections.get(section)
+            && let Some(opt) = sect.options().get(option)
+        {
+            return Some(opt);
         }
         None
     }
@@ -241,11 +242,12 @@ bzzzzz =brrrrrr\t
                 _ => unreachable!(),
             }
         }
-        assert!(ini
-            .options_iter("ANOTHER-SECTION")
-            .unwrap()
-            .next()
-            .is_none());
+        assert!(
+            ini.options_iter("ANOTHER-SECTION")
+                .unwrap()
+                .next()
+                .is_none()
+        );
     }
 
     #[test]

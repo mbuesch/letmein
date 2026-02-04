@@ -14,7 +14,7 @@
 
 #![forbid(unsafe_code)]
 
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::ConfigChecksum;
 use letmein_proto::{ResourceId, UserId};
 use std::{

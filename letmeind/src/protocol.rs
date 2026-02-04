@@ -63,19 +63,19 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                     )))
                     .await;
             }
-            if let Some(user_id) = self.user_id {
-                if msg.user() != user_id {
-                    return self
-                        .send_go_away(Err(err!("Received message user mismatch")))
-                        .await;
-                }
+            if let Some(user_id) = self.user_id
+                && msg.user() != user_id
+            {
+                return self
+                    .send_go_away(Err(err!("Received message user mismatch")))
+                    .await;
             }
-            if let Some(resource_id) = self.resource_id {
-                if msg.resource() != resource_id {
-                    return self
-                        .send_go_away(Err(err!("Received message resource mismatch")))
-                        .await;
-                }
+            if let Some(resource_id) = self.resource_id
+                && msg.resource() != resource_id
+            {
+                return self
+                    .send_go_away(Err(err!("Received message resource mismatch")))
+                    .await;
             }
             Ok(msg)
         } else {

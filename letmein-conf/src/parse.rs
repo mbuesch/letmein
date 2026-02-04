@@ -77,10 +77,11 @@ pub fn parse_duration(s: &str) -> ah::Result<Duration> {
     if let Ok(secs) = parse_u32(s) {
         return Ok(Duration::from_secs(secs.into()));
     }
-    if let Ok(secs) = parse_f64(s) {
-        if secs >= 0.0 && secs <= u32::MAX.into() {
-            return Ok(Duration::from_secs_f64(secs));
-        }
+    if let Ok(secs) = parse_f64(s)
+        && secs >= 0.0
+        && secs <= u32::MAX.into()
+    {
+        return Ok(Duration::from_secs_f64(secs));
     }
     Err(err!("Invalid Duration"))
 }

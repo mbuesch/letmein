@@ -7,22 +7,22 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::DEBUG;
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use std::{
     collections::{HashMap, VecDeque},
     io::ErrorKind,
     net::SocketAddr,
     sync::{
-        atomic::{self, AtomicBool},
         Arc, Mutex as StdMutex,
+        atomic::{self, AtomicBool},
     },
     time::Duration,
 };
 use tokio::{
     net::{TcpStream, UdpSocket},
     sync::{
-        watch::{channel, Receiver, Sender},
         Mutex,
+        watch::{Receiver, Sender, channel},
     },
     time::sleep,
 };

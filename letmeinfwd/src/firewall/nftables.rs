@@ -10,12 +10,12 @@ use crate::firewall::{
     FirewallAction, FirewallChain, FirewallJumpTargets, FirewallMaintain, JumpLeaseMap, Lease,
     LeaseMapOps as _, LeasePort, LeaseType, PortLeaseMap, SingleLeasePort,
 };
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::Config;
 use nftables::{
     batch::Batch,
     expr::{Expression, NamedExpression, Payload, PayloadField},
-    helper::{apply_ruleset_with_args_async, get_current_ruleset_with_args_async, DEFAULT_ARGS},
+    helper::{DEFAULT_ARGS, apply_ruleset_with_args_async, get_current_ruleset_with_args_async},
     schema::{Chain, FlushObject, NfCmd, NfListObject, NfObject, Rule},
     stmt::{Counter, JumpTarget, Match, Operator, Statement},
     types::NfFamily,
@@ -107,11 +107,7 @@ impl<'a> NftNames<'a> {
 }
 
 fn option_if<T>(t: T, c: bool) -> Option<T> {
-    if c {
-        Some(t)
-    } else {
-        None
-    }
+    if c { Some(t) } else { None }
 }
 
 /// Create an nftables IP source address match statement.

@@ -8,10 +8,10 @@
 
 #![forbid(unsafe_code)]
 
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use std::{
     env,
-    io::{stdin, Read as _},
+    io::{Read as _, stdin},
 };
 
 fn main() -> ah::Result<()> {

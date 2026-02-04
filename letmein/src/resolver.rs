@@ -8,11 +8,11 @@
 
 use anyhow::{self as ah, format_err as err};
 use hickory_resolver::{
+    TokioResolver,
     config::ResolverConfig,
     lookup::Lookup,
     name_server::TokioConnectionProvider,
     proto::rr::{record_data::RData, record_type::RecordType},
-    TokioResolver,
 };
 use std::net::IpAddr;
 
@@ -142,10 +142,10 @@ pub async fn resolve(host: &str, cfg: &ResConf) -> ah::Result<IpAddr> {
     }
 
     if cfg.srv.system {
-        if let Ok(builder) = TokioResolver::builder_tokio() {
-            if let Ok(lookup) = builder.build().lookup(host, record_type).await {
-                return get_first_result(lookup, host, cfg.mode);
-            }
+        if let Ok(builder) = TokioResolver::builder_tokio()
+            && let Ok(lookup) = builder.build().lookup(host, record_type).await
+        {
+            return get_first_result(lookup, host, cfg.mode);
         }
 
         #[cfg(not(target_os = "android"))]

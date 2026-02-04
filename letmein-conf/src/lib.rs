@@ -22,8 +22,8 @@ use crate::{
     parse::{is_number, parse_bool, parse_duration, parse_hex, parse_u16},
     parse_items::{Map, MapItem},
 };
-use anyhow::{self as ah, format_err as err, Context as _};
-use letmein_proto::{Key, ResourceId, UserId, PORT};
+use anyhow::{self as ah, Context as _, format_err as err};
+use letmein_proto::{Key, PORT, ResourceId, UserId};
 use sha3::{Digest as _, Sha3_256};
 use std::{
     collections::HashMap,

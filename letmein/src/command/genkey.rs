@@ -8,7 +8,7 @@
 
 use anyhow as ah;
 use letmein_conf::Config;
-use letmein_proto::{secure_random, Key, UserId};
+use letmein_proto::{Key, UserId, secure_random};
 
 /// Generate a new truly random and secure user key.
 pub async fn run_genkey(conf: &Config, user: Option<UserId>) -> ah::Result<()> {

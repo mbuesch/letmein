@@ -6,8 +6,8 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::resolver::{resolve, ResConf};
-use anyhow::{self as ah, format_err as err, Context as _};
+use crate::resolver::{ResConf, resolve};
+use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::ControlPort;
 use letmein_proto::{Message, MsgNetSocket, MsgUdpDispatcher, Operation};
 use std::{

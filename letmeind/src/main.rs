@@ -21,11 +21,11 @@ use crate::{
     seccomp::install_seccomp_rules,
     server::{ConnectionOps as _, Server},
 };
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant, Seccomp};
 use std::{
-    fs::{create_dir_all, metadata, OpenOptions},
+    fs::{OpenOptions, create_dir_all, metadata},
     io::Write as _,
     os::unix::fs::MetadataExt as _,
     path::{Path, PathBuf},
@@ -34,7 +34,7 @@ use std::{
 };
 use tokio::{
     runtime,
-    signal::unix::{signal, SignalKind},
+    signal::unix::{SignalKind, signal},
     sync::{self, Semaphore},
     task,
 };

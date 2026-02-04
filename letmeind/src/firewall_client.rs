@@ -6,7 +6,7 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::ConfigChecksum;
 use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
 use letmein_proto::{ResourceId, UserId};

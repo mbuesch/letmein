@@ -8,7 +8,7 @@
 
 use anyhow::{self as ah, Context as _};
 use letmein_conf::Seccomp;
-use letmein_seccomp::{seccomp_supported, Action, Allow, Filter};
+use letmein_seccomp::{Action, Allow, Filter, seccomp_supported};
 
 const ALLOW_LIST: [Allow; 13] = [
     Allow::Mmap,

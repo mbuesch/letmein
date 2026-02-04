@@ -10,7 +10,7 @@ use anyhow as ah;
 use letmein_conf::Seccomp;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-use letmein_seccomp::{seccomp_supported, Action, Allow, Filter};
+use letmein_seccomp::{Action, Allow, Filter, seccomp_supported};
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 const ALLOW_LIST: [Allow; 14] = [

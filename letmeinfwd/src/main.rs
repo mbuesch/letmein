@@ -16,28 +16,28 @@ mod seccomp;
 mod server;
 
 use crate::{
-    firewall::{nftables::NftFirewall, FirewallMaintain as _},
+    firewall::{FirewallMaintain as _, nftables::NftFirewall},
     seccomp::install_seccomp_rules,
     server::FirewallServer,
 };
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use clap::Parser;
 use letmein_conf::{Config, ConfigVariant, Seccomp};
 use nix::unistd::{Group, User};
 use std::{
-    fs::{create_dir_all, metadata, set_permissions, OpenOptions},
+    fs::{OpenOptions, create_dir_all, metadata, set_permissions},
     io::Write as _,
-    os::unix::fs::{chown, MetadataExt as _, PermissionsExt as _},
+    os::unix::fs::{MetadataExt as _, PermissionsExt as _, chown},
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicU32, Ordering::Relaxed},
         Arc,
+        atomic::{AtomicU32, Ordering::Relaxed},
     },
     time::Duration,
 };
 use tokio::{
     runtime,
-    signal::unix::{signal, SignalKind},
+    signal::unix::{SignalKind, signal},
     sync::{self, Semaphore},
     task, time,
 };

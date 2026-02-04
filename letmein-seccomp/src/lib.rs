@@ -14,7 +14,7 @@
 std::compile_error!("letmeind server and letmein-seccomp do not support non-Linux platforms.");
 
 use anyhow::{self as ah, Context as _};
-use seccompiler::{apply_filter_all_threads, BpfProgram};
+use seccompiler::{BpfProgram, apply_filter_all_threads};
 use std::env::consts::ARCH;
 
 #[cfg(has_seccomp_support)]

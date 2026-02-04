@@ -8,9 +8,9 @@
 
 use crate::{
     client::Client,
-    resolver::{is_ipv4_addr, is_ipv6_addr, ResConf, ResCrypt, ResMode, ResSrv},
+    resolver::{ResConf, ResCrypt, ResMode, ResSrv, is_ipv4_addr, is_ipv6_addr},
 };
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::{Config, ControlPort};
 use letmein_proto::{Key, Message, Operation, ResourceId, UserId};
 use std::{path::Path, time::Duration};

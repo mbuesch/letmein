@@ -16,12 +16,12 @@ mod seccomp;
 use crate::{
     command::{
         genkey::run_genkey,
-        knock::{run_knock, run_revoke, KnockResource, KnockServer},
+        knock::{KnockResource, KnockServer, run_knock, run_revoke},
     },
     resolver::{ResCrypt, ResSrv},
     seccomp::install_seccomp_rules,
 };
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 use clap::{CommandFactory as _, Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant, Seccomp};
 use letmein_proto::{ResourceId, UserId};

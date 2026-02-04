@@ -11,7 +11,7 @@
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 std::compile_error!("letmeind server and letmein-systemd do not support non-Linux platforms.");
 
-use anyhow::{self as ah, format_err as err, Context as _};
+use anyhow::{self as ah, Context as _, format_err as err};
 
 #[cfg(any(feature = "tcp", feature = "unix"))]
 use std::{
