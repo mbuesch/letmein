@@ -16,7 +16,7 @@ jobs:
       matrix:
         toolchain:
           - name: msrv
-            version: 1.83.0
+            version: 1.88.0
           - name: latest
             version: 1.93.0
           - name: nightly
