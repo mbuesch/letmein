@@ -82,7 +82,6 @@ opt-level = "z"
 lto = "fat"
 panic = "abort"
 strip = "symbols"
-debug-assertions = false
 overflow-checks = true
 codegen-units = 1
 
