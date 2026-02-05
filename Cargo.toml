@@ -12,7 +12,7 @@ members = [
     "letmeinfwd",
     "tests/stubs/nft",
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 version = "12.0.0"
