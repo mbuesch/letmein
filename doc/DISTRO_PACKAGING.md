@@ -12,3 +12,8 @@ If you want to package the software for distribution, a few adjustments/patches 
   Meaning that the configuration files will be placed into `/opt/letmein/etc/`.
 
 - Adjust the install prefix from `/opt` to something else that makes more sense for your distribution.
+
+- It is highly recommended to keep the `overflow-checks = true` and `panic = "abort"` cargo release profile settings, as they are important for security hardening of letmein.
+  If you want to adjust them, make sure to understand the security implications of doing so.
+  The other settings in the release profile can be adjusted as needed.
+  But it is recommended to also keep the other settings as they are.
