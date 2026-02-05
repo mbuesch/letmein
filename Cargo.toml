@@ -83,6 +83,5 @@ lto = "fat"
 panic = "abort"
 strip = "symbols"
 overflow-checks = true
-codegen-units = 1
 
 # vim: ts=4 sw=4 expandtab
