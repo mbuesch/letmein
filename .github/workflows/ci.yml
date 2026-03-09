@@ -55,9 +55,9 @@ jobs:
 
       # Build
       - if: matrix.os.name == 'linux'
-        run: cargo build --verbose
+        run: cargo build
       - if: matrix.os.name != 'linux'
-        run: cargo build --verbose --package letmein
+        run: cargo build --package letmein
 
       # Run tests on Linux
       - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'stable'
