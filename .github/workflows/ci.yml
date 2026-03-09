@@ -17,9 +17,9 @@ jobs:
       matrix:
         toolchain:
           - name: msrv
-            version: 1.88.0
-          - name: latest
-            version: 1.93.0
+            version: 1.88
+          - name: stable
+            version: stable
           - name: nightly
             version: nightly
         os:
@@ -48,7 +48,7 @@ jobs:
       # Install toolchain
       - run: rustup update ${{ matrix.toolchain.version }}
       - run: rustup default ${{ matrix.toolchain.version }}
-      - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'latest'
+      - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'stable'
         run: rustup component add clippy
       - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'nightly'
         run: rustup component add rust-src miri
@@ -60,9 +60,9 @@ jobs:
         run: cargo build --verbose --package letmein
 
       # Run tests on Linux
-      - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'latest'
+      - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'stable'
         run: sh ./tests/run-tests.sh
-      - if: matrix.os.name == 'linux' && matrix.toolchain.name != 'latest'
+      - if: matrix.os.name == 'linux' && matrix.toolchain.name != 'stable'
         run: sh ./tests/run-tests.sh --no-clippy
       - if: matrix.os.name == 'linux' && matrix.toolchain.name == 'nightly'
         run: cargo miri test
