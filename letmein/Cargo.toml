@@ -14,9 +14,17 @@ readme = { workspace = true }
 categories = { workspace = true }
 keywords = { workspace = true }
 
+[features]
+default = [ "cli" ]
+cli = [ "dep:clap" ]
+
+[[bin]]
+name = "letmein"
+required-features = [ "cli" ]
+
 [dependencies]
 anyhow = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, optional = true }
 hickory-resolver = { workspace = true, features = [ "system-config", "tokio", "tls-ring", "https-ring", "quic-ring", "webpki-roots", "dnssec-ring" ] }
 letmein-conf = { workspace = true }
 letmein-proto = { workspace = true }

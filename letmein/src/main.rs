@@ -8,12 +8,9 @@
 
 #![forbid(unsafe_code)]
 
-mod client;
-mod command;
-mod resolver;
-mod seccomp;
-
-use crate::{
+use anyhow::{self as ah, Context as _, format_err as err};
+use clap::{CommandFactory as _, Parser, Subcommand};
+use letmein::{
     command::{
         genkey::run_genkey,
         knock::{KnockResource, KnockServer, run_knock, run_revoke},
@@ -21,8 +18,6 @@ use crate::{
     resolver::{ResCrypt, ResSrv},
     seccomp::install_seccomp_rules,
 };
-use anyhow::{self as ah, Context as _, format_err as err};
-use clap::{CommandFactory as _, Parser, Subcommand};
 use letmein_conf::{Config, ConfigVariant, Seccomp};
 use letmein_proto::{ResourceId, UserId};
 use std::{path::PathBuf, sync::Arc, time::Duration};
