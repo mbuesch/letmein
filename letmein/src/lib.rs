@@ -18,7 +18,6 @@ pub mod command;
 pub mod resolver;
 
 /// Setting up seccomp filters on Linux and Android platforms.
-#[cfg(any(target_os = "linux", target_os = "android"))]
 pub mod seccomp;
 
 // vim: ts=4 sw=4 expandtab
