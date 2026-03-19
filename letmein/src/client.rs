@@ -20,7 +20,7 @@ use tokio::{
     time::timeout,
 };
 
-/// TCP control connection to the server.
+/// Control connection to the server.
 pub struct Client {
     sock: MsgNetSocket,
     control_timeout: Duration,
@@ -73,14 +73,14 @@ impl Client {
         })
     }
 
-    /// Receive a message from the TCP control connection.
+    /// Receive a message from the control connection.
     pub async fn recv_msg(&mut self) -> ah::Result<Option<Message>> {
         timeout(self.control_timeout, Message::recv(&self.sock))
             .await
             .map_err(|_| err!("RX communication with peer timed out"))?
     }
 
-    /// Receive a specific message type from the TCP control connection.
+    /// Receive a specific message type from the control connection.
     ///
     /// Returns an error, if another message type is received.
     /// Returns an error, if a [`Operation::GoAway`] type Message is received.
@@ -102,7 +102,7 @@ impl Client {
         Ok(reply)
     }
 
-    /// Send a message to the TCP control connection.
+    /// Send a message to the control connection.
     pub async fn send_msg(&mut self, msg: Message) -> ah::Result<()> {
         timeout(self.control_timeout, msg.send(&self.sock))
             .await
