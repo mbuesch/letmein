@@ -25,18 +25,17 @@ use tokio::runtime;
 
 /// Parse `ResSrv` helper for command line argument parsing.
 fn parse_dns(dns: &str) -> ah::Result<ResSrv> {
-    let mut srv = ResSrv {
-        system: false,
-        quad9: false,
-        google: false,
-        cloudflare: false,
-    };
+    let mut srv = ResSrv::default()
+        .system(false)
+        .quad9(false)
+        .google(false)
+        .cloudflare(false);
     for dns in dns.split(',') {
         match &dns.trim().to_lowercase()[..] {
-            "system" => srv.system = true,
-            "quad9" => srv.quad9 = true,
-            "google" => srv.google = true,
-            "cloudflare" => srv.cloudflare = true,
+            "system" => srv = srv.system(true),
+            "quad9" => srv = srv.quad9(true),
+            "google" => srv = srv.google(true),
+            "cloudflare" => srv = srv.cloudflare(true),
             _ => return Err(err!("Unknown DNS resolver: {dns}")),
         }
     }
@@ -45,16 +44,15 @@ fn parse_dns(dns: &str) -> ah::Result<ResSrv> {
 
 /// Parse `ResCrypt` helper for command line argument parsing.
 fn parse_dns_crypt(dns_crypt: &str) -> ah::Result<ResCrypt> {
-    let mut crypt = ResCrypt {
-        tls: false,
-        https: false,
-        unencrypted: false,
-    };
+    let mut crypt = ResCrypt::default()
+        .tls(false)
+        .https(false)
+        .unencrypted(false);
     for dns_crypt in dns_crypt.split(',') {
         match &dns_crypt.trim().to_lowercase()[..] {
-            "tls" => crypt.tls = true,
-            "https" => crypt.https = true,
-            "unencrypted" => crypt.unencrypted = true,
+            "tls" => crypt = crypt.tls(true),
+            "https" => crypt = crypt.https(true),
+            "unencrypted" => crypt = crypt.unencrypted(true),
             _ => return Err(err!("Unknown DNS transport encryption: {dns_crypt}")),
         }
     }
@@ -231,9 +229,9 @@ impl KnockOrRevokeOpts {
         KnockServer {
             addr: &self.host,
             addr_mode: (self.ipv4, self.ipv6).into(),
-            port: self.server_port,
-            port_tcp: self.server_port_tcp,
-            port_udp: self.server_port_udp,
+            control_port_override: self.server_port,
+            control_port_override_tcp: self.server_port_tcp,
+            control_port_override_udp: self.server_port_udp,
         }
     }
 
@@ -324,11 +322,13 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
             Command::GenKey {
                 user,
             } => {
-                run_genkey(
+                let key = run_genkey(
                     &conf,
                     user,
                 )
-                .await
+                .await?;
+                println!("{key}");
+                Ok(())
             }
         }
     } else {

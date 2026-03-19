@@ -18,10 +18,18 @@ use std::{path::Path, time::Duration};
 /// Address types to knock.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum AddrMode {
+    /// Try both IPv6 and IPv4, but suppress warnings for the one that fails if the other succeeds.
     #[default]
     TryBoth,
+
+    /// Knock on both IPv6 and IPv4, and report all errors.
+    /// If IPv6 fails, do not try IPv4.
     Both,
+
+    /// Knock on IPv6 only.
     Ipv6,
+
+    /// Knock on IPv4 only.
     Ipv4,
 }
 
@@ -91,12 +99,11 @@ impl KnockSeq<'_> {
             self.addr,
             self.control_port,
             self.control_timeout,
-            &ResConf {
-                mode: resolve_mode,
-                srv: self.resolve_srv.clone(),
-                crypt: self.resolve_crypt.clone(),
-                suppress_warnings,
-            },
+            &ResConf::default()
+                .mode(resolve_mode)
+                .srv(self.resolve_srv.clone())
+                .crypt(self.resolve_crypt.clone())
+                .suppress_warnings(suppress_warnings),
         )
         .await
         .context("Client init")?;
@@ -134,25 +141,36 @@ impl KnockSeq<'_> {
     }
 }
 
+/// Server description for the `knock` and `revoke` commands.
 pub struct KnockServer<'a> {
+    /// The host name, IPv4 or IPv6 address that you want to knock on.
     pub addr: &'a str,
+
+    /// Knock on IPv4, IPv6 or both.
     pub addr_mode: AddrMode,
-    pub port: Option<u16>,
-    pub port_tcp: bool,
-    pub port_udp: bool,
+
+    /// Enforce a specific control port, ignoring the one in the configuration file.
+    pub control_port_override: Option<u16>,
+
+    /// Enforce TCP for the control port, ignoring the one in the configuration file.
+    pub control_port_override_tcp: bool,
+
+    /// Enforce UDP for the control port, ignoring the one in the configuration file.
+    pub control_port_override_udp: bool,
 }
 
 impl KnockServer<'_> {
+    #[must_use]
     pub fn to_control_port(&self, conf: &Config) -> ControlPort {
         let mut control_port = conf.port();
-        if let Some(server_port) = self.port {
+        if let Some(server_port) = self.control_port_override {
             control_port.port = server_port;
         }
-        if self.port_udp {
+        if self.control_port_override_udp {
             control_port.tcp = false;
             control_port.udp = true;
         }
-        if self.port_tcp {
+        if self.control_port_override_tcp {
             control_port.tcp = true;
             control_port.udp = false;
         }
@@ -163,8 +181,12 @@ impl KnockServer<'_> {
     }
 }
 
+/// Description of the resource to knock on for the `knock` and `revoke` commands.
 pub enum KnockResource {
+    /// Knock on a specific resource identifier.
     Resource(ResourceId),
+    /// Knock a port number.
+    /// The port number will be resolved to a resource identifier using the local configuration file.
     Port(u16),
 }
 

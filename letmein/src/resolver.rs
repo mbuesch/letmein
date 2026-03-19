@@ -18,6 +18,7 @@ use std::net::IpAddr;
 
 /// Host name resolution target mode.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ResMode {
     /// Resolve to IPv6.
     #[default]
@@ -28,56 +29,171 @@ pub enum ResMode {
 }
 
 /// Host name resolution service.
+///
+/// By `Default` only the system resolver is enabled, but you can enable more DNS services individually.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ResSrv {
     /// Use the resolver from system configuration.
-    pub system: bool,
+    system: bool,
 
     /// Use Quad9 DNS.
-    pub quad9: bool,
+    quad9: bool,
 
     /// Use Google DNS.
-    pub google: bool,
+    google: bool,
 
     /// Use Cloudflare DNS.
-    pub cloudflare: bool,
+    cloudflare: bool,
+}
+
+impl Default for ResSrv {
+    fn default() -> Self {
+        Self {
+            system: true,
+            quad9: false,
+            google: false,
+            cloudflare: false,
+        }
+    }
+}
+
+impl ResSrv {
+    #[must_use]
+    pub fn system(self, enable: bool) -> Self {
+        Self {
+            system: enable,
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn quad9(self, enable: bool) -> Self {
+        Self {
+            quad9: enable,
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn google(self, enable: bool) -> Self {
+        Self {
+            google: enable,
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn cloudflare(self, enable: bool) -> Self {
+        Self {
+            cloudflare: enable,
+            ..self
+        }
+    }
 }
 
 /// Host name resolution encryption.
+///
+/// By `Default` all encryption modes and unencrypted DNS are enabled, but you can disable them individually.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ResCrypt {
     /// Try DNS over TLS.
-    pub tls: bool,
+    tls: bool,
 
     /// Try DNS over HTTPS.
-    pub https: bool,
+    https: bool,
 
     /// Try unencrypted DNS.
-    pub unencrypted: bool,
+    unencrypted: bool,
+}
+
+impl Default for ResCrypt {
+    fn default() -> Self {
+        Self {
+            tls: true,
+            https: true,
+            unencrypted: true,
+        }
+    }
+}
+
+impl ResCrypt {
+    #[must_use]
+    pub fn tls(self, enable: bool) -> Self {
+        Self {
+            tls: enable,
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn https(self, enable: bool) -> Self {
+        Self {
+            https: enable,
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn unencrypted(self, enable: bool) -> Self {
+        Self {
+            unencrypted: enable,
+            ..self
+        }
+    }
 }
 
 /// Host name resolution configuration.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
+#[non_exhaustive]
 pub struct ResConf {
     /// Resolution mode: IPv4 or IPv6?
-    pub mode: ResMode,
+    mode: ResMode,
 
     /// Resolution service.
-    pub srv: ResSrv,
+    srv: ResSrv,
 
     /// Resolution encryption.
-    pub crypt: ResCrypt,
+    crypt: ResCrypt,
 
     /// Suppress warnings.
-    pub suppress_warnings: bool,
+    suppress_warnings: bool,
+}
+
+impl ResConf {
+    #[must_use]
+    pub fn mode(self, mode: ResMode) -> Self {
+        Self { mode, ..self }
+    }
+
+    #[must_use]
+    pub fn srv(self, srv: ResSrv) -> Self {
+        Self { srv, ..self }
+    }
+
+    #[must_use]
+    pub fn crypt(self, crypt: ResCrypt) -> Self {
+        Self { crypt, ..self }
+    }
+
+    #[must_use]
+    pub fn suppress_warnings(self, suppress_warnings: bool) -> Self {
+        Self {
+            suppress_warnings,
+            ..self
+        }
+    }
 }
 
 /// Check if a string can be parsed into an IPv4 address.
+#[must_use]
 pub fn is_ipv4_addr(host: &str) -> bool {
     host.parse::<IpAddr>().map(|a| a.is_ipv4()).unwrap_or(false)
 }
 
 /// Check if a string can be parsed into an IPv6 address.
+#[must_use]
 pub fn is_ipv6_addr(host: &str) -> bool {
     host.parse::<IpAddr>().map(|a| a.is_ipv6()).unwrap_or(false)
 }

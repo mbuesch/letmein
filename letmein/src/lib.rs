@@ -8,9 +8,17 @@
 
 #![forbid(unsafe_code)]
 
+/// Letmein client implementation.
 pub mod client;
+
+/// Letmein commands.
 pub mod command;
+
+/// Resolving hostnames into their corresponding IP addresses.
 pub mod resolver;
+
+/// Setting up seccomp filters on Linux and Android platforms.
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub mod seccomp;
 
 // vim: ts=4 sw=4 expandtab
