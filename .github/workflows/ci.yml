@@ -45,6 +45,12 @@ jobs:
           path: ~/.cargo
           key: cargo-${{ matrix.os.version }}-${{ matrix.toolchain.version }}
 
+      # Install dependencies on Linux
+      - if : matrix.os.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev gir1.2-gdk-3.0-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev libxdo-dev
+
       # Install toolchain
       - run: rustup update ${{ matrix.toolchain.version }}
       - run: rustup default ${{ matrix.toolchain.version }}

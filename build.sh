@@ -79,9 +79,9 @@ if [ "$release" = "release" -o "$release" = "both" ]; then
     else
         cargo build --release $FEATURES || die "Cargo build (release) failed."
     fi
-    check_dynlibs target/release/letmein
-    check_dynlibs target/release/letmeind
-    check_dynlibs target/release/letmeinfwd
+    for p in $packages_release_paths; do
+        check_dynlibs "$p"
+    done
 fi
 
 # vim: ts=4 sw=4 expandtab

@@ -1,0 +1,25 @@
+[application]
+name = "letmein"
+default_platform = "desktop"
+
+[bundle]
+identifier = "ch.bues.letmein"
+publisher = "Michael Büsch"
+copyright = "Michael Büsch"
+icon = [
+    "assets/letmein-logo-16.png",
+    "assets/letmein-logo-32.png",
+    "assets/letmein-logo-48.png",
+    "assets/letmein-logo-64.png",
+    "assets/letmein-logo-128.png",
+    "assets/letmein-logo-256.png",
+    "assets/letmein-logo-512.png",
+]
+#category = ""
+short_description = "Authenticated port/firewall knocking"
+long_description = "A simple port knocker with a simple and secure authentication mechanism."
+
+[android]
+min_sdk = 28 # Android 9
+target_sdk = 35 # Android 15
+compile_sdk = 35

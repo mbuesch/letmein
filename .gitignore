@@ -1,3 +1,8 @@
 /target
 /.vscode/
 /.mcp.json
+/sign-release-android.sh
+*.aab
+*.apk
+*.idsig
+*.jks

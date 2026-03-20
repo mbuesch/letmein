@@ -394,8 +394,10 @@ impl Filter {
                     }
                 },
                 Allow::Stat => {
+                    #[cfg(not(target_os = "android"))]
                     add_sys(&mut map, sys!(SYS_fstat));
                     add_sys(&mut map, sys!(SYS_statx));
+                    #[cfg(not(target_os = "android"))]
                     add_sys(&mut map, sys!(SYS_newfstatat));
                 }
                 Allow::Recv => {
