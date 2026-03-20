@@ -1,0 +1,44 @@
+# -*- coding: utf-8 -*-
+
+[package]
+name = "letmein-gui"
+description = "Authenticated port knocking - GUI"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+categories = { workspace = true }
+keywords = { workspace = true }
+
+[[bin]]
+name = "letmein-gui"
+path = "src/main.rs"
+
+[lib]
+name = "letmein_gui"
+crate-type = ["cdylib", "staticlib", "rlib"]
+path = "src/lib.rs"
+
+[features]
+default = ["desktop"]
+desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]
+
+[dependencies]
+anyhow = { workspace = true }
+base64 = "0.22"
+dioxus = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["png"] }
+letmein = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+letmein-conf = { workspace = true }
+letmein-proto = { workspace = true }
+
+[lints]
+workspace = true
+
+# vim: ts=4 sw=4 expandtab

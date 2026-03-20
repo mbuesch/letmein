@@ -15,12 +15,13 @@ categories = { workspace = true }
 keywords = { workspace = true }
 
 [features]
-default = [ "cli" ]
+default = [ "cli", "seccomp" ]
 cli = [ "dep:clap" ]
+seccomp = [ "dep:letmein-seccomp" ]
 
 [[bin]]
 name = "letmein"
-required-features = [ "cli" ]
+required-features = [ "cli", "seccomp" ]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -32,7 +33,7 @@ libc = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "net", "macros", "time", ] }
 
 [target.'cfg(any(target_os="linux", target_os="android"))'.dependencies]
-letmein-seccomp = { workspace = true }
+letmein-seccomp = { workspace = true, optional = true }
 
 [lints]
 workspace = true

@@ -9,10 +9,10 @@
 use anyhow as ah;
 use letmein_conf::Seccomp;
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(all(any(target_os = "linux", target_os = "android"), feature = "seccomp"))]
 use letmein_seccomp::{Action, Allow, Filter, seccomp_supported};
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(all(any(target_os = "linux", target_os = "android"), feature = "seccomp"))]
 const ALLOW_LIST: [Allow; 14] = [
     Allow::Mmap,
     Allow::Mprotect,
@@ -34,7 +34,7 @@ const ALLOW_LIST: [Allow; 14] = [
     Allow::Uname,
 ];
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(all(any(target_os = "linux", target_os = "android"), feature = "seccomp"))]
 fn do_install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
     use anyhow::Context as _;
 
@@ -67,7 +67,7 @@ fn do_install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
 /// Install the `seccomp` rules, if requested.
 #[allow(unused_variables)]
 pub fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(all(any(target_os = "linux", target_os = "android"), feature = "seccomp"))]
     do_install_seccomp_rules(seccomp)?;
 
     Ok(())
