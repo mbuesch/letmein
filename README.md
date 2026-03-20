@@ -1,5 +1,7 @@
 # letmein - Authenticated port/firewall knocking
 
+![img](assets/letmein-logo-64.png)
+
 Letmein is a simple port knocker with a simple and secure authentication mechanism.
 It can be used to harden against pre-authentication attacks on services like SSH, VPN, IMAP and many more.
 

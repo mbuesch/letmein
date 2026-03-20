@@ -1,1 +1,6 @@
 /target
+/sign-release-android.sh
+*.aab
+*.apk
+*.idsig
+*.jks

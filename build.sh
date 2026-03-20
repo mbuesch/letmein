@@ -48,27 +48,29 @@ check_dynlibs()
 cd "$basedir" || die "cd basedir failed."
 export LETMEIN_CONF_PREFIX="/opt/letmein"
 
+packages_args="-p letmein -p letmeind -p letmeinfwd"
+packages_release_paths="target/release/letmein target/release/letmeind target/release/letmeinfwd"
+
 # Debug build and test
 if [ "$release" = "debug" -o "$release" = "both" ]; then
-    cargo build || die "Cargo build (debug) failed."
-    cargo test || die "Cargo test failed."
+    cargo build $packages_args || die "Cargo build (debug) failed."
+    cargo test $packages_args || die "Cargo test failed."
 fi
 
 # Release build
 if [ "$release" = "release" -o "$release" = "both" ]; then
     if which cargo-auditable >/dev/null 2>&1; then
-        cargo auditable build --release || die "Cargo build (release) failed."
-        cargo audit --deny warnings bin \
-            target/release/letmein \
-            target/release/letmeind \
-            target/release/letmeinfwd \
+        cargo auditable build --release $packages_args \
+            || die "Cargo build (release) failed."
+        cargo audit --deny warnings bin $packages_release_paths \
             || die "Cargo audit failed."
     else
-        cargo build --release || die "Cargo build (release) failed."
+        cargo build --release $packages_args \
+            || die "Cargo build (release) failed."
     fi
-    check_dynlibs target/release/letmein
-    check_dynlibs target/release/letmeind
-    check_dynlibs target/release/letmeinfwd
+    for p in $packages_release_paths; do
+        check_dynlibs "$p"
+    done
 fi
 
 # vim: ts=4 sw=4 expandtab

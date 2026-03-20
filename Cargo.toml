@@ -2,12 +2,13 @@
 
 [workspace]
 members = [
-    "letmein",
     "letmein-conf",
     "letmein-fwproto",
+    "letmein-gui",
     "letmein-proto",
     "letmein-seccomp",
     "letmein-systemd",
+    "letmein",
     "letmeind",
     "letmeinfwd",
     "tests/stubs/nft",
@@ -30,6 +31,7 @@ keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
 anyhow = "1"
 clap = { version = "4", default-features = false, features = [ "std", "help", "usage", "error-context", "derive" ] }
 ctutils = "0.4"
+dioxus = "0.7"
 getrandom = "0.4"
 hickory-resolver = "0.25"
 hmac = "0.13"
@@ -41,6 +43,7 @@ seccompiler = "0.5"
 sha3 = "0.11"
 tokio = "1"
 
+letmein = { version = "12", path = "./letmein", default-features = false }
 letmein-conf = { version = "12", path = "./letmein-conf" }
 letmein-fwproto = { version = "12", path = "./letmein-fwproto" }
 letmein-proto = { version = "12", path = "./letmein-proto" }
