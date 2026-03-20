@@ -10,7 +10,8 @@ use crate::ConfigChecksum;
 use anyhow::{self as ah, Context as _, format_err as err};
 use std::{
     collections::{HashMap, hash_map},
-    io::Read as _,
+    fmt,
+    io::{Read as _, Write as _},
     path::Path,
 };
 
@@ -78,6 +79,23 @@ impl Ini {
         file.read_to_end(&mut buf)
             .context("Read configuration file")?;
         self.parse_bytes(&buf)
+    }
+
+    /// Write the serialized INI state to a file.
+    ///
+    /// The checksum is updated to reflect the written content.
+    pub fn write_file(&mut self, path: &Path) -> ah::Result<()> {
+        let content = self.to_string();
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+            .context("Open configuration file for writing")?;
+        file.write_all(content.as_bytes())
+            .context("Write configuration file")?;
+        self.checksum = ConfigChecksum::calculate(content.as_bytes());
+        Ok(())
     }
 
     /// Read the `.ini`-style formatted byte stream into an existing parser.
@@ -196,10 +214,39 @@ impl Ini {
         self.sections.get(section).map(|s| s.iter())
     }
 
+    /// Set the value of an option in the given section.
+    ///
+    /// Calling this method invalidates the checksum.
+    pub fn set(&mut self, section: &str, option: &str, value: &str) {
+        self.checksum = Default::default();
+        self.sections
+            .entry(section.to_string())
+            .or_insert_with(IniSection::new)
+            .options_mut()
+            .insert(option.to_string(), value.to_string());
+    }
+
     /// Get the content checksum.
     #[must_use]
     pub fn checksum(&self) -> &ConfigChecksum {
         &self.checksum
+    }
+}
+
+impl fmt::Display for Ini {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut sections: Vec<&String> = self.sections.keys().collect();
+        sections.sort();
+        for section in sections {
+            writeln!(f, "[{section}]")?;
+            let sect = &self.sections[section];
+            let mut options: Vec<(&String, &String)> = sect.iter().collect();
+            options.sort_by_key(|(k, _)| k.as_str());
+            for (name, value) in options {
+                writeln!(f, "{name}={value}")?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -306,6 +353,80 @@ opt=val
 
         let mut ini = Ini::new();
         ini.parse_str(text).unwrap();
+    }
+
+    #[test]
+    fn test_set() {
+        let mut ini = Ini::new();
+        ini.set("S", "foo", "bar");
+        ini.set("S", "baz", "42");
+        assert_eq!(ini.get("S", "foo"), Some("bar"));
+        assert_eq!(ini.get("S", "baz"), Some("42"));
+        assert_eq!(ini.get("S", "missing"), None);
+        assert_eq!(ini.get("NOPE", "foo"), None);
+    }
+
+    #[test]
+    fn test_set_overwrite() {
+        let mut ini = Ini::new();
+        ini.set("S", "key", "first");
+        ini.set("S", "key", "second");
+        assert_eq!(ini.get("S", "key"), Some("second"));
+    }
+
+    #[test]
+    fn test_set_invalidates_checksum() {
+        let mut ini = Ini::new();
+        ini.parse_str("[S]\nopt=val\n").unwrap();
+        let original = ini.checksum().clone();
+        ini.set("S", "opt", "changed");
+        assert_ne!(ini.checksum(), &original);
+        assert_eq!(ini.checksum(), &ConfigChecksum::default());
+    }
+
+    #[test]
+    fn test_serialize() {
+        let mut ini = Ini::new();
+        ini.set("B", "z", "last");
+        ini.set("B", "a", "first");
+        ini.set("A", "x", "1");
+        let s = ini.to_string();
+        // Sections and options are sorted
+        assert_eq!(s, "[A]\nx=1\n[B]\na=first\nz=last\n");
+    }
+
+    #[test]
+    fn test_serialize_roundtrip() {
+        let mut ini = Ini::new();
+        ini.set("SEC", "key", " value with space");
+        ini.set("SEC", "num", "99");
+        let serialized = ini.to_string();
+
+        let mut ini2 = Ini::new();
+        ini2.parse_str(&serialized).unwrap();
+        assert_eq!(ini2.get("SEC", "key"), Some(" value with space"));
+        assert_eq!(ini2.get("SEC", "num"), Some("99"));
+    }
+
+    #[test]
+    fn test_write_file() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("letmein_ini_test_write.conf");
+        let mut ini = Ini::new();
+        ini.set("S", "opt", "hello");
+        ini.write_file(&path).unwrap();
+
+        // Checksum should now be set (non-default).
+        let written_checksum = ini.checksum().clone();
+        assert_ne!(&written_checksum, &ConfigChecksum::default());
+
+        // Re-reading the file should yield the same checksum and values.
+        let mut ini2 = Ini::new();
+        ini2.read_file(&path).unwrap();
+        assert_eq!(ini2.checksum(), &written_checksum);
+        assert_eq!(ini2.get("S", "opt"), Some("hello"));
+
+        let _ = std::fs::remove_file(&path);
     }
 }
 
