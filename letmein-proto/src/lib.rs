@@ -18,7 +18,7 @@
 mod socket;
 
 use anyhow::{self as ah, format_err as err};
-use hmac::{Hmac, Mac as _};
+use hmac::{Hmac, KeyInit as _, Mac as _};
 use sha3::Sha3_256;
 use subtle::ConstantTimeEq as _;
 
