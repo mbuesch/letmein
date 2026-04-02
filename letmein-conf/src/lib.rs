@@ -51,6 +51,14 @@ const DEFAULT_NFT_TIMEOUT: Duration = Duration::from_millis(600_000);
 
 const MAX_CHAIN_LEN: usize = 64;
 
+fn is_valid_chain_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_CHAIN_LEN
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+}
+
 /// Configuration content checksum.
 #[derive(Clone, Debug, Default, Eq)]
 pub struct ConfigChecksum([u8; ConfigChecksum::SIZE]);
@@ -642,21 +650,21 @@ fn extract_resource_jump(
 
     let users = extract_users(id, &users)?;
 
-    if input.as_ref().map_or(0, String::len) > MAX_CHAIN_LEN {
+    if !input.as_ref().is_none_or(|n| is_valid_chain_name(n)) {
         return Err(err!(
-            "[RESOURCE] '{id}': 'input' chain name is too long. \
+            "[RESOURCE] '{id}': 'input' chain name contains invalid characters or is too long. \
             Maximum length is {MAX_CHAIN_LEN} bytes."
         ));
     }
-    if forward.as_ref().map_or(0, String::len) > MAX_CHAIN_LEN {
+    if !forward.as_ref().is_none_or(|n| is_valid_chain_name(n)) {
         return Err(err!(
-            "[RESOURCE] '{id}': 'forward' chain name is too long. \
+            "[RESOURCE] '{id}': 'forward' chain name contains invalid characters or is too long. \
             Maximum length is {MAX_CHAIN_LEN} bytes."
         ));
     }
-    if output.as_ref().map_or(0, String::len) > MAX_CHAIN_LEN {
+    if !output.as_ref().is_none_or(|n| is_valid_chain_name(n)) {
         return Err(err!(
-            "[RESOURCE] '{id}': 'output' chain name is too long. \
+            "[RESOURCE] '{id}': 'output' chain name contains invalid characters or is too long. \
             Maximum length is {MAX_CHAIN_LEN} bytes."
         ));
     }
@@ -760,17 +768,14 @@ fn get_nft_table(ini: &Ini) -> ah::Result<String> {
 fn get_nft_chain(ini: &Ini, field: &str) -> ah::Result<String> {
     if let Some(chain) = ini.get("NFTABLES", field) {
         let chain = chain.trim().to_string();
-        if chain.len() > MAX_CHAIN_LEN {
-            Err(err!(
-                "[NFTABLES] {} is {} bytes long. \
-                Which exceeds the maximum of {} bytes. \
-                Please choose a smaller chain name.",
-                field,
-                chain.len(),
-                MAX_CHAIN_LEN
-            ))
-        } else {
+        if is_valid_chain_name(&chain) {
             Ok(chain)
+        } else {
+            Err(err!(
+                "[NFTABLES] {field} contains invalid characters or is too long ({} bytes). \
+                The maximum length is {MAX_CHAIN_LEN} bytes.",
+                chain.len(),
+            ))
         }
     } else {
         Ok(String::new())
