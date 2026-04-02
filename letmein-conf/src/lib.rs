@@ -550,6 +550,7 @@ fn extract_resource_port(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn extract_resource_jump(
     id: ResourceId,
     resources: &mut HashMap<ResourceId, Resource>,
@@ -640,6 +641,25 @@ fn extract_resource_jump(
     }
 
     let users = extract_users(id, &users)?;
+
+    if input.as_ref().map_or(0, String::len) > MAX_CHAIN_LEN {
+        return Err(err!(
+            "[RESOURCE] '{id}': 'input' chain name is too long. \
+            Maximum length is {MAX_CHAIN_LEN} bytes."
+        ));
+    }
+    if forward.as_ref().map_or(0, String::len) > MAX_CHAIN_LEN {
+        return Err(err!(
+            "[RESOURCE] '{id}': 'forward' chain name is too long. \
+            Maximum length is {MAX_CHAIN_LEN} bytes."
+        ));
+    }
+    if output.as_ref().map_or(0, String::len) > MAX_CHAIN_LEN {
+        return Err(err!(
+            "[RESOURCE] '{id}': 'output' chain name is too long. \
+            Maximum length is {MAX_CHAIN_LEN} bytes."
+        ));
+    }
 
     resources.insert(
         id,
