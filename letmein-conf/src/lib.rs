@@ -23,6 +23,7 @@ use crate::{
     parse_items::{Map, MapItem},
 };
 use anyhow::{self as ah, Context as _, format_err as err};
+use ctutils::CtEq as _;
 use letmein_proto::{Key, PORT, ResourceId, UserId};
 use sha3::{Digest as _, Sha3_256};
 use std::{
@@ -30,7 +31,6 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use subtle::ConstantTimeEq as _;
 
 pub use crate::ini::{Ini, IniSectionIter};
 

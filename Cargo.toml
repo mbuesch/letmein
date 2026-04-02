@@ -29,6 +29,7 @@ keywords = [ "port-knocking", "port", "knock", "firewall", "nftables" ]
 [workspace.dependencies]
 anyhow = "1"
 clap = { version = "4", default-features = false, features = [ "std", "help", "usage", "error-context", "derive" ] }
+ctutils = "0.4"
 getrandom = "0.4"
 hickory-resolver = "0.25"
 hmac = "0.13"
@@ -38,7 +39,6 @@ nix = { version = "0.31", default-features = false }
 sd-notify = "0.5"
 seccompiler = "0.5"
 sha3 = "0.11"
-subtle = "2"
 tokio = "1"
 
 letmein-conf = { version = "12", path = "./letmein-conf" }

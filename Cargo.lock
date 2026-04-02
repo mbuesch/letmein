@@ -691,9 +691,9 @@ name = "letmein-conf"
 version = "12.1.1"
 dependencies = [
  "anyhow",
+ "ctutils",
  "letmein-proto",
  "sha3",
- "subtle",
 ]
 
 [[package]]
@@ -711,10 +711,10 @@ name = "letmein-proto"
 version = "12.1.1"
 dependencies = [
  "anyhow",
+ "ctutils",
  "getrandom 0.4.2",
  "hmac",
  "sha3",
- "subtle",
  "tokio",
 ]
 

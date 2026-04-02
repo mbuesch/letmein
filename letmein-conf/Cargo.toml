@@ -16,9 +16,9 @@ keywords = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+ctutils = { workspace = true }
 letmein-proto = { workspace = true }
 sha3 = { workspace = true }
-subtle = { workspace = true }
 
 [lints]
 workspace = true

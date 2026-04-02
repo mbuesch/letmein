@@ -18,9 +18,9 @@
 mod socket;
 
 use anyhow::{self as ah, format_err as err};
+use ctutils::CtEq as _;
 use hmac::{Hmac, KeyInit as _, Mac as _};
 use sha3::Sha3_256;
-use subtle::ConstantTimeEq as _;
 
 pub use crate::socket::{NetSocket, UdpDispatcher};
 

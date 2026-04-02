@@ -16,10 +16,10 @@ keywords = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+ctutils = { workspace = true }
 getrandom = { workspace = true }
 hmac = { workspace = true }
 sha3 = { workspace = true }
-subtle = { workspace = true }
 tokio = { workspace = true, features = [ "net", "sync", "macros", "time" ] }
 
 [lints]
