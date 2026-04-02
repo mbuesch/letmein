@@ -160,7 +160,12 @@ impl Ini {
                     if sections.contains_key(sname) {
                         return Err(err!("Duplicate section name: '{line}'"));
                     }
-                    sections.insert(sname.to_string(), IniSection::new());
+                    if sections
+                        .insert(sname.to_string(), IniSection::new())
+                        .is_some()
+                    {
+                        return Err(err!("Duplicate section name: '{line}'"));
+                    }
                     in_section = Some(sname.to_string());
                     continue;
                 }
@@ -175,11 +180,15 @@ impl Ini {
                         // We have an option
                         let opt_name = line[..=(idx - chlen)].trim_end().to_string();
                         let opt_value = line[idx + chlen..].to_string();
-                        sections
+                        if sections
                             .get_mut(section)
                             .unwrap()
                             .options_mut()
-                            .insert(opt_name.clone(), opt_value);
+                            .insert(opt_name.clone(), opt_value)
+                            .is_some()
+                        {
+                            return Err(err!("Duplicate option name: '{line}'"));
+                        }
                         cur_opt_name = Some(opt_name);
                     } else {
                         return Err(err!("Option has no name before equal sign '=': '{line}'"));
