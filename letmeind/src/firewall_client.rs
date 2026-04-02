@@ -10,8 +10,11 @@ use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::ConfigChecksum;
 use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
 use letmein_proto::{ResourceId, UserId};
-use std::{net::IpAddr, path::Path};
-use tokio::net::UnixStream;
+use std::{net::IpAddr, path::Path, time::Duration};
+use tokio::{net::UnixStream, time::timeout};
+
+/// IPC timeout for communication with letmeinfwd.
+const FWD_IPC_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct FirewallClient {
     stream: UnixStream,
@@ -29,8 +32,9 @@ impl FirewallClient {
 
     /// Receive an Ack message.
     async fn recv_ack(&mut self) -> ah::Result<()> {
-        let Some(msg_reply) = FirewallMessage::recv(&mut self.stream)
+        let Some(msg_reply) = timeout(FWD_IPC_TIMEOUT, FirewallMessage::recv(&mut self.stream))
             .await
+            .map_err(|_| err!("IPC communication with letmeinfwd timed out"))?
             .context("Receive ack-reply")?
         else {
             return Err(err!("Connection terminated"));
@@ -54,10 +58,13 @@ impl FirewallClient {
         conf_cs: &ConfigChecksum,
     ) -> ah::Result<()> {
         // Send an install-rules request to the firewall daemon.
-        FirewallMessage::new_install(user, resource, addr, conf_cs)
-            .send(&mut self.stream)
-            .await
-            .context("Send install-rules message")?;
+        timeout(
+            FWD_IPC_TIMEOUT,
+            FirewallMessage::new_install(user, resource, addr, conf_cs).send(&mut self.stream),
+        )
+        .await
+        .map_err(|_| err!("IPC communication with letmeinfwd timed out"))?
+        .context("Send install-rules message")?;
 
         // Receive the acknowledge reply.
         self.recv_ack().await
@@ -72,10 +79,13 @@ impl FirewallClient {
         conf_cs: &ConfigChecksum,
     ) -> ah::Result<()> {
         // Send a revoke-rules request to the firewall daemon.
-        FirewallMessage::new_revoke(user, resource, addr, conf_cs)
-            .send(&mut self.stream)
-            .await
-            .context("Send revoke-rules message")?;
+        timeout(
+            FWD_IPC_TIMEOUT,
+            FirewallMessage::new_revoke(user, resource, addr, conf_cs).send(&mut self.stream),
+        )
+        .await
+        .map_err(|_| err!("IPC communication with letmeinfwd timed out"))?
+        .context("Send revoke-rules message")?;
 
         // Receive the acknowledge reply.
         self.recv_ack().await
