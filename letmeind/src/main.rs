@@ -12,11 +12,13 @@
 std::compile_error!("letmeind server does not support non-Linux platforms.");
 
 mod firewall_client;
+mod ip_limiter;
 mod protocol;
 mod seccomp;
 mod server;
 
 use crate::{
+    ip_limiter::IpLimiter,
     protocol::Protocol,
     seccomp::install_seccomp_rules,
     server::{ConnectionOps as _, Server},
@@ -89,8 +91,12 @@ struct Opts {
     rundir: PathBuf,
 
     /// Maximum number of simultaneous connections.
-    #[arg(short, long, default_value = "8")]
+    #[arg(short, long, default_value = "64")]
     num_connections: usize,
+
+    /// Maximum number of simultaneous connections from the same IP address.
+    #[arg(short = 'N', long, default_value = "8")]
+    num_ip_connections: usize,
 
     /// Force-disable use of systemd socket.
     ///
@@ -159,17 +165,38 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
 
         async move {
             let conn_semaphore = Arc::new(Semaphore::new(opts.num_connections));
+            let ip_limiter = Arc::new(IpLimiter::new(
+                opts.num_ip_connections.min(opts.num_connections),
+            ));
+
             loop {
-                let conf = Arc::clone(&conf);
-                let opts = Arc::clone(&opts);
-                let conn_semaphore = Arc::clone(&conn_semaphore);
                 match srv.accept().await {
                     Ok(conn) => {
-                        // Socket connection handler.
+                        let conn_semaphore = Arc::clone(&conn_semaphore);
                         let conn = Arc::new(conn);
-                        if let Ok(permit) = conn_semaphore.acquire_owned().await {
-                            let conn = Arc::clone(&conn);
-                            task::spawn(async move {
+                        let peer_ip = conn.peer_addr().ip();
+
+                        // Limit the number of simultaneous connections from the same IP address.
+                        if !ip_limiter.request_permit_ok(peer_ip) {
+                            eprintln!(
+                                "Client '{peer_ip}': ERROR: \
+                                Too many simultaneous connections. Dropping connection."
+                            );
+                            continue;
+                        }
+
+                        // Acquire a global connection slot.
+                        let permit = conn_semaphore
+                            .acquire_owned()
+                            .await
+                            .expect("Connection semaphore closed");
+
+                        task::spawn({
+                            let conf = Arc::clone(&conf);
+                            let opts = Arc::clone(&opts);
+                            let ip_limiter = Arc::clone(&ip_limiter);
+
+                            async move {
                                 let mut proto = Protocol::new(&*conn, &conf, &opts.rundir);
                                 if let Err(e) = proto.run().await {
                                     eprintln!(
@@ -181,10 +208,9 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                                 }
                                 conn.close().await;
                                 drop(permit);
-                            });
-                        } else {
-                            conn.close().await;
-                        }
+                                ip_limiter.return_permit(peer_ip);
+                            }
+                        });
                     }
                     Err(e) => {
                         let _ = exit_tx.send(Err(e)).await;
