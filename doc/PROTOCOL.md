@@ -77,15 +77,28 @@ Successful knocking:
 | RESPONSE -> |              |                      |
 |             | <- COMEIN    | Firewall port opened |
 
-A communication flow always starts with a `KNOCK` message from the client to the server.
+Successful revoking:
 
-A `CHALLENGE` from the server can only follow a `KNOCK` from the client.
+| Client      | Server       | Server Firewall      |
+| ----------: | :----------- | -------------------- |
+| REVOKE ->   |              |                      |
+|             | <- CHALLENGE |                      |
+| RESPONSE -> |              |                      |
+|             | <- COMEIN    | Firewall port closed |
+
+
+A communication flow always starts with a `KNOCK` or `REVOKE` message from the client to the server.
+
+A `CHALLENGE` from the server can only follow a `KNOCK` or `REVOKE` from the client.
 
 A `RESPONSE` from the client can only follow a `CHALLENGE` from the server.
 
 A `COMEIN` from the server can only follow a `RESPONSE` from the client.
 
-A successful knocking always ends with a `COMEIN` message from the server to the client.
+A successful knocking/revoking always ends with a `COMEIN` message from the server to the client.
+
+Note that the final success message is also `COMEIN` for `REVOKE` communication flows, where success technically means the possibility to come-in has been revoked.
+Think of `COMEIN` as an OK-ish response to the initial request.
 
 If something goes wrong the server can send the `GOAWAY` message to the client at any time.
 Whether and when that actually happens depends on the
@@ -94,7 +107,7 @@ Whether and when that actually happens depends on the
 All other message flow combinations are invalid and shall result in an immediate stop of the communication and authentication.
 Invalid combinations may or may not trigger a `GOAWAY`, depending on the error policy configuration.
 
-The `USER` and `RESOURCE` values in all messages shall always be equal to what the client requested in the first `KNOCK` message.
+The `USER` and `RESOURCE` values in all messages shall always be equal to what the client requested in the first `KNOCK` or `REVOKE` message.
 
 # Cryptography
 
@@ -217,7 +230,7 @@ The `||`-operator in the algorithm description above is a concatenation of the s
 Validation always only happens on the server side.
 
 Generate the [EXPECTED_AUTH token](PROTOCOL.md#generate-auth-token) for the received message using the expected `CHALLENGE_TOKEN`.
-For a `KNOCK` message the expected `CHALLENGE_TOKEN` is 32 bytes of zeros.
+For a `KNOCK` or `REVOKE` message the expected `CHALLENGE_TOKEN` is 32 bytes of zeros.
 For a `RESPONSE` message the expected `CHALLENGE_TOKEN` is the `AUTH` field of the `CHALLENGE` message that the server sent to the client.
 
 Compare the `EXPECTED_AUTH` token to the actual `AUTH` token of the `RESPONSE` message using a Constant Time Comparison Function.
