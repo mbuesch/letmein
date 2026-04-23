@@ -42,7 +42,7 @@ use tokio::{
     task, time,
 };
 
-const FW_MAINTAIN_PERIOD: Duration = Duration::from_millis(5000);
+const FW_MAINTAIN_PERIOD: Duration = Duration::from_secs(5);
 
 static LETMEIND_UID: AtomicU32 = AtomicU32::new(u32::MAX);
 static LETMEIND_GID: AtomicU32 = AtomicU32::new(u32::MAX);

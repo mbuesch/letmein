@@ -46,8 +46,8 @@ const CLIENT_CONF_PATH: &str = "etc/letmein.conf";
 #[cfg(target_os = "windows")]
 const CLIENT_CONF_PATH: &str = "letmein.conf";
 
-const DEFAULT_CONTROL_TIMEOUT: Duration = Duration::from_millis(5_000);
-const DEFAULT_NFT_TIMEOUT: Duration = Duration::from_millis(600_000);
+const DEFAULT_CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_NFT_TIMEOUT: Duration = Duration::from_secs(600);
 
 const MAX_CHAIN_LEN: usize = 64;
 

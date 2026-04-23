@@ -189,13 +189,13 @@ impl ResConf {
 /// Check if a string can be parsed into an IPv4 address.
 #[must_use]
 pub fn is_ipv4_addr(host: &str) -> bool {
-    host.parse::<IpAddr>().map(|a| a.is_ipv4()).unwrap_or(false)
+    host.parse::<IpAddr>().is_ok_and(|a| a.is_ipv4())
 }
 
 /// Check if a string can be parsed into an IPv6 address.
 #[must_use]
 pub fn is_ipv6_addr(host: &str) -> bool {
-    host.parse::<IpAddr>().map(|a| a.is_ipv6()).unwrap_or(false)
+    host.parse::<IpAddr>().is_ok_and(|a| a.is_ipv6())
 }
 
 /// Determine the DNS record type from the address resolution mode.
