@@ -31,7 +31,7 @@ anyhow = "1"
 clap = { version = "4", default-features = false, features = [ "std", "help", "usage", "error-context", "derive" ] }
 ctutils = "0.4"
 getrandom = "0.4"
-hickory-resolver = "0.25"
+hickory-resolver = "0.26"
 hmac = "0.13"
 libc = "0.2"
 nftables = "0.6"

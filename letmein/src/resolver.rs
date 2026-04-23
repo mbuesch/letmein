@@ -9,10 +9,10 @@
 use anyhow::{self as ah, format_err as err};
 use hickory_resolver::{
     TokioResolver,
-    config::ResolverConfig,
+    config::{CLOUDFLARE, GOOGLE, QUAD9, ResolverConfig},
     lookup::Lookup,
-    name_server::TokioConnectionProvider,
-    proto::rr::{record_data::RData, record_type::RecordType},
+    net::runtime::TokioRuntimeProvider,
+    proto::rr::{RData, RecordType},
 };
 use std::net::IpAddr;
 
@@ -207,9 +207,9 @@ fn get_record_type(mode: ResMode) -> (RecordType, &'static str, &'static str) {
 }
 
 /// Return the first address that matches the requested address resolution mode.
-fn get_first_result(lookup: Lookup, host: &str, mode: ResMode) -> ah::Result<IpAddr> {
-    for addr in lookup {
-        match (mode, addr) {
+fn get_first_result(lookup: &Lookup, host: &str, mode: ResMode) -> ah::Result<IpAddr> {
+    for answer in lookup.answers() {
+        match (mode, &answer.data) {
             (ResMode::Ipv6, RData::AAAA(addr)) => return Ok(addr.0.into()),
             (ResMode::Ipv4, RData::A(addr)) => return Ok(addr.0.into()),
             _ => (),
@@ -246,22 +246,21 @@ pub async fn resolve(host: &str, cfg: &ResConf) -> ah::Result<IpAddr> {
 
     macro_rules! lookup_and_return {
         ($conf:expr) => {
-            if let Ok(l) =
-                TokioResolver::builder_with_config($conf, TokioConnectionProvider::default())
-                    .build()
-                    .lookup(host, record_type)
-                    .await
+            if let Ok(resolver) =
+                TokioResolver::builder_with_config($conf, TokioRuntimeProvider::default()).build()
+                && let Ok(lookup) = resolver.lookup(host, record_type).await
             {
-                return get_first_result(l, host, cfg.mode);
+                return get_first_result(&lookup, host, cfg.mode);
             }
         };
     }
 
     if cfg.srv.system {
         if let Ok(builder) = TokioResolver::builder_tokio()
-            && let Ok(lookup) = builder.build().lookup(host, record_type).await
+            && let Ok(resolver) = builder.build()
+            && let Ok(lookup) = resolver.lookup(host, record_type).await
         {
-            return get_first_result(lookup, host, cfg.mode);
+            return get_first_result(&lookup, host, cfg.mode);
         }
 
         #[cfg(not(target_os = "android"))]
@@ -286,37 +285,37 @@ pub async fn resolve(host: &str, cfg: &ResConf) -> ah::Result<IpAddr> {
 
     if cfg.crypt.tls {
         if cfg.srv.quad9 {
-            lookup_and_return!(ResolverConfig::quad9_tls());
+            lookup_and_return!(ResolverConfig::tls(&QUAD9));
         }
         if cfg.srv.google {
-            lookup_and_return!(ResolverConfig::google_tls());
+            lookup_and_return!(ResolverConfig::tls(&GOOGLE));
         }
         if cfg.srv.cloudflare {
-            lookup_and_return!(ResolverConfig::cloudflare_tls());
+            lookup_and_return!(ResolverConfig::tls(&CLOUDFLARE));
         }
     }
 
     if cfg.crypt.https {
         if cfg.srv.quad9 {
-            lookup_and_return!(ResolverConfig::quad9_https());
+            lookup_and_return!(ResolverConfig::https(&QUAD9));
         }
         if cfg.srv.google {
-            lookup_and_return!(ResolverConfig::google_https());
+            lookup_and_return!(ResolverConfig::https(&GOOGLE));
         }
         if cfg.srv.cloudflare {
-            lookup_and_return!(ResolverConfig::cloudflare_https());
+            lookup_and_return!(ResolverConfig::https(&CLOUDFLARE));
         }
     }
 
     if cfg.crypt.unencrypted {
         if cfg.srv.quad9 {
-            lookup_and_return!(ResolverConfig::quad9());
+            lookup_and_return!(ResolverConfig::udp_and_tcp(&QUAD9));
         }
         if cfg.srv.google {
-            lookup_and_return!(ResolverConfig::google());
+            lookup_and_return!(ResolverConfig::udp_and_tcp(&GOOGLE));
         }
         if cfg.srv.cloudflare {
-            lookup_and_return!(ResolverConfig::cloudflare());
+            lookup_and_return!(ResolverConfig::udp_and_tcp(&CLOUDFLARE));
         }
     }
 
