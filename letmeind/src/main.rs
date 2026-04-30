@@ -178,6 +178,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
 
                         // Limit the number of simultaneous connections from the same IP address.
                         if !ip_limiter.request_permit_ok(peer_ip) {
+                            conn.close().await;
                             eprintln!(
                                 "Client '{peer_ip}': ERROR: \
                                 Too many simultaneous connections. Dropping connection."
