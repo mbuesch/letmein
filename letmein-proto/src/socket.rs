@@ -103,23 +103,23 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 // and if not, then push the received datagram to the queue.
                 assert!(conn.rx_queue.len() <= Q_SIZE);
                 if conn.rx_queue.len() == Q_SIZE {
-                    self.conn.remove(&peer_addr); // Close connection.
+                    self.disconnect(peer_addr); // Close connection.
                     return Err(err!("UDP socket read: RX queue overflow (max={Q_SIZE})."));
                 }
                 conn.rx_queue.push_back(buf);
+                self.nr_queued_dgrams += 1;
                 let accepted = conn.accepted;
 
                 // Check if this was a new connection and
                 // we exceeded the maximum number of connections.
                 if self.conn.len() > self.max_nr_conn {
-                    self.conn.remove(&peer_addr); // Close connection.
+                    self.disconnect(peer_addr); // Close connection.
                     return Err(err!(
                         "UDP socket read: Too many connections (max={}).",
                         self.max_nr_conn
                     ));
                 }
 
-                self.nr_queued_dgrams += 1;
                 assert!(self.nr_queued_dgrams <= self.max_nr_conn * Q_SIZE);
 
                 if !accepted {
