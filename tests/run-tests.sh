@@ -29,14 +29,28 @@ build_project()
 {
     info "Building project..."
     cd "$basedir" || die "cd failed"
-    ./build.sh || die "Build failed"
+    if [ "$resolver" = "libc" ]; then
+        local opts="--libc-resolver"
+    elif [ "$resolver" = "hickory" ]; then
+        local opts=
+    else
+        die "Invalid resolver: $resolver"
+    fi
+    ./build.sh $opts || die "Build failed"
 }
 
 cargo_clippy()
 {
     export LETMEIN_CONF_PREFIX="/opt/letmein"
-    cargo clippy -- --deny warnings || die "cargo clippy failed"
-    cargo clippy --tests -- --deny warnings || die "cargo clippy --tests failed"
+    if [ "$resolver" = "libc" ]; then
+        local opts="--no-default-features --features libc-resolver"
+    elif [ "$resolver" = "hickory" ]; then
+        local opts=
+    else
+        die "Invalid resolver: $resolver"
+    fi
+    cargo clippy $opts -- --deny warnings || die "cargo clippy failed"
+    cargo clippy $opts --tests -- --deny warnings || die "cargo clippy --tests failed"
 }
 
 run_tests_genkey()
@@ -292,13 +306,24 @@ trap cleanup_and_exit INT TERM
 trap cleanup EXIT
 
 info "Temporary directory is: $tmpdir"
-build_project
-if [ "$no_clippy" -eq 0 ]; then
-    cargo_clippy
-fi
-run_tests_genkey
-run_tests_knock_revoke tcp
-run_tests_knock_revoke udp
+
+tests_main()
+{
+    info "With resolver: $resolver"
+    if [ "$no_clippy" -eq 0 ]; then
+        cargo_clippy
+    fi
+    build_project
+    run_tests_genkey
+    run_tests_knock_revoke tcp
+    run_tests_knock_revoke udp
+}
+
+resolver=libc
+tests_main
+resolver=hickory
+tests_main
+
 info "All tests Ok."
 
 # vim: ts=4 sw=4 expandtab

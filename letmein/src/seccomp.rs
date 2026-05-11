@@ -13,7 +13,7 @@ use letmein_conf::Seccomp;
 use letmein_seccomp::{Action, Allow, Filter, seccomp_supported};
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-const ALLOW_LIST: [Allow; 14] = [
+const ALLOW_LIST: [Allow; 15] = [
     Allow::Mmap,
     Allow::Mprotect,
     Allow::Open,
@@ -26,6 +26,14 @@ const ALLOW_LIST: [Allow; 14] = [
     Allow::Recv,
     Allow::Send,
     Allow::Listen,
+    Allow::Socket {
+        afs: Some(&[
+            libc::AF_INET as _,
+            libc::AF_INET6 as _,
+            libc::AF_UNIX as _,
+            libc::AF_NETLINK as _,
+        ]),
+    },
     Allow::TcpConnect,
     Allow::SetSockOpt {
         level_optname: Some((libc::IPPROTO_TCP as _, libc::TCP_NODELAY as _)),

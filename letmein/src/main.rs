@@ -24,6 +24,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::runtime;
 
 /// Parse `ResSrv` helper for command line argument parsing.
+#[cfg(feature = "hickory-resolver")]
 fn parse_dns(dns: &str) -> ah::Result<ResSrv> {
     let mut srv = ResSrv::default()
         .system(false)
@@ -43,6 +44,7 @@ fn parse_dns(dns: &str) -> ah::Result<ResSrv> {
 }
 
 /// Parse `ResCrypt` helper for command line argument parsing.
+#[cfg(feature = "hickory-resolver")]
 fn parse_dns_crypt(dns_crypt: &str) -> ah::Result<ResCrypt> {
     let mut crypt = ResCrypt::default()
         .tls(false)
@@ -85,6 +87,7 @@ struct Opts {
     /// - google: Try the Google DNS service.
     ///
     /// - cloudflare: Try the Cloudflare DNS service.
+    #[cfg(feature = "hickory-resolver")]
     #[arg(long, default_value = "system,quad9,google,cloudflare", value_parser = parse_dns)]
     dns: ResSrv,
 
@@ -100,6 +103,7 @@ struct Opts {
     ///
     /// - unencrypted: Use plain DNS lookup without encryption.
     ///   This will be tried last, if specified.
+    #[cfg(feature = "hickory-resolver")]
     #[arg(long, default_value = "tls,https,unencrypted", value_parser = parse_dns_crypt)]
     dns_crypt: ResCrypt,
 
@@ -123,6 +127,30 @@ impl Opts {
         } else {
             Config::get_default_path(ConfigVariant::Client)
         }
+    }
+
+    /// Get the DNS resolver configuration from command line or default.
+    #[cfg_attr(not(feature = "hickory-resolver"), allow(clippy::unused_self))]
+    pub fn get_dns(&self) -> ResSrv {
+        #[cfg(feature = "hickory-resolver")]
+        let dns = self.dns.clone();
+
+        #[cfg(not(feature = "hickory-resolver"))]
+        let dns = ResSrv::default();
+
+        dns
+    }
+
+    /// Get the DNS resolver transport encryption configuration from command line or default.
+    #[cfg_attr(not(feature = "hickory-resolver"), allow(clippy::unused_self))]
+    pub fn get_dns_crypt(&self) -> ResCrypt {
+        #[cfg(feature = "hickory-resolver")]
+        let dns_crypt = self.dns_crypt.clone();
+
+        #[cfg(not(feature = "hickory-resolver"))]
+        let dns_crypt = ResCrypt::default();
+
+        dns_crypt
     }
 }
 
@@ -293,7 +321,7 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
     install_seccomp_rules(opts.seccomp.unwrap_or(conf.seccomp()))?;
 
     // Run the user specified command.
-    if let Some(command) = opts.command {
+    if let Some(command) = &opts.command {
         match command {
             Command::Knock { knock } => {
                 run_knock(
@@ -302,8 +330,8 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
                     knock.get_server(),
                     knock.get_resource()?,
                     knock.user,
-                    &opts.dns,
-                    &opts.dns_crypt,
+                    &opts.get_dns(),
+                    &opts.get_dns_crypt(),
                 )
                 .await
             }
@@ -314,8 +342,8 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
                     revoke.get_server(),
                     revoke.get_resource()?,
                     revoke.user,
-                    &opts.dns,
-                    &opts.dns_crypt,
+                    &opts.get_dns(),
+                    &opts.get_dns_crypt(),
                 )
                 .await
             }
@@ -324,7 +352,7 @@ async fn async_main(opts: Opts) -> ah::Result<()> {
             } => {
                 let key = run_genkey(
                     &conf,
-                    user,
+                    *user,
                 )
                 .await?;
                 println!("{key}");

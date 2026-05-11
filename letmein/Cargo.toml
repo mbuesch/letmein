@@ -15,8 +15,10 @@ categories = { workspace = true }
 keywords = { workspace = true }
 
 [features]
-default = [ "cli" ]
+default = [ "cli", "hickory-resolver" ]
 cli = [ "dep:clap" ]
+hickory-resolver = [ "dep:hickory-resolver" ]
+libc-resolver = [ "dep:dns-lookup" ]
 
 [[bin]]
 name = "letmein"
@@ -25,7 +27,8 @@ required-features = [ "cli" ]
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true, optional = true }
-hickory-resolver = { workspace = true, features = [ "system-config", "tokio", "tls-ring", "https-ring", "quic-ring", "webpki-roots", "dnssec-ring" ] }
+dns-lookup = { workspace = true, optional = true }
+hickory-resolver = { workspace = true, optional = true, features = [ "system-config", "tokio", "tls-ring", "https-ring", "quic-ring", "webpki-roots", "dnssec-ring" ] }
 letmein-conf = { workspace = true }
 letmein-proto = { workspace = true }
 libc = { workspace = true }

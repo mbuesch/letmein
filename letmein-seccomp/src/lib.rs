@@ -88,13 +88,14 @@ pub fn seccomp_supported() -> bool {
 
 /// Abstract allow-list features that map to one or more syscalls each.
 #[derive(Clone, Copy, Debug)]
-pub enum Allow {
+pub enum Allow<'a> {
     Mmap,
     Mprotect,
     GetUidGid,
     ArchPrctl { op: Option<u32> },
     Dup,
     Pipe,
+    Socket { afs: Option<&'a [i32]> },
     Listen,
     UnixAccept,
     UnixConnect,
@@ -229,6 +230,16 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_pipe));
                     add_sys(&mut map, sys!(SYS_pipe2));
                 }
+                Allow::Socket { afs } => {
+                    if let Some(afs) = afs {
+                        for af in afs {
+                            add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == *af));
+                        }
+                    } else {
+                        add_sys(&mut map, sys!(SYS_socket));
+                    }
+                    add_sys(&mut map, sys!(SYS_getsockname));
+                }
                 Allow::Listen => {
                     add_sys(&mut map, sys!(SYS_bind));
                     add_sys(&mut map, sys!(SYS_listen));
@@ -236,44 +247,40 @@ impl Filter {
                 Allow::UnixAccept => {
                     add_sys(&mut map, sys!(SYS_accept4));
                     add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == libc::AF_UNIX));
+                    add_sys(&mut map, sys!(SYS_getsockname));
                     add_sys(&mut map, sys!(SYS_getsockopt));
                     add_sys(&mut map, sys!(SYS_getpeername));
                 }
                 Allow::UnixConnect => {
                     add_sys(&mut map, sys!(SYS_connect));
                     add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == libc::AF_UNIX));
+                    add_sys(&mut map, sys!(SYS_getsockname));
                     add_sys(&mut map, sys!(SYS_getsockopt));
                     add_sys(&mut map, sys!(SYS_getpeername));
                 }
                 Allow::TcpAccept => {
                     add_sys(&mut map, sys!(SYS_accept4));
-                    add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == libc::AF_INET));
-                    add_sys_args_match(
-                        &mut map,
-                        sys!(SYS_socket),
-                        args!([0](32) == libc::AF_INET6),
-                    );
+                    for af in [libc::AF_INET, libc::AF_INET6] {
+                        add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == af));
+                    }
+                    add_sys(&mut map, sys!(SYS_getsockname));
                     add_sys(&mut map, sys!(SYS_getsockopt));
                     add_sys(&mut map, sys!(SYS_getpeername));
                 }
                 Allow::TcpConnect => {
                     add_sys(&mut map, sys!(SYS_connect));
-                    add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == libc::AF_INET));
-                    add_sys_args_match(
-                        &mut map,
-                        sys!(SYS_socket),
-                        args!([0](32) == libc::AF_INET6),
-                    );
+                    for af in [libc::AF_INET, libc::AF_INET6] {
+                        add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == af));
+                    }
+                    add_sys(&mut map, sys!(SYS_getsockname));
                     add_sys(&mut map, sys!(SYS_getsockopt));
                     add_sys(&mut map, sys!(SYS_getpeername));
                 }
                 Allow::Netlink => {
                     add_sys(&mut map, sys!(SYS_connect));
-                    add_sys_args_match(
-                        &mut map,
-                        sys!(SYS_socket),
-                        args!([0](32) == libc::AF_NETLINK),
-                    );
+                    let af = libc::AF_NETLINK;
+                    add_sys_args_match(&mut map, sys!(SYS_socket), args!([0](32) == af));
+                    add_sys(&mut map, sys!(SYS_getsockname));
                     add_sys(&mut map, sys!(SYS_getsockopt));
                 }
                 Allow::SetSockOpt { level_optname } => {

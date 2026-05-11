@@ -7,6 +7,7 @@ basedir="$(realpath "$0" | xargs dirname)"
 . "$basedir/scripts/lib.sh"
 
 release="both"
+hickory_resolver=1
 while [ $# -ge 1 ]; do
     case "$1" in
         --debug|-d)
@@ -14,6 +15,12 @@ while [ $# -ge 1 ]; do
             ;;
         --release|-r)
             release="release"
+            ;;
+        --libc-resolver)
+            hickory_resolver=0
+            ;;
+        --hickory-resolver)
+            hickory_resolver=1
             ;;
         *)
             die "Invalid option: $1"
@@ -48,23 +55,29 @@ check_dynlibs()
 cd "$basedir" || die "cd basedir failed."
 export LETMEIN_CONF_PREFIX="/opt/letmein"
 
+if [ $hickory_resolver -eq 0 ]; then
+    FEATURES="--no-default-features --features libc-resolver,cli"
+else
+    FEATURES="--no-default-features --features hickory-resolver,cli"
+fi
+
 # Debug build and test
 if [ "$release" = "debug" -o "$release" = "both" ]; then
-    cargo build || die "Cargo build (debug) failed."
-    cargo test || die "Cargo test failed."
+    cargo build $FEATURES || die "Cargo build (debug) failed."
+    cargo test $FEATURES || die "Cargo test failed."
 fi
 
 # Release build
 if [ "$release" = "release" -o "$release" = "both" ]; then
     if which cargo-auditable >/dev/null 2>&1; then
-        cargo auditable build --release || die "Cargo build (release) failed."
+        cargo auditable build --release $FEATURES || die "Cargo build (release) failed."
         cargo audit --deny warnings bin \
             target/release/letmein \
             target/release/letmeind \
             target/release/letmeinfwd \
             || die "Cargo audit failed."
     else
-        cargo build --release || die "Cargo build (release) failed."
+        cargo build --release $FEATURES || die "Cargo build (release) failed."
     fi
     check_dynlibs target/release/letmein
     check_dynlibs target/release/letmeind
