@@ -130,6 +130,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn run(&mut self) -> ah::Result<()> {
         self.user_id = None;
         self.resource_id = None;
@@ -180,16 +181,25 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 .await;
         }
 
-        // Check if trying to knock/revoke the control port.
+        // Check if trying to knock/revoke port 0 or the control port.
         match resource {
             Resource::Port { port, .. } => {
+                // Port 0 is reserved by the operating system and not allowed.
+                if *port == 0 {
+                    return self
+                        .send_go_away(Err(err!(
+                            "Incorrect configuration: The resource {resource_id} \
+                            is a port resource with port 0. That is not allowed."
+                        )))
+                        .await;
+                }
                 // The control port is never allowed.
                 let control_port = self.conf.port().port;
                 if *port == control_port {
                     return self
                         .send_go_away(Err(err!(
                             "Incorrect configuration: The resource {resource_id} uses the \
-                         letmein control port {control_port}. That is not allowed."
+                            letmein control port {control_port}. That is not allowed."
                         )))
                         .await;
                 }

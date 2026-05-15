@@ -53,6 +53,25 @@ fn addr_check(addr: &IpAddr) -> bool {
     }
 }
 
+fn port_check(conf: &Config, port: LeasePort) -> ah::Result<()> {
+    // letmeind should never send us a request for invalid ports.
+    // But we check this here again, to be sure that letmeinfwd doesn't do something wrong.
+
+    // Port 0 is reserved by the operating system.
+    if port.port() == 0 {
+        return Err(err!("The knocked/revoked port {port} is 0."));
+    }
+
+    // Don't allow the user to manage the control port.
+    if port.port() == conf.port().port {
+        return Err(err!(
+            "The knocked/revoked port {port} is the letmein control port."
+        ));
+    }
+
+    Ok(())
+}
+
 pub struct FirewallConnection {
     stream: UnixStream,
 }
@@ -160,14 +179,9 @@ impl FirewallConnection {
                 Resource::Port { .. } => {
                     let port: LeasePort = resource.try_into().expect("Not a port resource");
 
-                    // Don't allow the user to manage the control port.
-                    if port.port() == conf.port().port {
-                        // Whoops, letmeind should never send us a request for the
-                        // control port. Did some other process write to the unix socket?
-                        let res = Err(err!("The knocked port {port} is the letmein control port."));
-                        return self.send_result(res).await;
+                    if let Err(e) = port_check(conf, port) {
+                        return self.send_result(Err(e)).await;
                     }
-
                     // Open the firewall.
                     let res = fw.open_port(conf, addr, port, timeout).await;
                     self.send_result(res).await
@@ -184,6 +198,9 @@ impl FirewallConnection {
                 Resource::Port { .. } => {
                     let lease_port = resource.try_into().expect("Not a port resource");
 
+                    if let Err(e) = port_check(conf, lease_port) {
+                        return self.send_result(Err(e)).await;
+                    }
                     // Close the port.
                     let res = fw.revoke_port(conf, addr, lease_port).await;
                     self.send_result(res).await

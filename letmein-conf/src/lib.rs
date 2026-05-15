@@ -528,6 +528,11 @@ fn extract_resource_port(
     let Some(port) = port else {
         return Err(err!("[RESOURCE] '{id}': No 'port' value present"));
     };
+    if port == 0 {
+        return Err(err!(
+            "[RESOURCE] '{id}': port 0 is reserved by the operating system"
+        ));
+    }
 
     let users = extract_users(id, &users)?;
 
