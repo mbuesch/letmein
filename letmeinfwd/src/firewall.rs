@@ -236,6 +236,11 @@ type PortLeaseId = (IpAddr, LeasePort);
 /// A map of port [Lease]s.
 type PortLeaseMap = HashMap<PortLeaseId, Lease>;
 
+/// Make a new `PortLeaseId`.
+fn port_lease_id(addr: IpAddr, port: LeasePort) -> PortLeaseId {
+    (addr, port)
+}
+
 /// Key in the jump lease map.
 ///
 /// - `0`: Address of the client that the jump uses as saddr condition
@@ -246,6 +251,11 @@ type JumpLeaseId = (Option<IpAddr>, FirewallChain, String);
 
 /// A map of jump [Lease]s.
 type JumpLeaseMap = HashMap<JumpLeaseId, Lease>;
+
+/// Make a new `JumpLeaseId`.
+fn jump_lease_id(addr: Option<IpAddr>, chain: FirewallChain, target: &str) -> JumpLeaseId {
+    (addr, chain, target.to_string())
+}
 
 trait LeaseMapOps {
     /// Prune (remove) all leases that have timed out.

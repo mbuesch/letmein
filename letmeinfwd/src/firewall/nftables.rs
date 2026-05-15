@@ -8,7 +8,8 @@
 
 use crate::firewall::{
     FirewallAction, FirewallChain, FirewallJumpTargets, FirewallMaintain, JumpLeaseMap, Lease,
-    LeaseMapOps as _, LeasePort, LeaseType, PortLeaseMap, SingleLeasePort,
+    LeaseMapOps as _, LeasePort, LeaseType, PortLeaseMap, SingleLeasePort, jump_lease_id,
+    port_lease_id,
 };
 use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::Config;
@@ -572,13 +573,15 @@ impl NftFirewallInner {
     }
 
     /// Generate one lease rule and apply it to the kernel.
-    async fn nftables_add_lease(&mut self, conf: &Config, lease: &Lease) -> ah::Result<()> {
+    async fn nftables_add_leases(&mut self, conf: &Config, leases: &[Lease]) -> ah::Result<()> {
         let names = NftNames::get(conf).context("Read configuration")?;
 
-        // Open the lease port, restricted to the peer address.
+        // Open the lease ports, restricted to the peer address.
         let mut batch = Batch::new();
-        for cmd in gen_add_lease_cmds(conf, &names, lease)? {
-            batch.add_cmd(cmd);
+        for lease in leases {
+            for cmd in gen_add_lease_cmds(conf, &names, lease)? {
+                batch.add_cmd(cmd);
+            }
         }
 
         // Apply all batch commands to the kernel.
@@ -662,12 +665,13 @@ impl NftFirewallInner {
     ) -> ah::Result<()> {
         assert!(!self.shutdown);
 
-        let key = (remote_addr, port);
+        let key = port_lease_id(remote_addr, port);
         if let Some(lease) = self.port_leases.get_mut(&key) {
             lease.refresh_timeout(conf);
         } else {
             let lease = Lease::new_port(conf, remote_addr, port, timeout);
-            self.nftables_add_lease(conf, &lease).await?;
+            self.nftables_add_leases(conf, slice::from_ref(&lease))
+                .await?;
             self.port_leases.insert(key, lease);
             self.print_total_rule_count(conf);
         }
@@ -682,7 +686,7 @@ impl NftFirewallInner {
     ) -> ah::Result<()> {
         assert!(!self.shutdown);
 
-        let key = (remote_addr, port);
+        let key = port_lease_id(remote_addr, port);
         if let Some(lease) = self.port_leases.remove(&key) {
             if let Err(e) = self
                 .nftables_remove_leases(conf, slice::from_ref(&lease))
@@ -706,7 +710,10 @@ impl NftFirewallInner {
     ) -> ah::Result<()> {
         assert!(!self.shutdown);
 
-        let mut added = false;
+        let mut new_leases = Vec::with_capacity(3);
+        let mut refresh_leases = Vec::with_capacity(3);
+
+        // Build the new leases and check if they already exist.
         for (target_chain, match_saddr, chain) in &[
             (
                 targets.input.as_ref(),
@@ -729,21 +736,49 @@ impl NftFirewallInner {
             };
 
             let addr = option_if(remote_addr, *match_saddr);
-            let key = (addr, *chain, (**target_chain).clone());
+            let key = jump_lease_id(addr, *chain, target_chain);
 
-            if let Some(lease) = self.jump_leases.get_mut(&key) {
-                lease.refresh_timeout(conf);
+            if self.jump_leases.contains_key(&key) {
+                refresh_leases.push(key);
             } else {
-                let lease =
-                    Lease::new_jump(conf, addr, *chain, target_chain, *match_saddr, timeout);
-                self.nftables_add_lease(conf, &lease).await?;
-                self.jump_leases.insert(key, lease);
-                added = true;
+                new_leases.push(Lease::new_jump(
+                    conf,
+                    addr,
+                    *chain,
+                    target_chain,
+                    *match_saddr,
+                    timeout,
+                ));
             }
         }
-        if added {
+
+        // Add the new leases to the kernel and to our map.
+        if !new_leases.is_empty() {
+            // Add the new leases to the kernel.
+            self.nftables_add_leases(conf, &new_leases).await?;
+            // Add the new leases to our map.
+            for lease in new_leases {
+                if let LeaseType::Jump {
+                    chain,
+                    target,
+                    match_saddr: _,
+                } = lease.type_()
+                {
+                    let key = jump_lease_id(lease.addr(), *chain, target);
+                    self.jump_leases.insert(key, lease);
+                } else {
+                    unreachable!();
+                }
+            }
             self.print_total_rule_count(conf);
         }
+        // Refresh the timeouts of the existing leases.
+        for key in refresh_leases {
+            if let Some(lease) = self.jump_leases.get_mut(&key) {
+                lease.refresh_timeout(conf);
+            }
+        }
+
         Ok(())
     }
 
@@ -778,7 +813,7 @@ impl NftFirewallInner {
             };
 
             let addr = option_if(remote_addr, *match_saddr);
-            let key = (addr, *chain, (**target_chain).clone());
+            let key = jump_lease_id(addr, *chain, target_chain);
 
             if let Some(lease) = self.jump_leases.remove(&key) {
                 if let Err(e) = self
@@ -787,6 +822,7 @@ impl NftFirewallInner {
                 {
                     // Removal from kernel failed. Add it back into our map.
                     self.jump_leases.insert(key, lease);
+                    self.print_total_rule_count(conf);
                     return Err(e);
                 }
                 removed = true;
