@@ -886,10 +886,14 @@ impl Config {
 
     /// (Re-)load a configuration from a file.
     pub fn load(&mut self, path: &Path) -> ah::Result<()> {
-        if let Ok(ini) = Ini::new_from_file(path) {
-            self.load_ini(&ini)?;
-        } else if self.variant == ConfigVariant::Server {
-            return Err(err!("Failed to load configuration {}", path.display()));
+        match Ini::new_from_file(path)? {
+            Some(ini) => {
+                self.load_ini(&ini)?;
+            }
+            None if self.variant == ConfigVariant::Server => {
+                return Err(err!("Configuration file {} does not exist", path.display()));
+            }
+            None => (), // Default empty config for client.
         }
         self.path = Some(path.to_path_buf());
         Ok(())

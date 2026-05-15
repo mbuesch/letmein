@@ -60,25 +60,38 @@ impl Ini {
     }
 
     /// Create a new parser state and parse the specified `.ini`-style file.
-    pub fn new_from_file(path: &Path) -> ah::Result<Self> {
+    ///
+    /// Returns `Ok(None)` if the configuration file is not present.
+    /// Returns `Ok(Some(Ini))` if the file was successfully read and parsed,
+    /// and `Err` if an error occurred while reading or parsing the file.
+    pub fn new_from_file(path: &Path) -> ah::Result<Option<Self>> {
         let mut this = Self::new();
-        this.read_file(path)?;
-        Ok(this)
+        if this.read_file(path)? {
+            Ok(Some(this))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Read the specified `.ini`-style file into an existing parser.
     ///
     /// Note that the parser state will be cleared before adding new items
     /// from the file.
-    pub fn read_file(&mut self, path: &Path) -> ah::Result<()> {
-        let mut file = std::fs::OpenOptions::new()
-            .read(true)
-            .open(path)
-            .context("Open configuration file")?;
+    ///
+    /// Returns `Ok(true)` if the file was successfully read, `Ok(false)` if the
+    /// file was not found, and `Err` if an error occurred while reading or parsing
+    /// the file.
+    pub fn read_file(&mut self, path: &Path) -> ah::Result<bool> {
+        let mut file = match std::fs::OpenOptions::new().read(true).open(path) {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(e) => return Err(e).context("Open configuration file"),
+        };
         let mut buf = vec![];
         file.read_to_end(&mut buf)
             .context("Read configuration file")?;
-        self.parse_bytes(&buf)
+        self.parse_bytes(&buf)?;
+        Ok(true)
     }
 
     /// Write the serialized INI state to a file.
@@ -431,7 +444,7 @@ opt=val
 
         // Re-reading the file should yield the same checksum and values.
         let mut ini2 = Ini::new();
-        ini2.read_file(&path).unwrap();
+        assert!(ini2.read_file(&path).unwrap());
         assert_eq!(ini2.checksum(), &written_checksum);
         assert_eq!(ini2.get("S", "opt"), Some("hello"));
 
