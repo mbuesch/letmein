@@ -14,7 +14,7 @@ const ALLOW_LIST: [Allow; 29] = [
     Allow::Mmap,
     Allow::Mprotect,
     Allow::GetUidGid,
-    Allow::ArchPrctl { ops: None }, //TODO
+    Allow::ArchPrctl { ops: None },
     Allow::Dup,
     Allow::Pipe,
     Allow::Access,

@@ -244,10 +244,24 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_getgid));
                     add_sys(&mut map, sys!(SYS_getegid));
                 }
-                Allow::ArchPrctl { ops: _ } => {
-                    //TODO restrict to ops
+                Allow::ArchPrctl { ops } => {
                     #[cfg(target_arch = "x86_64")]
-                    add_sys(&mut map, sys!(SYS_arch_prctl));
+                    {
+                        match ops {
+                            Some(ops) => {
+                                for op in ops {
+                                    add_sys_args_match(
+                                        &mut map,
+                                        sys!(SYS_arch_prctl),
+                                        args!([0](32) == *op),
+                                    );
+                                }
+                            }
+                            None => {
+                                add_sys(&mut map, sys!(SYS_arch_prctl));
+                            }
+                        }
+                    }
                 }
                 Allow::Dup => {
                     add_sys(&mut map, sys!(SYS_dup));
