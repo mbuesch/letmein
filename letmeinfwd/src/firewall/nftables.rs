@@ -452,9 +452,10 @@ impl NftFirewallInner {
     /// This will also remove all rules from the kernel.
     pub async fn new(conf: &Config) -> ah::Result<Self> {
         // Test if the `nft` binary is available.
-        if let Err(e) = std::process::Command::new(conf.nft_exe())
+        if let Err(e) = tokio::process::Command::new(conf.nft_exe())
             .args(["--help"])
             .output()
+            .await
         {
             return Err(err!(
                 "Failed to execute the 'nft' program.\n\
