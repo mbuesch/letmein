@@ -323,7 +323,7 @@ fn main() -> ah::Result<()> {
 
     runtime::Builder::new_current_thread()
         .thread_keep_alive(Duration::from_millis(0))
-        .max_blocking_threads(1)
+        .max_blocking_threads(16)
         .enable_all()
         .build()
         .context("Tokio runtime builder")?
