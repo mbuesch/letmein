@@ -43,7 +43,7 @@ cargo_clippy()
 {
     export LETMEIN_CONF_PREFIX="/opt/letmein"
     if [ "$resolver" = "libc" ]; then
-        local opts="--no-default-features --features libc-resolver"
+        local opts="--no-default-features --features cli,libc-resolver"
     elif [ "$resolver" = "hickory" ]; then
         local opts=
     else

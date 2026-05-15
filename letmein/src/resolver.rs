@@ -6,7 +6,7 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use anyhow as ah;
+use anyhow::{self as ah, format_err as err};
 use std::net::IpAddr;
 
 #[cfg(feature = "hickory-resolver")]
@@ -14,13 +14,23 @@ mod hickory;
 #[cfg(feature = "hickory-resolver")]
 use hickory as backend;
 
-#[cfg(feature = "libc-resolver")]
+#[cfg(all(feature = "libc-resolver", not(feature = "hickory-resolver")))]
 mod dns_lookup;
-#[cfg(feature = "libc-resolver")]
+#[cfg(all(feature = "libc-resolver", not(feature = "hickory-resolver")))]
 use dns_lookup as backend;
 
 #[cfg(not(any(feature = "hickory-resolver", feature = "libc-resolver")))]
-compile_error!("At least one resolver backend must be enabled. Enable the 'hickory-resolver' or 'libc-resolver' feature.");
+compile_error!(
+    "At least one resolver backend must be enabled. Enable the 'hickory-resolver' or 'libc-resolver' feature."
+);
+
+#[cfg(all(feature = "hickory-resolver", feature = "libc-resolver"))]
+#[deprecated(
+    note = "Feature 'hickory-resolver' and 'libc-resolver' enabled. Using 'hickory-resolver'."
+)]
+const WARNING_HICKORY_AND_LIBC_RESOLVER_ENABLED: () = ();
+#[cfg(all(feature = "hickory-resolver", feature = "libc-resolver"))]
+const _: () = WARNING_HICKORY_AND_LIBC_RESOLVER_ENABLED;
 
 /// Host name resolution target mode.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -216,6 +226,25 @@ pub fn is_ipv6_addr(host: &str) -> bool {
 
 /// Resolve a host name into an address.
 pub async fn resolve(host: &str, cfg: &ResConf) -> ah::Result<IpAddr> {
+    // Try to parse host as an IP address.
+    if let Ok(addr) = host.parse::<IpAddr>() {
+        match cfg.mode {
+            ResMode::Ipv4 if !addr.is_ipv4() => {
+                return Err(err!(
+                    "Supplied a raw IPv6 address, but resolution mode is set to IPv4"
+                ));
+            }
+            ResMode::Ipv6 if !addr.is_ipv6() => {
+                return Err(err!(
+                    "Supplied a raw IPv4 address, but resolution mode is set to IPv6"
+                ));
+            }
+            _ => (),
+        }
+        // It is an IP address. No need for DNS lookup.
+        return Ok(addr);
+    }
+
     backend::resolve(host, cfg).await
 }
 

@@ -34,25 +34,6 @@ fn get_first_result(lookup: &Lookup, host: &str, mode: ResMode) -> ah::Result<Ip
 
 /// Resolve a host name into an address.
 pub async fn resolve(host: &str, cfg: &ResConf) -> ah::Result<IpAddr> {
-    // Try to parse host as an IP address.
-    if let Ok(addr) = host.parse::<IpAddr>() {
-        match cfg.mode {
-            ResMode::Ipv4 if !addr.is_ipv4() => {
-                return Err(err!(
-                    "Supplied a raw IPv6 address, but resolution mode is set to IPv4"
-                ));
-            }
-            ResMode::Ipv6 if !addr.is_ipv6() => {
-                return Err(err!(
-                    "Supplied a raw IPv4 address, but resolution mode is set to IPv6"
-                ));
-            }
-            _ => (),
-        }
-        // It is an IP address. No need for DNS lookup.
-        return Ok(addr);
-    }
-
     let (record_type, record_type_str, addr_type_str) = get_record_type(cfg.mode);
 
     macro_rules! lookup_and_return {

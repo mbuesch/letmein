@@ -151,15 +151,35 @@ impl Filter {
         use seccompiler::{SeccompAction, SeccompFilter, SeccompRule};
         use std::collections::BTreeMap;
 
-        type RulesMap = BTreeMap<i64, Vec<SeccompRule>>;
+        enum RuleType {
+            Unconditional,
+            Conditional(Vec<SeccompRule>),
+        }
+        type RulesMap = BTreeMap<i64, RuleType>;
 
         fn add_sys(map: &mut RulesMap, sys: i64) {
-            let _rules = map.entry(sys).or_default();
+            let rules = map.entry(sys).or_insert_with(|| RuleType::Unconditional);
+            match rules {
+                RuleType::Unconditional => { /* Syscall is already unconditionally allowed. */ }
+                RuleType::Conditional(_) => {
+                    /* Allow syscall unconditionally */
+                    *rules = RuleType::Unconditional;
+                }
+            }
         }
 
         fn add_sys_args_match(map: &mut RulesMap, sys: i64, rule: SeccompRule) {
-            let rules = map.entry(sys).or_default();
-            rules.push(rule);
+            let rules = map
+                .entry(sys)
+                .or_insert_with(|| RuleType::Conditional(vec![]));
+            match rules {
+                RuleType::Unconditional => {
+                    /* It's already unconditional. This is a super-set of our condition. */
+                }
+                RuleType::Conditional(rules) => {
+                    rules.push(rule);
+                }
+            }
         }
 
         let mut map: RulesMap = [].into();
@@ -404,7 +424,12 @@ impl Filter {
         }
 
         let filter = SeccompFilter::new(
-            map,
+            map.into_iter()
+                .map(|(sys, rules)| match rules {
+                    RuleType::Unconditional => (sys, vec![]),
+                    RuleType::Conditional(rules) => (sys, rules),
+                })
+                .collect(),
             match deny_action {
                 Action::Kill => SeccompAction::KillProcess,
                 Action::Log => SeccompAction::Log,
