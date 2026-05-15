@@ -14,15 +14,15 @@ const ALLOW_LIST: [Allow; 29] = [
     Allow::Mmap,
     Allow::Mprotect,
     Allow::GetUidGid,
-    Allow::ArchPrctl { op: None }, //TODO
+    Allow::ArchPrctl { ops: None }, //TODO
     Allow::Dup,
     Allow::Pipe,
     Allow::Access,
     Allow::Open,
     Allow::Read,
     Allow::Write,
-    Allow::Ioctl { op: None }, //TODO
-    Allow::Fcntl { op: None },
+    Allow::Ioctl { ops: None },
+    Allow::Fcntl { ops: None },
     Allow::Stat,
     Allow::Recv,
     Allow::Send,

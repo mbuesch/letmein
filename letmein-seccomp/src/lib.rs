@@ -92,23 +92,33 @@ pub enum Allow<'a> {
     Mmap,
     Mprotect,
     GetUidGid,
-    ArchPrctl { op: Option<u32> },
+    ArchPrctl {
+        ops: Option<&'a [u32]>,
+    },
     Dup,
     Pipe,
-    Socket { afs: Option<&'a [i32]> },
+    Socket {
+        afs: Option<&'a [i32]>,
+    },
     Listen,
     UnixAccept,
     UnixConnect,
     TcpAccept,
     TcpConnect,
     Netlink,
-    SetSockOpt { level_optname: Option<(i32, i32)> },
+    SetSockOpt {
+        level_optname: Option<&'a [(i32, i32)]>,
+    },
     Access,
     Open,
     Read,
     Write,
-    Ioctl { op: Option<u32> },
-    Fcntl { op: Option<u32> },
+    Ioctl {
+        ops: Option<&'a [u64]>,
+    },
+    Fcntl {
+        ops: Option<&'a [u32]>,
+    },
     Stat,
     Recv,
     Send,
@@ -234,8 +244,8 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_getgid));
                     add_sys(&mut map, sys!(SYS_getegid));
                 }
-                Allow::ArchPrctl { op: _ } => {
-                    //TODO restrict to op
+                Allow::ArchPrctl { ops: _ } => {
+                    //TODO restrict to ops
                     #[cfg(target_arch = "x86_64")]
                     add_sys(&mut map, sys!(SYS_arch_prctl));
                 }
@@ -304,12 +314,14 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_getsockopt));
                 }
                 Allow::SetSockOpt { level_optname } => {
-                    if let Some((level, optname)) = level_optname {
-                        add_sys_args_match(
-                            &mut map,
-                            sys!(SYS_setsockopt),
-                            args!([1](32) == level, [2](32) == optname),
-                        );
+                    if let Some(level_optname) = level_optname {
+                        for (level, optname) in level_optname {
+                            add_sys_args_match(
+                                &mut map,
+                                sys!(SYS_setsockopt),
+                                args!([1](32) == *level, [2](32) == *optname),
+                            );
+                        }
                     } else {
                         add_sys(&mut map, sys!(SYS_setsockopt));
                     }
@@ -343,13 +355,21 @@ impl Filter {
                     add_sys(&mut map, sys!(SYS_writev));
                     add_read_write_rules(&mut map);
                 }
-                Allow::Ioctl { op: _ } => {
-                    //TODO restrict to op
-                    add_sys(&mut map, sys!(SYS_ioctl));
-                }
-                Allow::Fcntl { op } => match op {
-                    Some(op) => {
-                        add_sys_args_match(&mut map, sys!(SYS_fcntl), args!([1](32) == op));
+                Allow::Ioctl { ops } => match ops {
+                    Some(ops) => {
+                        for op in ops {
+                            add_sys_args_match(&mut map, sys!(SYS_ioctl), args!([1](64) == *op));
+                        }
+                    }
+                    None => {
+                        add_sys(&mut map, sys!(SYS_ioctl));
+                    }
+                },
+                Allow::Fcntl { ops } => match ops {
+                    Some(ops) => {
+                        for op in ops {
+                            add_sys_args_match(&mut map, sys!(SYS_fcntl), args!([1](32) == *op));
+                        }
                     }
                     None => {
                         add_sys(&mut map, sys!(SYS_fcntl));

@@ -16,7 +16,7 @@ const ALLOW_LIST: [Allow; 13] = [
     Allow::Read,
     Allow::Write,
     Allow::Fcntl {
-        op: Some(libc::F_GETFD as _),
+        ops: Some(&[libc::F_GETFD as _]),
     },
     Allow::Recv,
     Allow::Send,
@@ -24,7 +24,7 @@ const ALLOW_LIST: [Allow; 13] = [
     Allow::TcpAccept,
     Allow::UnixConnect,
     Allow::SetSockOpt {
-        level_optname: Some((libc::IPPROTO_TCP as _, libc::TCP_NODELAY as _)),
+        level_optname: Some(&[(libc::IPPROTO_TCP as _, libc::TCP_NODELAY as _)]),
     },
     Allow::Signal,
     Allow::Futex,

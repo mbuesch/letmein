@@ -13,14 +13,17 @@ use letmein_conf::Seccomp;
 use letmein_seccomp::{Action, Allow, Filter, seccomp_supported};
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-const ALLOW_LIST: [Allow; 15] = [
+const ALLOW_LIST: [Allow; 16] = [
     Allow::Mmap,
     Allow::Mprotect,
     Allow::Open,
     Allow::Read,
     Allow::Write,
+    Allow::Ioctl {
+        ops: Some(&[libc::FIONREAD as _]),
+    },
     Allow::Fcntl {
-        op: Some(libc::F_GETFD as _),
+        ops: Some(&[libc::F_GETFD as _]),
     },
     Allow::Stat,
     Allow::Recv,
@@ -36,7 +39,7 @@ const ALLOW_LIST: [Allow; 15] = [
     },
     Allow::TcpConnect,
     Allow::SetSockOpt {
-        level_optname: Some((libc::IPPROTO_TCP as _, libc::TCP_NODELAY as _)),
+        level_optname: None,
     },
     Allow::Futex,
     Allow::Uname,
