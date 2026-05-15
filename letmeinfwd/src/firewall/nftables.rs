@@ -667,7 +667,7 @@ impl NftFirewallInner {
 
         let key = port_lease_id(remote_addr, port);
         if let Some(lease) = self.port_leases.get_mut(&key) {
-            lease.refresh_timeout(conf);
+            lease.refresh_timeout(conf, timeout);
         } else {
             let lease = Lease::new_port(conf, remote_addr, port, timeout);
             self.nftables_add_leases(conf, slice::from_ref(&lease))
@@ -775,7 +775,7 @@ impl NftFirewallInner {
         // Refresh the timeouts of the existing leases.
         for key in refresh_leases {
             if let Some(lease) = self.jump_leases.get_mut(&key) {
-                lease.refresh_timeout(conf);
+                lease.refresh_timeout(conf, timeout);
             }
         }
 

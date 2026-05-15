@@ -198,8 +198,8 @@ impl Lease {
     }
 
     /// Reset the timeout to maximum.
-    pub fn refresh_timeout(&mut self, conf: &Config) {
-        self.timeout = Instant::now() + conf.nft_timeout();
+    pub fn refresh_timeout(&mut self, conf: &Config, timeout: Option<Duration>) {
+        self.timeout = Instant::now() + timeout.unwrap_or_else(|| conf.nft_timeout());
     }
 
     /// Check if this lease has timed out.
