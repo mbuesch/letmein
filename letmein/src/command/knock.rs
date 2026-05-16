@@ -22,8 +22,9 @@ pub enum AddrMode {
     #[default]
     TryBoth,
 
-    /// Knock on both IPv6 and IPv4, and report all errors.
-    /// If IPv6 fails, do not try IPv4.
+    /// Knock on both IPv6 and IPv4.
+    /// If IPv6 fails report an error for the IPv6 attempt, do not try IPv4.
+    /// If IPv4 fails report an error for the IPv4 attempt.
     Both,
 
     /// Knock on IPv6 only.
