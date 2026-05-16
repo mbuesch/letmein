@@ -21,7 +21,7 @@ use std::{
 use tokio::{
     net::{TcpStream, UdpSocket},
     sync::{
-        Mutex,
+        Mutex, Notify,
         watch::{Receiver, Sender, channel},
     },
     time::sleep,
@@ -38,6 +38,10 @@ struct UdpConn<const MSG_SIZE: usize, const Q_SIZE: usize> {
 
     /// Is this a new connection that has not been accepted, yet?
     accepted: bool,
+
+    /// Per-connection wakeup for [`UdpDispatcher::recv_from`].
+    /// Fired whenever a datagram is queued for this accepted connection.
+    recv_notify: Arc<Notify>,
 }
 
 /// Very simple "connection" tracking for UDP.
@@ -77,12 +81,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
     }
 
     /// Try to receive a new datagram from the socket.
-    fn try_recv(
-        &mut self,
-        socket: &UdpSocket,
-        accept_notify: &Sender<()>,
-        recv_notify: &Sender<()>,
-    ) -> ah::Result<()> {
+    fn try_recv(&mut self, socket: &UdpSocket, accept_notify: &Sender<()>) -> ah::Result<()> {
         let mut buf = [0_u8; MSG_SIZE];
         match socket.try_recv_from(&mut buf) {
             Ok((n, peer_addr)) => {
@@ -93,10 +92,14 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 // Add the received datagram to an existing connection
                 // or create a new connection, if there is none, yet.
                 assert!(self.conn.len() <= self.max_nr_conn);
+                if DEBUG && !self.conn.contains_key(&peer_addr) {
+                    println!("UDP-dispatcher: try_recv: New conn from {peer_addr}.");
+                }
                 let conn = self.conn.entry(peer_addr).or_insert_with(|| UdpConn {
                     rx_queue: VecDeque::new(),
                     peer_addr,
                     accepted: false,
+                    recv_notify: Arc::new(Notify::new()),
                 });
 
                 // Check if the RX queue is full
@@ -109,6 +112,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 conn.rx_queue.push_back(buf);
                 self.nr_queued_dgrams += 1;
                 let accepted = conn.accepted;
+                let recv_notify = Arc::clone(&conn.recv_notify);
 
                 // Check if this was a new connection and
                 // we exceeded the maximum number of connections.
@@ -122,13 +126,20 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
 
                 assert!(self.nr_queued_dgrams <= self.max_nr_conn * Q_SIZE);
 
-                if !accepted {
+                if accepted {
                     if DEBUG {
-                        println!("UDP-dispatcher: Notifying accept-watchers.");
+                        println!(
+                            "UDP-dispatcher: try_recv: Queued datagram for {peer_addr}; firing recv_notify."
+                        );
                     }
-                    // There is an un-accepted connection. Wake watcher.
+                    recv_notify.notify_one();
+                } else {
+                    if DEBUG {
+                        println!(
+                            "UDP-dispatcher: try_recv: Queued datagram for {peer_addr} (unaccepted); firing accept_notify."
+                        );
+                    }
                     let _ = accept_notify.send(());
-                    let _ = recv_notify.send(());
                 }
 
                 Ok(())
@@ -138,38 +149,27 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
         }
     }
 
-    /// Notify receivers based on whether more datagrams are queued.
-    fn recv_notify(&self, recv_notify: &Sender<()>) {
-        if self.nr_queued_dgrams > 0 {
-            // There is queued RX data for an accepted connection. Wake watcher.
-            if DEBUG {
-                println!("UDP-dispatcher: Notifying recv-watchers.");
-            }
-            let _ = recv_notify.send(());
-        }
-    }
-
     /// Get the first not-accepted connection, or None.
-    fn try_accept(
-        &mut self,
-        socket: &UdpSocket,
-        accept_notify: &Sender<()>,
-        recv_notify: &Sender<()>,
-    ) -> Option<SocketAddr> {
-        if let Err(e) = self.try_recv(socket, accept_notify, recv_notify) {
+    fn try_accept(&mut self, socket: &UdpSocket, accept_notify: &Sender<()>) -> Option<SocketAddr> {
+        if let Err(e) = self.try_recv(socket, accept_notify) {
             if DEBUG {
                 eprintln!("UDP-dispatcher: try_recv error during try_accept: {e:?}");
             }
             return None;
         }
-        for conn in &mut self.conn.values_mut() {
-            if !conn.accepted {
+        let peer_addr = self.conn.values_mut().find_map(|conn| {
+            (!conn.accepted).then(|| {
                 conn.accepted = true;
-                return Some(conn.peer_addr);
-            }
+                conn.peer_addr
+            })
+        });
+        // The watch channel merges concurrent sends into a single version bump.
+        // If we accepted one connection but more unaccepted connections remain,
+        // re-fire accept_notify so the next accept() call wakes immediately.
+        if peer_addr.is_some() && self.conn.values().any(|c| !c.accepted) {
+            let _ = accept_notify.send(());
         }
-        self.recv_notify(recv_notify);
-        None
+        peer_addr
     }
 
     /// Get the oldest element from the RX queue.
@@ -178,22 +178,28 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
         socket: &UdpSocket,
         peer_addr: SocketAddr,
         accept_notify: &Sender<()>,
-        recv_notify: &Sender<()>,
     ) -> ah::Result<Option<[u8; MSG_SIZE]>> {
-        self.try_recv(socket, accept_notify, recv_notify)?;
+        self.try_recv(socket, accept_notify)?;
         let buf = self
             .conn
             .get_mut(&peer_addr)
             .and_then(|conn| conn.rx_queue.pop_front());
         if buf.is_some() {
             self.nr_queued_dgrams -= 1;
+            if DEBUG {
+                println!("UDP-dispatcher: try_recv_from({peer_addr}): Popped datagram from queue.");
+            }
+        } else if DEBUG {
+            println!("UDP-dispatcher: try_recv_from({peer_addr}): Queue empty.");
         }
-        self.recv_notify(recv_notify);
         Ok(buf)
     }
 
     /// Disconnect the connection identified by the `peer_addr`.
     fn disconnect(&mut self, peer_addr: SocketAddr) {
+        if DEBUG {
+            println!("UDP-dispatcher: disconnect({peer_addr}).");
+        }
         if let Some(conn) = self.conn.get(&peer_addr) {
             self.nr_queued_dgrams -= conn.rx_queue.len();
         }
@@ -218,9 +224,6 @@ pub struct UdpDispatcher<const MSG_SIZE: usize, const Q_SIZE: usize> {
 
     /// Watch signal: New accept-connections are available.
     accept_watch: (Sender<()>, Mutex<Receiver<()>>),
-
-    /// Watch signal: new data for an established connection is available.
-    recv_watch: (Sender<()>, Mutex<Receiver<()>>),
 }
 
 impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE> {
@@ -229,12 +232,10 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
     /// with the given maximum possible number of connections.
     pub fn new(socket: UdpSocket, max_nr_conn: usize) -> Self {
         let accept_watch = channel(());
-        let recv_watch = channel(());
         Self {
             rx: StdMutex::new(UdpDispatcherRx::new(max_nr_conn)),
             socket,
             accept_watch: (accept_watch.0, Mutex::new(accept_watch.1)),
-            recv_watch: (recv_watch.0, Mutex::new(recv_watch.1)),
         }
     }
 
@@ -255,14 +256,14 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
             if DEBUG {
                 println!("UDP-dispatcher: Trying accept.");
             }
-            let peer_addr = self.rx.lock().expect("Mutex poisoned").try_accept(
-                &self.socket,
-                &self.accept_watch.0,
-                &self.recv_watch.0,
-            );
+            let peer_addr = self
+                .rx
+                .lock()
+                .expect("Mutex poisoned")
+                .try_accept(&self.socket, &self.accept_watch.0);
             if let Some(peer_addr) = peer_addr {
                 if DEBUG {
-                    println!("UDP-dispatcher: Accepted new connection.");
+                    println!("UDP-dispatcher: Accepted new connection from {peer_addr}.");
                 }
                 break Ok(peer_addr);
             }
@@ -274,35 +275,48 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
     /// peer identified by the IP address + port tuple `peer_addr`.
     pub async fn recv_from(&self, peer_addr: SocketAddr) -> ah::Result<[u8; MSG_SIZE]> {
         loop {
-            {
-                let mut recv_watch = self.recv_watch.1.lock().await;
-                tokio::select! {
-                    _ = self.socket.readable() => (),
-                    _ = recv_watch.changed() => (),
+            // Get data if already queued.
+            let notify = {
+                let mut rx = self.rx.lock().expect("Mutex poisoned");
+                let buf = rx.try_recv_from(&self.socket, peer_addr, &self.accept_watch.0)?;
+                if let Some(buf) = buf {
+                    if DEBUG {
+                        println!("UDP-dispatcher: recv_from({peer_addr}): Returning datagram.");
+                    }
+                    return Ok(buf);
                 }
-            }
+                // No data yet; grab the conn wakeup handle if the conn exists already
+                rx.conn
+                    .get(&peer_addr)
+                    .map(|conn| Arc::clone(&conn.recv_notify))
+            };
 
-            if DEBUG {
-                println!("UDP-dispatcher: Trying recv.");
-            }
-            let buf = self.rx.lock().expect("Mutex poisoned").try_recv_from(
-                &self.socket,
-                peer_addr,
-                &self.accept_watch.0,
-                &self.recv_watch.0,
-            )?;
-            if let Some(buf) = buf {
+            if let Some(notify) = notify {
                 if DEBUG {
-                    println!("UDP-dispatcher: Received datagram.");
+                    println!(
+                        "UDP-dispatcher: recv_from({peer_addr}): Waiting (select: socket | recv_notify)."
+                    );
                 }
-                break Ok(buf);
+                tokio::select! {
+                    Ok(()) = self.socket.readable() => (),
+                    () = notify.notified() => (),
+                }
+            } else {
+                if DEBUG {
+                    println!(
+                        "UDP-dispatcher: recv_from({peer_addr}): Waiting (no conn yet; socket.readable only)."
+                    );
+                }
+                self.socket
+                    .readable()
+                    .await
+                    .context("UDP socket readable")?;
             }
-            sleep(Duration::from_millis(10)).await;
         }
     }
 
     /// Asynchronously send a datagram `data` to the specified
-    /// peer identified by the UP address + port tuple `peer_addr`.
+    /// peer identified by the IP address + port tuple `peer_addr`.
     pub async fn send_to(&self, peer_addr: SocketAddr, data: [u8; MSG_SIZE]) -> ah::Result<()> {
         self.socket
             .writable()
@@ -313,7 +327,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
             .await
             .context("UDP socket send_to")?;
         if DEBUG {
-            println!("UDP-dispatcher: Sent datagram.");
+            println!("UDP-dispatcher: send_to({peer_addr}): Sent datagram.");
         }
         Ok(())
     }
