@@ -197,13 +197,15 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
 
     /// Disconnect the connection identified by the `peer_addr`.
     fn disconnect(&mut self, peer_addr: SocketAddr) {
-        if DEBUG {
-            println!("UDP-dispatcher: disconnect({peer_addr}).");
+        if let Some(removed_conn) = self.conn.remove(&peer_addr) {
+            if DEBUG {
+                println!("UDP-dispatcher: disconnect({peer_addr}).");
+            }
+            self.nr_queued_dgrams -= removed_conn.rx_queue.len();
+            // Wake all waiters for this connection, so they can detect the disconnect.
+            removed_conn.recv_notify.notify_waiters();
+            removed_conn.recv_notify.notify_one();
         }
-        if let Some(conn) = self.conn.get(&peer_addr) {
-            self.nr_queued_dgrams -= conn.rx_queue.len();
-        }
-        self.conn.remove(&peer_addr);
         if self.conn.is_empty() {
             assert_eq!(self.nr_queued_dgrams, 0);
         }
