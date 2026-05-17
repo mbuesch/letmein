@@ -16,7 +16,6 @@ use std::{
         Arc, Mutex as StdMutex,
         atomic::{self, AtomicBool},
     },
-    time::Duration,
 };
 use tokio::{
     net::{TcpStream, UdpSocket},
@@ -24,7 +23,6 @@ use tokio::{
         Mutex, Notify,
         watch::{Receiver, Sender, channel},
     },
-    time::sleep,
 };
 
 /// One connection for use by [`UdpDispatcherRx`].
@@ -269,7 +267,6 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
                 }
                 break Ok(peer_addr);
             }
-            sleep(Duration::from_millis(10)).await;
         }
     }
 
