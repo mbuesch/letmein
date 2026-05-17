@@ -300,7 +300,7 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcher<MSG_SIZE, Q_SIZE>
                     );
                 }
                 tokio::select! {
-                    Ok(()) = self.socket.readable() => (),
+                    _ = self.socket.readable() => (),
                     () = notify.notified() => (),
                 }
             } else {
