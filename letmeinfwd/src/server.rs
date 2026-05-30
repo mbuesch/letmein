@@ -13,8 +13,9 @@ use crate::{
 };
 use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::{Config, Resource};
-use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
+use letmein_fwproto::{FWD_IPC_TIMEOUT, FirewallMessage, FirewallOperation, SOCK_FILE};
 use letmein_systemd::{SystemdSocket, systemd_notify_ready};
+use std::time::Duration;
 use std::{
     fs::{OpenOptions, metadata, remove_file},
     io::Read as _,
@@ -23,7 +24,13 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, atomic::Ordering::Relaxed},
 };
-use tokio::net::{UnixListener, UnixStream, unix::pid_t};
+use tokio::{
+    net::{UnixListener, UnixStream, unix::pid_t},
+    time::timeout,
+};
+
+// IPC timeout for receiving messages from letmeind.
+const RECV_TIMEOUT: Duration = Duration::from_secs(FWD_IPC_TIMEOUT.as_secs() * 100 / 75);
 
 /// Get the actual PID of the `letmeind` daemon process.
 fn get_letmeind_pid(rundir: &Path) -> ah::Result<pid_t> {
@@ -82,7 +89,9 @@ impl FirewallConnection {
     }
 
     async fn recv_msg(&mut self) -> ah::Result<Option<FirewallMessage>> {
-        FirewallMessage::recv(&mut self.stream).await
+        timeout(RECV_TIMEOUT, FirewallMessage::recv(&mut self.stream))
+            .await
+            .map_err(|_| err!("IPC receive timed out."))?
     }
 
     async fn send_msg(&mut self, msg: &FirewallMessage) -> ah::Result<()> {

@@ -20,6 +20,7 @@ use letmein_proto::{ResourceId, UserId};
 use std::{
     future::Future,
     net::{IpAddr, Ipv4Addr},
+    time::Duration,
 };
 use tokio::io::ErrorKind;
 
@@ -31,6 +32,9 @@ use tokio::net::windows::named_pipe::{NamedPipeClient, NamedPipeServer};
 
 /// Firewall daemon Unix socket file name.
 pub const SOCK_FILE: &str = "letmeinfwd.sock";
+
+/// IPC timeout for communication with letmeinfwd.
+pub const FWD_IPC_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The operation to perform on the firewall.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]

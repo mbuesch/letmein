@@ -8,13 +8,10 @@
 
 use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::ConfigChecksum;
-use letmein_fwproto::{FirewallMessage, FirewallOperation, SOCK_FILE};
+use letmein_fwproto::{FWD_IPC_TIMEOUT, FirewallMessage, FirewallOperation, SOCK_FILE};
 use letmein_proto::{ResourceId, UserId};
-use std::{net::IpAddr, path::Path, time::Duration};
+use std::{net::IpAddr, path::Path};
 use tokio::{net::UnixStream, time::timeout};
-
-/// IPC timeout for communication with letmeinfwd.
-const FWD_IPC_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct FirewallClient {
     stream: UnixStream,
