@@ -202,9 +202,6 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
         .context("Configuration file")?;
     let conf = Arc::new(conf);
 
-    // Initialize access to the firewall.
-    let fw = Arc::new(NftFirewall::new(&conf).await?);
-
     // Register unix signal handlers.
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
     let mut sigint = signal(SignalKind::interrupt()).unwrap();
@@ -225,6 +222,9 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     // Install `seccomp` rules, if required.
     let seccomp = opts.seccomp.unwrap_or(conf.seccomp());
     install_seccomp_rules(seccomp)?;
+
+    // Initialize access to the firewall.
+    let fw = Arc::new(NftFirewall::new(&conf).await?);
 
     // Spawn task: Unix socket handler.
     task::spawn({
