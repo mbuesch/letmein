@@ -262,6 +262,10 @@ impl Filter {
                             }
                         }
                     }
+                    #[cfg(not(target_arch = "x86_64"))]
+                    {
+                        let _ = ops;
+                    }
                 }
                 Allow::Dup => {
                     add_sys(&mut map, sys!(SYS_dup));
