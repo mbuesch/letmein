@@ -1,7 +1,7 @@
 #!/bin/sh
 # -*- coding: utf-8 -*-
 
-basedir="$(realpath "$0" | xargs dirname)"
+basedir="$(dirname "$(realpath "$0")")"
 
 "$basedir/install-server.sh" || exit 1
 "$basedir/install-client.sh" || exit 1

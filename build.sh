@@ -1,7 +1,7 @@
 #!/bin/sh
 # -*- coding: utf-8 -*-
 
-basedir="$(realpath "$0" | xargs dirname)"
+basedir="$(dirname "$(realpath "$0")")"
 
 [ -f "$basedir/Cargo.toml" ] || die "basedir sanity check failed"
 . "$basedir/scripts/lib.sh"
