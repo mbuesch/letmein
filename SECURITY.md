@@ -84,6 +84,13 @@ The simple design is supposed to reduce the attack surface and as such improve s
   - **rationale**: The port is only open for a short and limited amount of time and there is expected to be a second layer of security in the protected service itself (e.g. ssh login; see 2FA discussion below).
   While it's an unfortunate fact that the port will be open for the whole NATed network, this is still much better than having it open for the whole internet all the time (without port knocker).
 
+- **weakness**: An active MiM attacker positioned on the network path between client and server can relay the full challenge-response exchange to the server using the attacker's own connection.
+  Because the HMAC computation does not include the connection's peer IP address, the relay passes authentication and the firewall opens for the attacker's IP instead of the legitimate client's IP.
+  - **rationale**: The authentication is not designed to be robust against an active MiM relay.
+  The reasoning is similar to how NAT makes the knocked-open port available to the entire NATed network: More peers than the single authenticated client can access the opened port, but the risk is an acceptable tradeoff.
+  Exploiting this requires an active MiM position on the network path, which is a strong prerequisite.
+  The port is only open for a limited time and the protected service is expected to provide its own authentication as a second barrier of security.
+
 - **weakness**: If you use letmein to protect UDP ports, IP address spoofing can give some access for attackers after legitimate authentication of a user. With UDP IP address spoofing an attacker might be able to impersonate a legitimate user session after successful knocking.
   - **rationale**: This is a general property of UDP. The rationale is similar to that of NAT (see above). Letmein still massively reduces the attack surface by closing the port by default.
 
