@@ -19,7 +19,7 @@ mod socket;
 
 use anyhow::{self as ah, format_err as err};
 use ctutils::CtEq as _;
-use hmac::{Hmac, KeyInit as _, Mac as _};
+use hmac::{KeyInit as _, Mac as _, SimpleHmac};
 use sha3::Sha3_256;
 
 pub use crate::socket::{NetSocket, UdpDispatcher};
@@ -279,7 +279,7 @@ impl Message {
         let user: u32 = self.user.into();
         let resource: u32 = self.resource.into();
 
-        let mut mac = Hmac::<Sha3_256>::new_from_slice(shared_key)
+        let mut mac = SimpleHmac::<Sha3_256>::new_from_slice(shared_key)
             .expect("HMAC<SHA3-256> initialization failed");
         mac.update(&operation.to_be_bytes());
         mac.update(&user.to_be_bytes());
