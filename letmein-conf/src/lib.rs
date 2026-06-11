@@ -901,7 +901,53 @@ impl Config {
             None => (), // Default empty config for client.
         }
         self.path = Some(path.to_path_buf());
+        self.check_permissions(path);
         Ok(())
+    }
+
+    /// Check configuration file permissions and warn if insecure write access.
+    fn check_permissions(&self, path: &Path) {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt as _;
+            
+            match std::fs::metadata(path) {
+                Ok(meta) => {
+                    let mode = meta.mode();
+                    
+                    // Different permission requirements for client vs server
+                    let (mask, recommended) = match self.variant {
+                        ConfigVariant::Client => {
+                            // Client: Allow group/world read, but no write permissions
+                            // Allows 600, 644, 640, etc.
+                            (0o022, "644")
+                        }
+                        ConfigVariant::Server => {
+                            // Server: Allow group read, but no group write or any world permissions
+                            // Default is root:letmeind 0o640
+                            (0o027, "640")
+                        }
+                    };
+                    if (mode & mask) != 0 {
+                        eprintln!(
+                            "WARNING: Configuration file '{}' has insecure permissions: {:o}\n\
+                                 Recommended: chmod {} {} (or 600 for stricter access)",
+                            path.display(), mode & 0o777, recommended, path.display()
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("WARNING: Cannot check permissions for '{}': {}",
+                              path.display(), e);
+                }
+            }
+        }
+        
+        #[cfg(not(unix))]
+        {
+            // Windows doesn't use Unix permissions
+            let _ = path; // Suppress unused warning
+        }
     }
 
     /// (Re-)load a configuration from a parsed [Ini] instance.
