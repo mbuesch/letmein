@@ -80,7 +80,6 @@ fn make_pidfile(rundir: &Path) -> ah::Result<()> {
         .context("Write to PID-file")
 }
 
-
 #[derive(Parser, Debug, Clone)]
 struct Opts {
     /// Override the default path to the configuration file.

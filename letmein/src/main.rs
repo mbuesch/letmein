@@ -61,7 +61,6 @@ fn parse_dns_crypt(dns_crypt: &str) -> ah::Result<ResCrypt> {
     Ok(crypt)
 }
 
-
 #[derive(Parser, Debug)]
 struct Opts {
     /// Override the default path to the configuration file.

@@ -910,11 +910,11 @@ impl Config {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt as _;
-            
+
             match std::fs::metadata(path) {
                 Ok(meta) => {
                     let mode = meta.mode();
-                    
+
                     // Different permission requirements for client vs server
                     let (mask, recommended) = match self.variant {
                         ConfigVariant::Client => {
@@ -932,17 +932,23 @@ impl Config {
                         eprintln!(
                             "WARNING: Configuration file '{}' has insecure permissions: {:o}\n\
                                  Recommended: chmod {} {} (or 600 for stricter access)",
-                            path.display(), mode & 0o777, recommended, path.display()
+                            path.display(),
+                            mode & 0o777,
+                            recommended,
+                            path.display()
                         );
                     }
                 }
                 Err(e) => {
-                    eprintln!("WARNING: Cannot check permissions for '{}': {}",
-                              path.display(), e);
+                    eprintln!(
+                        "WARNING: Cannot check permissions for '{}': {}",
+                        path.display(),
+                        e
+                    );
                 }
             }
         }
-        
+
         #[cfg(not(unix))]
         {
             // Windows doesn't use Unix permissions
