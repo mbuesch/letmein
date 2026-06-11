@@ -918,13 +918,13 @@ impl Config {
                         ConfigVariant::Client => {
                             // Client: Allow group/world read, but no write permissions.
                             // Allow exec permissions, even though it doesn't make much sense.
-                            (0o022, "644", None)
+                            (0o022, 0o644, None)
                         }
                         ConfigVariant::Server => {
                             // Server: Allow group read, but no group write or any world permissions.
                             // Allow exec permissions, even though it doesn't make much sense.
                             // Enforce ownership by root (uid 0).
-                            (0o026, "640", Some(0))
+                            (0o026, 0o640, Some(0))
                         }
                     };
                     if let Some(good_uid) = good_uid {
@@ -942,7 +942,7 @@ impl Config {
                         eprintln!(
                             "WARNING: \
                             Configuration file '{dpath}' has insecure permissions: {mode:o}.\n\
-                            Recommended: chmod {recommended} {dpath}"
+                            Recommended: chmod {recommended:o} {dpath}"
                         );
                     }
                 }
