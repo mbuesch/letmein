@@ -911,34 +911,45 @@ impl Config {
         {
             use std::os::unix::fs::MetadataExt as _;
 
+            let dpath = path.display();
             match std::fs::metadata(path) {
                 Ok(meta) => {
-                    let (mask, recommended) = match self.variant {
+                    let (mask, recommended, good_uid) = match self.variant {
                         ConfigVariant::Client => {
                             // Client: Allow group/world read, but no write permissions.
                             // Allow exec permissions, even though it doesn't make much sense.
-                            (0o022, "644")
+                            (0o022, "644", None)
                         }
                         ConfigVariant::Server => {
                             // Server: Allow group read, but no group write or any world permissions.
                             // Allow exec permissions, even though it doesn't make much sense.
-                            (0o026, "640")
+                            // Enforce ownership by root (uid 0).
+                            (0o026, "640", Some(0))
                         }
                     };
+                    if let Some(good_uid) = good_uid {
+                        let actual_uid = meta.uid();
+                        if actual_uid != good_uid {
+                            eprintln!(
+                                "WARNING: \
+                                Configuration file '{dpath}' has insecure ownership: UID={actual_uid}.\n\
+                                Recommended: chown root:letmeind {dpath}"
+                            );
+                        }
+                    }
                     let mode = meta.mode() & 0o777;
                     if (mode & mask) != 0 {
-                        let path = path.display();
                         eprintln!(
-                            "WARNING: Configuration file '{path}' has insecure permissions: {mode:o}.\n\
-                            Recommended: chmod {recommended} {path}"
+                            "WARNING: \
+                            Configuration file '{dpath}' has insecure permissions: {mode:o}.\n\
+                            Recommended: chmod {recommended} {dpath}"
                         );
                     }
                 }
                 Err(e) => {
-                    let path = path.display();
                     eprintln!(
-                        "WARNING: Failed to check configuration file permissions for \
-                        '{path}': {e}"
+                        "WARNING: \
+                        Failed to check configuration file permissions for '{dpath}': {e}"
                     );
                 }
             }
