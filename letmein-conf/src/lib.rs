@@ -913,37 +913,32 @@ impl Config {
 
             match std::fs::metadata(path) {
                 Ok(meta) => {
-                    let mode = meta.mode();
-
-                    // Different permission requirements for client vs server
                     let (mask, recommended) = match self.variant {
                         ConfigVariant::Client => {
-                            // Client: Allow group/world read, but no write permissions
-                            // Allows 600, 644, 640, etc.
+                            // Client: Allow group/world read, but no write permissions.
+                            // Allow exec permissions, even though it doesn't make much sense.
                             (0o022, "644")
                         }
                         ConfigVariant::Server => {
-                            // Server: Allow group read, but no group write or any world permissions
-                            // Default is root:letmeind 0o640
-                            (0o027, "640")
+                            // Server: Allow group read, but no group write or any world permissions.
+                            // Allow exec permissions, even though it doesn't make much sense.
+                            (0o026, "640")
                         }
                     };
+                    let mode = meta.mode() & 0o777;
                     if (mode & mask) != 0 {
+                        let path = path.display();
                         eprintln!(
-                            "WARNING: Configuration file '{}' has insecure permissions: {:o}\n\
-                                 Recommended: chmod {} {} (or 600 for stricter access)",
-                            path.display(),
-                            mode & 0o777,
-                            recommended,
-                            path.display()
+                            "WARNING: Configuration file '{path}' has insecure permissions: {mode:o}.\n\
+                            Recommended: chmod {recommended} {path}"
                         );
                     }
                 }
                 Err(e) => {
+                    let path = path.display();
                     eprintln!(
-                        "WARNING: Cannot check permissions for '{}': {}",
-                        path.display(),
-                        e
+                        "WARNING: Failed to check configuration file permissions for \
+                        '{path}': {e}"
                     );
                 }
             }
