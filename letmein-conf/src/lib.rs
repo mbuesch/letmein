@@ -894,6 +894,7 @@ impl Config {
         match Ini::new_from_file(path)? {
             Some(ini) => {
                 self.load_ini(&ini)?;
+                self.check_permissions(path);
             }
             None if self.variant == ConfigVariant::Server => {
                 return Err(err!("Configuration file {} does not exist", path.display()));
@@ -901,7 +902,6 @@ impl Config {
             None => (), // Default empty config for client.
         }
         self.path = Some(path.to_path_buf());
-        self.check_permissions(path);
         Ok(())
     }
 
@@ -951,8 +951,8 @@ impl Config {
 
         #[cfg(not(unix))]
         {
-            // Windows doesn't use Unix permissions
-            let _ = path; // Suppress unused warning
+            // No permission checks on non-Unix platforms.
+            let _ = path;
         }
     }
 
