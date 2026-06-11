@@ -139,7 +139,7 @@ impl std::fmt::Display for LeaseType {
 /// Dynamic resource lease.
 #[derive(Clone)]
 struct Lease {
-    addr: Option<IpAddr>,
+    client_addr: IpAddr,
     timeout: Instant,
     type_: LeaseType,
 }
@@ -148,7 +148,7 @@ impl Lease {
     /// Create a new port-lease.
     pub fn new_port(
         conf: &Config,
-        addr: IpAddr,
+        client_addr: IpAddr,
         port: LeasePort,
         timeout: Option<Duration>,
     ) -> Self {
@@ -159,13 +159,13 @@ impl Lease {
                 LeasePort::Tcp(p) | LeasePort::Udp(p) | LeasePort::TcpUdp(p) => p,
             }
         );
-        Self::new(conf, Some(addr), LeaseType::Port { port }, timeout)
+        Self::new(conf, client_addr, LeaseType::Port { port }, timeout)
     }
 
     /// Create a new jump-lease.
     pub fn new_jump(
         conf: &Config,
-        addr: Option<IpAddr>,
+        client_addr: IpAddr,
         chain: FirewallChain,
         target: &str,
         match_saddr: bool,
@@ -173,7 +173,7 @@ impl Lease {
     ) -> Self {
         Self::new(
             conf,
-            addr,
+            client_addr,
             LeaseType::Jump {
                 chain,
                 target: target.to_string(),
@@ -185,13 +185,13 @@ impl Lease {
 
     fn new(
         conf: &Config,
-        addr: Option<IpAddr>,
+        client_addr: IpAddr,
         type_: LeaseType,
         timeout: Option<Duration>,
     ) -> Self {
         let timeout = Instant::now() + timeout.unwrap_or_else(|| conf.nft_timeout());
         Self {
-            addr,
+            client_addr,
             timeout,
             type_,
         }
@@ -207,9 +207,9 @@ impl Lease {
         now >= self.timeout
     }
 
-    /// Get the IP address of this lease.
-    pub fn addr(&self) -> Option<IpAddr> {
-        self.addr
+    /// Get the client IP address of this lease.
+    pub fn client_addr(&self) -> IpAddr {
+        self.client_addr
     }
 
     /// Get the lease type.
@@ -220,10 +220,12 @@ impl Lease {
 
 impl std::fmt::Display for Lease {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let addr = self
-            .addr()
-            .map_or_else(|| "any".to_string(), |a| a.to_string());
-        write!(f, "Lease(addr={addr}, {})", self.type_())
+        write!(
+            f,
+            "Lease(client_addr={}, {})",
+            self.client_addr(),
+            self.type_()
+        )
     }
 }
 
@@ -243,17 +245,16 @@ fn port_lease_id(addr: IpAddr, port: LeasePort) -> PortLeaseId {
 
 /// Key in the jump lease map.
 ///
-/// - `0`: Address of the client that the jump uses as saddr condition
-///   or `None` if the jump is unconditional.
+/// - `0`: Address of the client that initiated this jump.
 /// - `1`: The firewall chain that the jump is added to.
 /// - `2`: The name of the target chain that the jump jumps to.
-type JumpLeaseId = (Option<IpAddr>, FirewallChain, String);
+type JumpLeaseId = (IpAddr, FirewallChain, String);
 
 /// A map of jump [Lease]s.
 type JumpLeaseMap = HashMap<JumpLeaseId, Lease>;
 
 /// Make a new `JumpLeaseId`.
-fn jump_lease_id(addr: Option<IpAddr>, chain: FirewallChain, target: &str) -> JumpLeaseId {
+fn jump_lease_id(addr: IpAddr, chain: FirewallChain, target: &str) -> JumpLeaseId {
     (addr, chain, target.to_string())
 }
 

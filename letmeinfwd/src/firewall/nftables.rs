@@ -248,12 +248,13 @@ fn gen_add_port_lease_cmd<'a>(
 fn gen_add_jump_cmd<'a>(
     names: &'a NftNames,
     chain: &'a str,
-    addr: Option<IpAddr>,
+    client_addr: IpAddr,
+    match_saddr: Option<IpAddr>,
     target: &'a str,
 ) -> ah::Result<NfCmd<'a>> {
     let mut expr = Vec::with_capacity(2);
-    if let Some(addr) = addr {
-        expr.push(statement_match_saddr(names.family, addr)?);
+    if let Some(match_saddr) = match_saddr {
+        expr.push(statement_match_saddr(names.family, match_saddr)?);
     }
     expr.push(statement_jump(target));
     let mut rule = Rule {
@@ -263,7 +264,11 @@ fn gen_add_jump_cmd<'a>(
         expr: Cow::Owned(expr),
         ..Default::default()
     };
-    rule.comment = Some(Cow::Owned(gen_rule_comment(addr, None, Some(target))?));
+    rule.comment = Some(Cow::Owned(gen_rule_comment(
+        Some(client_addr),
+        None,
+        Some(target),
+    )?));
     Ok(NfCmd::Add(NfListObject::Rule(rule)))
 }
 
@@ -277,8 +282,7 @@ fn gen_add_lease_cmds<'a>(
     let mut cmds = Vec::with_capacity(3);
     match lease.type_() {
         LeaseType::Port { port } => {
-            let addr = lease.addr();
-            assert!(addr.is_some());
+            let addr = Some(lease.client_addr());
             match port {
                 LeasePort::Tcp(port) => {
                     let port = SingleLeasePort::Tcp(*port);
@@ -301,9 +305,16 @@ fn gen_add_lease_cmds<'a>(
             target,
             match_saddr,
         } => {
-            assert_eq!(*match_saddr, lease.addr().is_some());
+            let client_addr = lease.client_addr();
+            let match_saddr = option_if(client_addr, *match_saddr);
             let chain = names.get_chain(*chain)?;
-            cmds.push(gen_add_jump_cmd(names, chain, lease.addr(), target)?);
+            cmds.push(gen_add_jump_cmd(
+                names,
+                chain,
+                client_addr,
+                match_saddr,
+                target,
+            )?);
         }
     }
     if conf.debug() {
@@ -347,11 +358,11 @@ impl ListedRuleset<'_> {
         family: NfFamily,
         table: &str,
         chain: &str,
-        addr: Option<IpAddr>,
+        client_addr: IpAddr,
         port: Option<SingleLeasePort>,
         target: Option<&str>,
     ) -> ah::Result<u32> {
-        let comment = gen_rule_comment(addr, port, target)?;
+        let comment = gen_rule_comment(Some(client_addr), port, target)?;
         for obj in &*self.objs {
             if let NfObject::ListObject(obj) = obj {
                 match obj {
@@ -375,7 +386,7 @@ impl ListedRuleset<'_> {
         }
         Err(err!(
             "Nftables handle for {}/{}/{} not found in the kernel ruleset.",
-            addr.map(|a| a.to_string()).unwrap_or_default(),
+            client_addr,
             port.map(|p| p.to_string()).unwrap_or_default(),
             target.unwrap_or_default()
         ))
@@ -389,9 +400,8 @@ impl ListedRuleset<'_> {
         names: &'a NftNames,
         lease: &Lease,
     ) -> ah::Result<Vec<NfCmd<'a>>> {
-        let addr = lease.addr();
-
         let new_rule = |chain: &'a str,
+                        client_addr: IpAddr,
                         port: Option<SingleLeasePort>,
                         target: Option<&str>|
          -> ah::Result<NfCmd> {
@@ -402,36 +412,49 @@ impl ListedRuleset<'_> {
                 expr: Cow::Owned(vec![]),
                 ..Default::default()
             };
-            rule.handle =
-                Some(self.find_handle(names.family, names.table, chain, addr, port, target)?);
+            rule.handle = Some(self.find_handle(
+                names.family,
+                names.table,
+                chain,
+                client_addr,
+                port,
+                target,
+            )?);
             Ok(NfCmd::Delete(NfListObject::Rule(rule)))
         };
 
         let mut cmds = Vec::with_capacity(2);
         match lease.type_() {
-            LeaseType::Port { port } => match port {
-                LeasePort::Tcp(port) => {
-                    let chain = names.get_chain_input()?;
-                    cmds.push(new_rule(chain, Some(SingleLeasePort::Tcp(*port)), None)?);
+            LeaseType::Port { port } => {
+                let client_addr = lease.client_addr();
+                match port {
+                    LeasePort::Tcp(port) => {
+                        let chain = names.get_chain_input()?;
+                        let port = Some(SingleLeasePort::Tcp(*port));
+                        cmds.push(new_rule(chain, client_addr, port, None)?);
+                    }
+                    LeasePort::Udp(port) => {
+                        let chain = names.get_chain_input()?;
+                        let port = Some(SingleLeasePort::Udp(*port));
+                        cmds.push(new_rule(chain, client_addr, port, None)?);
+                    }
+                    LeasePort::TcpUdp(port) => {
+                        let chain = names.get_chain_input()?;
+                        let tcp_port = Some(SingleLeasePort::Tcp(*port));
+                        let udp_port = Some(SingleLeasePort::Udp(*port));
+                        cmds.push(new_rule(chain, client_addr, tcp_port, None)?);
+                        cmds.push(new_rule(chain, client_addr, udp_port, None)?);
+                    }
                 }
-                LeasePort::Udp(port) => {
-                    let chain = names.get_chain_input()?;
-                    cmds.push(new_rule(chain, Some(SingleLeasePort::Udp(*port)), None)?);
-                }
-                LeasePort::TcpUdp(port) => {
-                    let chain = names.get_chain_input()?;
-                    cmds.push(new_rule(chain, Some(SingleLeasePort::Tcp(*port)), None)?);
-                    cmds.push(new_rule(chain, Some(SingleLeasePort::Udp(*port)), None)?);
-                }
-            },
+            }
             LeaseType::Jump {
                 chain,
                 target,
-                match_saddr,
+                match_saddr: _,
             } => {
-                assert_eq!(*match_saddr, lease.addr().is_some());
+                let client_addr = lease.client_addr();
                 let chain = names.get_chain(*chain)?;
-                cmds.push(new_rule(chain, None, Some(target))?);
+                cmds.push(new_rule(chain, client_addr, None, Some(target))?);
             }
         }
         if conf.debug() {
@@ -735,15 +758,14 @@ impl NftFirewallInner {
                 continue;
             };
 
-            let addr = option_if(remote_addr, *match_saddr);
-            let key = jump_lease_id(addr, *chain, target_chain);
+            let key = jump_lease_id(remote_addr, *chain, target_chain);
 
             if self.jump_leases.contains_key(&key) {
                 refresh_leases.push(key);
             } else {
                 new_leases.push(Lease::new_jump(
                     conf,
-                    addr,
+                    remote_addr,
                     *chain,
                     target_chain,
                     *match_saddr,
@@ -764,7 +786,7 @@ impl NftFirewallInner {
                     match_saddr: _,
                 } = lease.type_()
                 {
-                    let key = jump_lease_id(lease.addr(), *chain, target);
+                    let key = jump_lease_id(lease.client_addr(), *chain, target);
                     self.jump_leases.insert(key, lease);
                 } else {
                     unreachable!();
@@ -791,29 +813,16 @@ impl NftFirewallInner {
         assert!(!self.shutdown);
 
         let mut removed = false;
-        for (target_chain, match_saddr, chain) in &[
-            (
-                targets.input.as_ref(),
-                targets.input_match_saddr,
-                FirewallChain::Input,
-            ),
-            (
-                targets.forward.as_ref(),
-                targets.forward_match_saddr,
-                FirewallChain::Forward,
-            ),
-            (
-                targets.output.as_ref(),
-                targets.output_match_saddr,
-                FirewallChain::Output,
-            ),
+        for (target_chain, chain) in &[
+            (targets.input.as_ref(), FirewallChain::Input),
+            (targets.forward.as_ref(), FirewallChain::Forward),
+            (targets.output.as_ref(), FirewallChain::Output),
         ] {
             let Some(target_chain) = target_chain else {
                 continue;
             };
 
-            let addr = option_if(remote_addr, *match_saddr);
-            let key = jump_lease_id(addr, *chain, target_chain);
+            let key = jump_lease_id(remote_addr, *chain, target_chain);
 
             if let Some(lease) = self.jump_leases.remove(&key) {
                 if let Err(e) = self
