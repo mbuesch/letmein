@@ -816,7 +816,7 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "letmein"
-version = "12.3.0"
+version = "12.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-conf"
-version = "12.3.0"
+version = "12.4.0"
 dependencies = [
  "anyhow",
  "ctutils",
@@ -841,7 +841,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-fwproto"
-version = "12.3.0"
+version = "12.4.0"
 dependencies = [
  "anyhow",
  "letmein-conf",
@@ -851,7 +851,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-proto"
-version = "12.3.0"
+version = "12.4.0"
 dependencies = [
  "anyhow",
  "ctutils",
@@ -863,7 +863,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-seccomp"
-version = "12.3.0"
+version = "12.4.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -872,7 +872,7 @@ dependencies = [
 
 [[package]]
 name = "letmein-systemd"
-version = "12.3.0"
+version = "12.4.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -881,7 +881,7 @@ dependencies = [
 
 [[package]]
 name = "letmeind"
-version = "12.3.0"
+version = "12.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -896,7 +896,7 @@ dependencies = [
 
 [[package]]
 name = "letmeinfwd"
-version = "12.3.0"
+version = "12.4.0"
 dependencies = [
  "anyhow",
  "clap",
