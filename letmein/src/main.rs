@@ -90,6 +90,9 @@ struct Opts {
     #[cfg(feature = "hickory-resolver")]
     #[arg(long, default_value = "system,quad9,google,cloudflare", value_parser = parse_dns)]
     dns: ResSrv,
+    #[cfg(not(feature = "hickory-resolver"))]
+    #[arg(long, hide = true)]
+    dns: Option<String>,
 
     /// DNS resolver transport encryption.
     ///
@@ -106,6 +109,9 @@ struct Opts {
     #[cfg(feature = "hickory-resolver")]
     #[arg(long, default_value = "tls,https,unencrypted", value_parser = parse_dns_crypt)]
     dns_crypt: ResCrypt,
+    #[cfg(not(feature = "hickory-resolver"))]
+    #[arg(long, hide = true)]
+    dns_crypt: Option<String>,
 
     /// Override the `seccomp` setting from the configuration file.
     ///
@@ -130,25 +136,41 @@ impl Opts {
     }
 
     /// Get the DNS resolver configuration from command line or default.
-    #[cfg_attr(not(feature = "hickory-resolver"), allow(clippy::unused_self))]
     pub fn get_dns(&self) -> ResSrv {
         #[cfg(feature = "hickory-resolver")]
         let dns = self.dns.clone();
 
         #[cfg(not(feature = "hickory-resolver"))]
-        let dns = ResSrv::default();
+        let dns = {
+            if self.dns.is_some() {
+                eprintln!(
+                    "WARNING: The command line option --dns has become obsolete \
+                    and doesn't do anything anymore. \
+                    The system DNS resolver is always used instead."
+                );
+            }
+            ResSrv::default()
+        };
 
         dns
     }
 
     /// Get the DNS resolver transport encryption configuration from command line or default.
-    #[cfg_attr(not(feature = "hickory-resolver"), allow(clippy::unused_self))]
     pub fn get_dns_crypt(&self) -> ResCrypt {
         #[cfg(feature = "hickory-resolver")]
         let dns_crypt = self.dns_crypt.clone();
 
         #[cfg(not(feature = "hickory-resolver"))]
-        let dns_crypt = ResCrypt::default();
+        let dns_crypt = {
+            if self.dns_crypt.is_some() {
+                eprintln!(
+                    "WARNING: The command line option --dns-crypt has become obsolete \
+                    and doesn't do anything anymore. \
+                    The system DNS resolver is always used instead."
+                );
+            }
+            ResCrypt::default()
+        };
 
         dns_crypt
     }

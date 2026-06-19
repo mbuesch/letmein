@@ -7,7 +7,7 @@ basedir="$(dirname "$(realpath "$0")")"
 . "$basedir/scripts/lib.sh"
 
 release="both"
-hickory_resolver=1
+hickory_resolver=0
 while [ $# -ge 1 ]; do
     case "$1" in
         --debug|-d)
