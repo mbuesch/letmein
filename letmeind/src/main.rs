@@ -11,6 +11,7 @@
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 std::compile_error!("letmeind server does not support non-Linux platforms.");
 
+mod auth_rate_limiter;
 mod firewall_client;
 mod ip_limiter;
 mod protocol;
@@ -18,6 +19,7 @@ mod seccomp;
 mod server;
 
 use crate::{
+    auth_rate_limiter::AuthRateLimiter,
     ip_limiter::IpLimiter,
     protocol::Protocol,
     seccomp::install_seccomp_rules,
@@ -168,6 +170,12 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
             let ip_limiter = Arc::new(IpLimiter::new(
                 opts.num_ip_connections.min(opts.num_connections),
             ));
+            let auth_rate_limiter = Arc::new(AuthRateLimiter::new(
+                conf.auth_max_attempts(),
+                conf.auth_time_window(),
+                conf.auth_base_delay(),
+                conf.auth_max_delay(),
+            ));
 
             loop {
                 match srv.accept().await {
@@ -196,9 +204,11 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                             let conf = Arc::clone(&conf);
                             let opts = Arc::clone(&opts);
                             let ip_limiter = Arc::clone(&ip_limiter);
+                            let auth_rate_limiter = Arc::clone(&auth_rate_limiter);
 
                             async move {
-                                let mut proto = Protocol::new(&*conn, &conf, &opts.rundir);
+                                let mut proto =
+                                    Protocol::new(&*conn, &conf, &opts.rundir, &auth_rate_limiter);
                                 if let Err(e) = proto.run().await {
                                     eprintln!(
                                         "Client '{}/{}' ERROR: {}",
