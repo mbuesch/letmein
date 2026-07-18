@@ -536,7 +536,7 @@ fn extract_resource_port(
 
     let users = extract_users(id, &users)?;
 
-    for (_, res) in resources.iter() {
+    for res in resources.values() {
         match res {
             Resource::Port { port: res_port, .. } => {
                 if *res_port == port {
