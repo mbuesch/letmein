@@ -48,6 +48,10 @@ const CLIENT_CONF_PATH: &str = "letmein.conf";
 
 const DEFAULT_CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_NFT_TIMEOUT: Duration = Duration::from_secs(600);
+const DEFAULT_AUTH_MAX_ATTEMPTS: u32 = 5;
+const DEFAULT_AUTH_TIME_WINDOW: Duration = Duration::from_secs(60);
+const DEFAULT_AUTH_BASE_DELAY: Duration = Duration::from_secs(1);
+const DEFAULT_AUTH_MAX_DELAY: Duration = Duration::from_secs(300);
 
 const MAX_CHAIN_LEN: usize = 64;
 
@@ -428,6 +432,38 @@ fn get_seccomp(ini: &Ini) -> ah::Result<Seccomp> {
         return seccomp.parse();
     }
     Ok(Default::default())
+}
+
+fn get_auth_max_attempts(ini: &Ini) -> ah::Result<u32> {
+    if let Some(value) = ini.get("GENERAL", "auth-max-attempts") {
+        let value = value.trim();
+        if !is_number(value) {
+            return Err(err!("[GENERAL] auth-max-attempts: Invalid number"));
+        }
+        return value.parse().context("[GENERAL] auth-max-attempts");
+    }
+    Ok(DEFAULT_AUTH_MAX_ATTEMPTS)
+}
+
+fn get_auth_time_window(ini: &Ini) -> ah::Result<Duration> {
+    if let Some(value) = ini.get("GENERAL", "auth-time-window") {
+        return parse_duration(value).context("[GENERAL] auth-time-window");
+    }
+    Ok(DEFAULT_AUTH_TIME_WINDOW)
+}
+
+fn get_auth_base_delay(ini: &Ini) -> ah::Result<Duration> {
+    if let Some(value) = ini.get("GENERAL", "auth-base-delay") {
+        return parse_duration(value).context("[GENERAL] auth-base-delay");
+    }
+    Ok(DEFAULT_AUTH_BASE_DELAY)
+}
+
+fn get_auth_max_delay(ini: &Ini) -> ah::Result<Duration> {
+    if let Some(value) = ini.get("GENERAL", "auth-max-delay") {
+        return parse_duration(value).context("[GENERAL] auth-max-delay");
+    }
+    Ok(DEFAULT_AUTH_MAX_DELAY)
 }
 
 fn get_keys(ini: &Ini) -> ah::Result<HashMap<UserId, Key>> {
@@ -828,6 +864,10 @@ pub struct Config {
     control_timeout: Duration,
     control_error_policy: ErrorPolicy,
     seccomp: Seccomp,
+    auth_max_attempts: u32,
+    auth_time_window: Duration,
+    auth_base_delay: Duration,
+    auth_max_delay: Duration,
     keys: HashMap<UserId, Key>,
     resources: HashMap<ResourceId, Resource>,
     default_user: UserId,
@@ -848,6 +888,10 @@ impl Config {
             checksum: Default::default(),
             variant,
             control_timeout: DEFAULT_CONTROL_TIMEOUT,
+            auth_max_attempts: DEFAULT_AUTH_MAX_ATTEMPTS,
+            auth_time_window: DEFAULT_AUTH_TIME_WINDOW,
+            auth_base_delay: DEFAULT_AUTH_BASE_DELAY,
+            auth_max_delay: DEFAULT_AUTH_MAX_DELAY,
             nft_timeout: DEFAULT_NFT_TIMEOUT,
             ..Default::default()
         }
@@ -978,6 +1022,10 @@ impl Config {
         let control_timeout = get_control_timeout(ini)?;
         let control_error_policy = get_control_error_policy(ini)?;
         let seccomp = get_seccomp(ini)?;
+        let auth_max_attempts = get_auth_max_attempts(ini)?;
+        let auth_time_window = get_auth_time_window(ini)?;
+        let auth_base_delay = get_auth_base_delay(ini)?;
+        let auth_max_delay = get_auth_max_delay(ini)?;
         let keys = get_keys(ini)?;
         let resources = get_resources(ini)?;
         if self.variant == ConfigVariant::Client {
@@ -999,6 +1047,10 @@ impl Config {
         self.control_timeout = control_timeout;
         self.control_error_policy = control_error_policy;
         self.seccomp = seccomp;
+        self.auth_max_attempts = auth_max_attempts;
+        self.auth_time_window = auth_time_window;
+        self.auth_base_delay = auth_base_delay;
+        self.auth_max_delay = auth_max_delay;
         self.keys = keys;
         self.resources = resources;
         self.default_user = default_user;
@@ -1046,6 +1098,30 @@ impl Config {
     #[must_use]
     pub fn seccomp(&self) -> Seccomp {
         self.seccomp
+    }
+
+    /// Get the `auth-max-attempts` option from `[GENERAL]` section.
+    #[must_use]
+    pub fn auth_max_attempts(&self) -> u32 {
+        self.auth_max_attempts
+    }
+
+    /// Get the `auth-time-window` option from `[GENERAL]` section.
+    #[must_use]
+    pub fn auth_time_window(&self) -> Duration {
+        self.auth_time_window
+    }
+
+    /// Get the `auth-base-delay` option from `[GENERAL]` section.
+    #[must_use]
+    pub fn auth_base_delay(&self) -> Duration {
+        self.auth_base_delay
+    }
+
+    /// Get the `auth-max-delay` option from `[GENERAL]` section.
+    #[must_use]
+    pub fn auth_max_delay(&self) -> Duration {
+        self.auth_max_delay
     }
 
     /// Get a list of all configured users.

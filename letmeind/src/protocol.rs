@@ -6,11 +6,13 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{firewall_client::FirewallClient, server::ConnectionOps};
+use crate::{
+    auth_rate_limiter::AuthRateLimiter, firewall_client::FirewallClient, server::ConnectionOps,
+};
 use anyhow::{self as ah, format_err as err};
 use letmein_conf::{Config, ErrorPolicy, Resource};
 use letmein_proto::{Message, Operation, ResourceId, UserId};
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 use tokio::time::timeout;
 
 /// Protocol authentication state.
@@ -32,17 +34,24 @@ pub struct Protocol<'a, C> {
     conn: &'a C,
     conf: &'a Config,
     rundir: &'a Path,
+    auth_rate_limiter: &'a Arc<AuthRateLimiter>,
     user_id: Option<UserId>,
     resource_id: Option<ResourceId>,
     auth_state: AuthState,
 }
 
 impl<'a, C: ConnectionOps> Protocol<'a, C> {
-    pub fn new(conn: &'a C, conf: &'a Config, rundir: &'a Path) -> Self {
+    pub fn new(
+        conn: &'a C,
+        conf: &'a Config,
+        rundir: &'a Path,
+        auth_rate_limiter: &'a Arc<AuthRateLimiter>,
+    ) -> Self {
         Self {
             conn,
             conf,
             rundir,
+            auth_rate_limiter,
             user_id: None,
             resource_id: None,
             auth_state: AuthState::NotAuth,
@@ -136,6 +145,20 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         self.resource_id = None;
         self.auth_state = AuthState::NotAuth;
 
+        // Check rate limiting before processing the request
+        let peer_ip = self.conn.peer_addr().ip();
+        if let Err(wait_time) = self.auth_rate_limiter.check_attempt_allowed(peer_ip) {
+            eprintln!(
+                "[{peer_ip}]: Rate limit exceeded. Must wait {:.1}s before next attempt.",
+                wait_time.as_secs_f64()
+            );
+            return self
+                .send_go_away(Err(err!(
+                    "Rate limit exceeded. Too many authentication attempts."
+                )))
+                .await;
+        }
+
         // Receive the initial knock/revoke message.
         let initial_message = self
             .recv_msg(&[Operation::Knock, Operation::Revoke])
@@ -159,6 +182,8 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         // Authenticate the received message.
         // This check is not replay-safe. But that's fine.
         if !initial_message.check_auth_ok_no_challenge(key) {
+            // Record failed authentication attempt
+            self.auth_rate_limiter.record_failed_attempt(peer_ip);
             return self
                 .send_go_away(Err(err!("Knock: Authentication failed")))
                 .await;
@@ -217,11 +242,16 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Authenticate the challenge-response.
         if !response.check_auth_ok(key, challenge) {
+            // Record failed authentication attempt
+            self.auth_rate_limiter.record_failed_attempt(peer_ip);
             return self
                 .send_go_away(Err(err!("Response: Authentication failed")))
                 .await;
         }
         self.auth_state = AuthState::ChallengeResponseAuth;
+
+        // Record successful authentication
+        self.auth_rate_limiter.record_success(peer_ip);
 
         // Reconfigure the firewall.
         let peer_ip_addr = self.conn.peer_addr().ip();

@@ -139,6 +139,54 @@ The recommended value is: `basic-auth`
 
 This option defaults to `control-error-policy=always`, if it is absent from the configuration.
 
+### `auth-max-attempts`
+
+The `auth-max-attempts` option specifies the maximum number of failed authentication attempts allowed from a single IP address within the time window before rate limiting is applied.
+
+This helps prevent brute-force attacks by limiting how many times an attacker can attempt to authenticate.
+
+IPv6 addresses are masked to a /56 prefix to prevent evasion by rotating the interface identifier.
+
+Possible values: Any positive integer
+
+This option defaults to `auth-max-attempts=5`, if it is absent from the configuration.
+
+### `auth-time-window`
+
+The `auth-time-window` option specifies the time window (in seconds) for counting failed authentication attempts.
+
+Failed attempts older than this window are not counted toward the rate limit.
+
+After this time window expires without additional failures, the failure count is reset.
+
+Possible values: Any positive number of seconds
+
+This option defaults to `auth-time-window=60`, if it is absent from the configuration.
+
+### `auth-base-delay`
+
+The `auth-base-delay` option specifies the initial delay (in seconds) imposed after the first failed authentication attempt.
+
+The delay increases exponentially with each subsequent failure using the formula: `base_delay * 2^(attempts-1)`.
+
+This exponential backoff makes brute-force attacks increasingly time-consuming.
+
+Possible values: Any positive number of seconds
+
+This option defaults to `auth-base-delay=1`, if it is absent from the configuration.
+
+### `auth-max-delay`
+
+The `auth-max-delay` option specifies the maximum delay (in seconds) after repeated failed authentication attempts.
+
+This caps the exponential backoff to prevent excessively long delays that could be used for denial-of-service attacks.
+
+Even with many failures, the delay will never exceed this maximum value.
+
+Possible values: Any positive number of seconds
+
+This option defaults to `auth-max-delay=300` (5 minutes), if it is absent from the configuration.
+
 ### `seccomp`
 
 The `seccomp` option turns [Seccomp](https://en.wikipedia.org/wiki/Seccomp) security hardening on or off.
