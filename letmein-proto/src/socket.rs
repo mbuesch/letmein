@@ -79,12 +79,21 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
     }
 
     /// Try to receive a new datagram from the socket.
+    ///
+    /// This must never fail because of problems that are caused by
+    /// input that is fully controlled by a remote peer.
+    /// `Err` is reserved for local failures.
     fn try_recv(&mut self, socket: &UdpSocket, accept_notify: &Sender<()>) -> ah::Result<()> {
         let mut buf = [0_u8; MSG_SIZE];
         match socket.try_recv_from(&mut buf) {
             Ok((n, peer_addr)) => {
                 if n != MSG_SIZE {
-                    return Err(err!("Socket read: Invalid datagram size: {n}"));
+                    if DEBUG {
+                        eprintln!(
+                            "UDP-dispatcher: try_recv: Datagram invalid size {n} from {peer_addr}."
+                        );
+                    }
+                    return Ok(());
                 }
 
                 // Add the received datagram to an existing connection
@@ -105,7 +114,12 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 assert!(conn.rx_queue.len() <= Q_SIZE);
                 if conn.rx_queue.len() == Q_SIZE {
                     self.disconnect(peer_addr); // Close connection.
-                    return Err(err!("UDP socket read: RX queue overflow (max={Q_SIZE})."));
+                    if DEBUG {
+                        eprintln!(
+                            "UDP-dispatcher: try_recv {peer_addr}: RX-Q overflow (max={Q_SIZE})."
+                        );
+                    }
+                    return Ok(());
                 }
                 conn.rx_queue.push_back(buf);
                 self.nr_queued_dgrams += 1;
@@ -116,10 +130,13 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 // we exceeded the maximum number of connections.
                 if self.conn.len() > self.max_nr_conn {
                     self.disconnect(peer_addr); // Close connection.
-                    return Err(err!(
-                        "UDP socket read: Too many connections (max={}).",
-                        self.max_nr_conn
-                    ));
+                    if DEBUG {
+                        eprintln!(
+                            "UDP-dispatcher: try_recv {peer_addr}: Too many conns (max={}).",
+                            self.max_nr_conn
+                        );
+                    }
+                    return Ok(());
                 }
 
                 assert!(self.nr_queued_dgrams <= self.max_nr_conn * Q_SIZE);
