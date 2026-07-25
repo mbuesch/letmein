@@ -82,12 +82,49 @@ impl Drop for Connection {
     }
 }
 
+/// Check whether an `accept(2)` error is transient, i.e. caused by a specific
+/// (potentially malicious or misbehaving) connection attempt or by temporary
+/// resource exhaustion, as opposed to the listening socket itself being broken.
+fn is_transient_accept_err(e: &std::io::Error) -> bool {
+    [
+        Some(libc::ECONNABORTED), // Connection aborted by peer.
+        Some(libc::EINTR),        // Interrupted system call.
+        Some(libc::EMFILE),       // Too many open files (per-process limit).
+        Some(libc::ENFILE),       // Too many open files (system-wide limit).
+        Some(libc::ENOBUFS),      // No buffer space available.
+        Some(libc::ENOMEM),       // Out of memory.
+        Some(libc::EPERM),        // Forbidden by firewall rules.
+    ]
+    .contains(&e.raw_os_error())
+}
+
+fn need_retry_throttling(e: &std::io::Error) -> bool {
+    [
+        Some(libc::EMFILE),
+        Some(libc::ENFILE),
+        Some(libc::ENOBUFS),
+        Some(libc::ENOMEM),
+    ]
+    .contains(&e.raw_os_error())
+}
+
 type TcpJoinHandle = Pin<Box<JoinHandle<ah::Result<(TcpStream, SocketAddr)>>>>;
 
 fn spawn_tcp_accept(tcp: Arc<Option<TcpListener>>) -> TcpJoinHandle {
     Box::pin(task::spawn(async move {
         if let Some(tcp) = tcp.as_ref() {
-            return Ok(tcp.accept().await?);
+            loop {
+                match tcp.accept().await {
+                    Ok(accepted) => return Ok(accepted),
+                    Err(e) if is_transient_accept_err(&e) => {
+                        eprintln!("TCP accept(): Transient error, retrying: {e}");
+                        if need_retry_throttling(&e) {
+                            time::sleep(Duration::from_millis(10)).await;
+                        }
+                    }
+                    Err(e) => return Err(e).context("TCP accept() failed"),
+                }
+            }
         }
         sleep_forever().await;
         unreachable!();
@@ -99,6 +136,8 @@ type UdpJoinHandle = Pin<Box<JoinHandle<ah::Result<(Arc<MsgUdpDispatcher>, Socke
 fn spawn_udp_accept(udp: Arc<Option<Arc<MsgUdpDispatcher>>>) -> UdpJoinHandle {
     Box::pin(task::spawn(async move {
         if let Some(udp) = udp.as_ref() {
+            // Transient errors are handled down in the UdpDispatcher,
+            // so we don't need to handle them here.
             let peer_addr = udp.accept().await?;
             return Ok((Arc::clone(udp), peer_addr));
         }
@@ -207,18 +246,28 @@ impl Server {
     }
 
     pub async fn accept(&mut self) -> ah::Result<Connection> {
-        tokio::select! {
-            result = &mut self.tcp_join => {
-                self.tcp_join = spawn_tcp_accept(Arc::clone(&self.tcp));
-                let (stream, peer_addr) = result??;
-                let ns = MsgNetSocket::from_tcp(stream)?;
-                Ok(Connection::new(ns, peer_addr, "TCP"))
-            }
-            result = &mut self.udp_join => {
-                self.udp_join = spawn_udp_accept(Arc::clone(&self.udp));
-                let (udp_disp, peer_addr) = result??;
-                let ns = MsgNetSocket::from_udp(udp_disp, peer_addr)?;
-                Ok(Connection::new(ns, peer_addr, "UDP"))
+        loop {
+            tokio::select! {
+                result = &mut self.tcp_join => {
+                    self.tcp_join = spawn_tcp_accept(Arc::clone(&self.tcp));
+                    let (stream, peer_addr) = result??;
+                    match MsgNetSocket::from_tcp(stream) {
+                        Ok(ns) => return Ok(Connection::new(ns, peer_addr, "TCP")),
+                        Err(e) => {
+                            eprintln!("Client '{peer_addr}/TCP': ERROR: Failed create MsgNetSocket: {e}");
+                        }
+                    }
+                }
+                result = &mut self.udp_join => {
+                    self.udp_join = spawn_udp_accept(Arc::clone(&self.udp));
+                    let (udp_disp, peer_addr) = result??;
+                    match MsgNetSocket::from_udp(udp_disp, peer_addr) {
+                        Ok(ns) => return Ok(Connection::new(ns, peer_addr, "UDP")),
+                        Err(e) => {
+                            eprintln!("Client '{peer_addr}/UDP': ERROR: Failed create MsgNetSocket: {e}");
+                        }
+                    }
+                }
             }
         }
     }
