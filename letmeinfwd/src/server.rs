@@ -40,6 +40,7 @@ fn get_letmeind_pid(rundir: &Path) -> ah::Result<pid_t> {
         .read(true)
         .open(rundir.join("letmeind/letmeind.pid"))
         .context("Open PID-file of 'letmeind' daemon")?
+        .take(32) // Limit the maximum file read size.
         .read_to_string(&mut pid)
         .context("Read PID-file of 'letmeind' daemon")?;
     pid.trim()
