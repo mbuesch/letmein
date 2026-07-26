@@ -15,10 +15,10 @@ use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::{Config, Resource};
 use letmein_fwproto::{FWD_IPC_TIMEOUT, FirewallMessage, FirewallOperation, SOCK_FILE};
 use letmein_systemd::{SystemdSocket, systemd_notify_ready};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{
     fs::{OpenOptions, metadata, remove_file},
-    io::Read as _,
+    io::{ErrorKind, Read as _},
     net::IpAddr,
     os::unix::fs::{MetadataExt as _, OpenOptionsExt as _},
     path::{Path, PathBuf},
@@ -26,23 +26,53 @@ use std::{
 };
 use tokio::{
     net::{UnixListener, UnixStream, unix::pid_t},
-    time::timeout,
+    time::{sleep, timeout},
 };
 
 // IPC timeout for receiving messages from letmeind.
 const RECV_TIMEOUT: Duration = Duration::from_secs(FWD_IPC_TIMEOUT.as_secs() * 100 / 75);
+// PID file read timeout
+const PID_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Get the actual PID of the `letmeind` daemon process.
-fn get_letmeind_pid(rundir: &Path) -> ah::Result<pid_t> {
-    let mut pid = String::new();
-    OpenOptions::new()
-        .custom_flags(libc::O_NOFOLLOW) // Trailing component must not be a symlink.
+async fn get_letmeind_pid(rundir: &Path) -> ah::Result<pid_t> {
+    let mut file = OpenOptions::new()
+        .custom_flags(
+            libc::O_NOFOLLOW | // Trailing component must not be a symlink.
+            libc::O_NONBLOCK, // Don't block on reading the PID-file.
+        )
         .read(true)
         .open(rundir.join("letmeind/letmeind.pid"))
-        .context("Open PID-file of 'letmeind' daemon")?
-        .take(32) // Limit the maximum file read size.
-        .read_to_string(&mut pid)
-        .context("Read PID-file of 'letmeind' daemon")?;
+        .context("Open PID-file of 'letmeind' daemon")?;
+
+    // Reading a regular file should never cause EWOULDBLOCK.
+    // However, we are reading from a foreign-owned path that an owner
+    // with less privileges owns.
+    // Ensure that the other end with less privileges cannot cause
+    // blocking or excessive computation on our side.
+    let max_read_bytes = 32_usize; // Limit the maximum file read size.
+    let mut pid = String::with_capacity(max_read_bytes);
+    let deadline = Instant::now() + PID_READ_TIMEOUT;
+    loop {
+        let remaining: u64 = max_read_bytes
+            .saturating_sub(pid.len())
+            .try_into()
+            .unwrap_or(0);
+        if remaining == 0 {
+            break;
+        }
+        match (&mut file).take(remaining).read_to_string(&mut pid) {
+            Ok(_) => break,
+            Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                if Instant::now() >= deadline {
+                    return Err(err!("Read PID-file of 'letmeind' daemon: Timeout."));
+                }
+            }
+            Err(e) => return Err(e).context("Read PID-file of 'letmeind' daemon"),
+        }
+        sleep(Duration::from_millis(10)).await;
+    }
+
     pid.trim()
         .parse()
         .context("Parse 'letmeind' PID-file string to number")
@@ -309,7 +339,7 @@ impl FirewallServer {
         let Some(pid) = cred.pid() else {
             return Err(err!("The connected pid is not known. Rejecting."));
         };
-        let expected_pid = get_letmeind_pid(&self.rundir)?;
+        let expected_pid = get_letmeind_pid(&self.rundir).await?;
         if pid != expected_pid {
             return Err(err!(
                 "The connected pid {pid} is not letmeind ({expected_pid}). Rejecting."
