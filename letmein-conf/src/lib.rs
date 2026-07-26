@@ -19,7 +19,7 @@ mod parse;
 mod parse_items;
 
 use crate::{
-    parse::{is_number, parse_bool, parse_duration, parse_hex, parse_u16},
+    parse::{is_number, parse_bool, parse_duration, parse_hex, parse_u16, parse_u32},
     parse_items::{Map, MapItem},
 };
 use anyhow::{self as ah, Context as _, format_err as err};
@@ -48,6 +48,8 @@ const CLIENT_CONF_PATH: &str = "letmein.conf";
 
 const DEFAULT_CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_NFT_TIMEOUT: Duration = Duration::from_secs(600);
+const DEFAULT_NFT_MAX_NR_RULES: u32 = 100;
+const NFT_MAX_NR_RULES_HARD_LIMIT: u32 = 1_000_000;
 
 const MAX_CHAIN_LEN: usize = 64;
 
@@ -807,6 +809,15 @@ fn get_nft_timeout(ini: &Ini) -> ah::Result<Duration> {
     }
 }
 
+fn get_nft_max_nr_rules(ini: &Ini) -> ah::Result<u32> {
+    if let Some(nft_max_nr_rules) = ini.get("NFTABLES", "max-nr-rules") {
+        let max_nr_rules = parse_u32(nft_max_nr_rules).context("[NFTABLES] max-nr-rules")?;
+        Ok(max_nr_rules.min(NFT_MAX_NR_RULES_HARD_LIMIT))
+    } else {
+        Ok(DEFAULT_NFT_MAX_NR_RULES.min(NFT_MAX_NR_RULES_HARD_LIMIT))
+    }
+}
+
 /// Configuration variant.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub enum ConfigVariant {
@@ -838,6 +849,7 @@ pub struct Config {
     nft_chain_forward: String,
     nft_chain_output: String,
     nft_timeout: Duration,
+    nft_max_nr_rules: u32,
 }
 
 impl Config {
@@ -972,6 +984,7 @@ impl Config {
         let mut nft_chain_forward = Default::default();
         let mut nft_chain_output = Default::default();
         let mut nft_timeout = DEFAULT_NFT_TIMEOUT;
+        let mut nft_max_nr_rules = DEFAULT_NFT_MAX_NR_RULES;
 
         let debug = get_debug(ini)?;
         let port = get_port(ini)?;
@@ -991,6 +1004,7 @@ impl Config {
             nft_chain_forward = get_nft_chain_forward(ini)?;
             nft_chain_output = get_nft_chain_output(ini)?;
             nft_timeout = get_nft_timeout(ini)?;
+            nft_max_nr_rules = get_nft_max_nr_rules(ini)?;
         }
 
         self.checksum = ini.checksum().clone();
@@ -1009,6 +1023,7 @@ impl Config {
         self.nft_chain_forward = nft_chain_forward;
         self.nft_chain_output = nft_chain_output;
         self.nft_timeout = nft_timeout;
+        self.nft_max_nr_rules = nft_max_nr_rules;
         Ok(())
     }
 
@@ -1144,6 +1159,12 @@ impl Config {
     #[must_use]
     pub fn nft_timeout(&self) -> Duration {
         self.nft_timeout
+    }
+
+    /// Get the `max-nr-rules` option from `[NFTABLES]` section.
+    #[must_use]
+    pub fn nft_max_nr_rules(&self) -> u32 {
+        self.nft_max_nr_rules
     }
 }
 
@@ -1417,7 +1438,7 @@ mod tests {
     fn test_nft() {
         let mut ini = Ini::new();
         ini.parse_str(
-            "[NFTABLES]\nexe = mynft \nfamily = ip6\ntable = myfilter\nchain-input = myLETMEIN-INPUT\ntimeout = 50\n",
+            "[NFTABLES]\nexe = mynft \nfamily = ip6\ntable = myfilter\nchain-input = myLETMEIN-INPUT\ntimeout = 50\nmax-nr-rules = 123456\n",
         )
         .unwrap();
         let nft_exe = get_nft_exe(&ini).unwrap();
@@ -1425,11 +1446,13 @@ mod tests {
         let nft_table = get_nft_table(&ini).unwrap();
         let nft_chain_input = get_nft_chain_input(&ini).unwrap();
         let nft_timeout = get_nft_timeout(&ini).unwrap();
+        let nft_max_nr_rules = get_nft_max_nr_rules(&ini).unwrap();
         assert_eq!(nft_exe, Path::new("mynft"));
         assert_eq!(nft_family, "ip6");
         assert_eq!(nft_table, "myfilter");
         assert_eq!(nft_chain_input, "myLETMEIN-INPUT");
         assert_eq!(nft_timeout, Duration::from_secs(50));
+        assert_eq!(nft_max_nr_rules, 123_456);
     }
 
     #[test]

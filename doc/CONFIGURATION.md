@@ -380,3 +380,15 @@ It is recommended to set this to a small duration of e.g. one minute `timeout=60
 This timeout can be overridden in the individual `[RESOURCES]`.
 
 This option defaults to `timeout=600`, if it is absent from the configuration.
+
+### `max-nr-rules`
+
+The maximum number of nftables rules that can be installed by letmein.
+
+If more than this number of rules are requested (e.g. by a large number of users knocking ports), then further requests will be rejected until some of the existing rules have timed out and been removed.
+
+This number includes all system rules installed by letmein, like the rule(s) required to open the letmein control port(s) itself.
+
+This option specifies a hard limit not even authenticated users can exceed to protect the availability of the server as a whole, as each firewall rule consumes system resources.
+
+This option defaults to `max-nr-rules=100`, if it is absent from the configuration.

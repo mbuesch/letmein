@@ -28,7 +28,7 @@ pub fn parse_u16(s: &str) -> ah::Result<u16> {
     }
 }
 
-fn parse_u32(s: &str) -> ah::Result<u32> {
+pub fn parse_u32(s: &str) -> ah::Result<u32> {
     let s = s.trim();
     if let Some(s) = s.strip_prefix("0x") {
         Ok(u32::from_str_radix(s, 16)?)
@@ -37,7 +37,7 @@ fn parse_u32(s: &str) -> ah::Result<u32> {
     }
 }
 
-fn parse_f64(s: &str) -> ah::Result<f64> {
+pub fn parse_f64(s: &str) -> ah::Result<f64> {
     let s = s.trim();
     let value = s.parse::<f64>()?;
     if value.is_finite() {

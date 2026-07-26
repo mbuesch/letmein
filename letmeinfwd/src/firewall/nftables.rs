@@ -279,7 +279,7 @@ fn gen_add_lease_cmds<'a>(
     names: &'a NftNames<'a>,
     lease: &'a Lease,
 ) -> ah::Result<Vec<NfCmd<'a>>> {
-    let mut cmds = Vec::with_capacity(3);
+    let mut cmds = Vec::with_capacity(2);
     match lease.type_() {
         LeaseType::Port { port } => {
             let addr = Some(lease.client_addr());
@@ -504,27 +504,34 @@ impl NftFirewallInner {
         Ok(this)
     }
 
+    // Number of rules currently installed in the kernel.
+    fn total_rule_count(&self) -> u32 {
+        let mut count: u32 = self.num_ctrl_rules.into();
+        for lease in self.port_leases.values() {
+            count += match lease.type_() {
+                LeaseType::Port { port } => match port {
+                    LeasePort::Tcp(_) | LeasePort::Udp(_) => 1,
+                    LeasePort::TcpUdp(_) => 2,
+                },
+                LeaseType::Jump { .. } => unreachable!(),
+            };
+        }
+        for lease in self.jump_leases.values() {
+            count += match lease.type_() {
+                LeaseType::Jump { .. } => 1,
+                LeaseType::Port { .. } => unreachable!(),
+            }
+        }
+        count
+    }
+
     /// Print the number of rules required for all leases.
-    #[allow(clippy::match_wildcard_for_single_variants)]
     fn print_total_rule_count(&self, conf: &Config) {
         if conf.debug() {
-            let mut count: usize = self.num_ctrl_rules.into();
-            for lease in self.port_leases.values() {
-                count += match lease.type_() {
-                    LeaseType::Port { port } => match port {
-                        LeasePort::Tcp(_) | LeasePort::Udp(_) => 1,
-                        LeasePort::TcpUdp(_) => 2,
-                    },
-                    _ => unreachable!(),
-                };
-            }
-            for lease in self.jump_leases.values() {
-                count += match lease.type_() {
-                    LeaseType::Jump { .. } => 1,
-                    _ => unreachable!(),
-                }
-            }
-            println!("nftables: A total of {count} rules is installed.");
+            println!(
+                "nftables: A total of {} rules is installed.",
+                self.total_rule_count()
+            );
         }
     }
 
@@ -600,11 +607,22 @@ impl NftFirewallInner {
         let names = NftNames::get(conf).context("Read configuration")?;
 
         // Open the lease ports, restricted to the peer address.
+        let mut count = 0_u32;
         let mut batch = Batch::new();
         for lease in leases {
             for cmd in gen_add_lease_cmds(conf, &names, lease)? {
                 batch.add_cmd(cmd);
+                count = count.saturating_add(1);
             }
+        }
+
+        // Check if we would exceed the number-of-rules limit.
+        let max_nr_rules = conf.nft_max_nr_rules();
+        if self.total_rule_count().saturating_add(count) > max_nr_rules {
+            return Err(err!(
+                "Maximum number of nftables rules 'max-nr-rules' \
+                ({max_nr_rules}) configuration exceeded."
+            ));
         }
 
         // Apply all batch commands to the kernel.
