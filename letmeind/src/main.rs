@@ -29,7 +29,7 @@ use letmein_conf::{Config, ConfigVariant, Seccomp};
 use std::{
     fs::{OpenOptions, create_dir_all, metadata},
     io::Write as _,
-    os::unix::fs::MetadataExt as _,
+    os::unix::fs::{MetadataExt as _, OpenOptionsExt as _},
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -71,6 +71,7 @@ fn make_run_subdir(rundir: &Path) -> ah::Result<()> {
 /// Create the PID-file in the /run subdirectory.
 fn make_pidfile(rundir: &Path) -> ah::Result<()> {
     OpenOptions::new()
+        .custom_flags(libc::O_NOFOLLOW) // Trailing component must not be a symlink.
         .write(true)
         .create(true)
         .truncate(true)

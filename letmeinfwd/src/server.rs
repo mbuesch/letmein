@@ -20,7 +20,7 @@ use std::{
     fs::{OpenOptions, metadata, remove_file},
     io::Read as _,
     net::IpAddr,
-    os::unix::fs::MetadataExt as _,
+    os::unix::fs::{MetadataExt as _, OpenOptionsExt as _},
     path::{Path, PathBuf},
     sync::{Arc, atomic::Ordering::Relaxed},
 };
@@ -36,6 +36,7 @@ const RECV_TIMEOUT: Duration = Duration::from_secs(FWD_IPC_TIMEOUT.as_secs() * 1
 fn get_letmeind_pid(rundir: &Path) -> ah::Result<pid_t> {
     let mut pid = String::new();
     OpenOptions::new()
+        .custom_flags(libc::O_NOFOLLOW) // Trailing component must not be a symlink.
         .read(true)
         .open(rundir.join("letmeind/letmeind.pid"))
         .context("Open PID-file of 'letmeind' daemon")?

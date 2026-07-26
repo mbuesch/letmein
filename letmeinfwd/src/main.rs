@@ -27,7 +27,7 @@ use nix::unistd::{Group, User};
 use std::{
     fs::{OpenOptions, create_dir_all, metadata, set_permissions},
     io::Write as _,
-    os::unix::fs::{MetadataExt as _, PermissionsExt as _, chown},
+    os::unix::fs::{MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _, chown},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -118,6 +118,7 @@ fn read_etc_passwd(opts: &Opts) -> ah::Result<()> {
 /// Create the PID-file in the /run subdirectory.
 fn make_pidfile(rundir: &Path) -> ah::Result<()> {
     OpenOptions::new()
+        .custom_flags(libc::O_NOFOLLOW) // Trailing component must not be a symlink.
         .write(true)
         .create(true)
         .truncate(true)
