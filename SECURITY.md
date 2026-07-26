@@ -53,6 +53,10 @@ I am interested to hear your opinion.
 
 If you found a security vulnerability, see [the vulnerability reporting process](SECURITY.md) for how to proceed.
 
+## Design decisions
+
+A couple of [design decisions](doc/DESIGN_DECISIONS.md) are in place to make the design simpler and in part (hopefully) have a positive effect on security.
+
 ## Known weaknesses
 
 There are a couple of known weaknesses that exist in letmein.
