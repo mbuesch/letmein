@@ -57,6 +57,23 @@ If you found a security vulnerability, see [the vulnerability reporting process]
 
 A couple of [design decisions](doc/DESIGN_DECISIONS.md) are in place to make the design simpler and in part (hopefully) have a positive effect on security.
 
+## Is the shipped `Cargo.lock` authoritative?
+
+No, it is not authoritative.
+
+The locked dependencies are an arbitrary snapshot at an arbitrary point in time.
+They have not specially been audited for security vulnerabilities.
+
+Instead the whole set of dependency crates is carefully chosen to be small and simple.
+The crates themselves are trusted, not a specific version.
+
+Always use the latest (semver-compatible-) version of all dependencies to get the latest security fixes.
+
+That means:
+
+- Do not use `cargo install --locked`. Use `cargo install` (without `--locked`) instead.
+- If building from the git/tar source, run a `cargo update` before building to refresh the `Cargo.lock` file to the latest versions of all dependencies.
+
 ## Known weaknesses
 
 There are a couple of known weaknesses that exist in letmein.

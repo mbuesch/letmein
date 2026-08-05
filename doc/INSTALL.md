@@ -99,6 +99,10 @@ Note that there are a few important differences when using `cargo install` inste
 You may use `cargo install` to install the `letmein` client application.
 But it is *not* recommended to use `cargo install` to install the `letmeind` and `letmeinfwd` server daemons.
 
+### Shall `cargo install --locked` be used?
+
+[No.](../SECURITY.md#is-the-shipped-cargolock-authoritative)
+
 ## Arch Linux: Installing from AUR
 
 If you use [Arch Linux](https://archlinux.org/), then you can install the client and the server from [AUR](https://aur.archlinux.org/packages/letmein).
