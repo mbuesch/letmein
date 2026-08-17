@@ -13,6 +13,7 @@ std::compile_error!("letmeind server does not support non-Linux platforms.");
 
 mod firewall_client;
 mod ip_limiter;
+mod logging;
 mod protocol;
 mod seccomp;
 mod server;
@@ -129,6 +130,17 @@ impl Opts {
     }
 }
 
+fn is_expected_connection_error(err: &str) -> bool {
+    matches!(
+        err,
+        s if s.starts_with("Unknown user:")
+            || s.starts_with("Unknown resource:")
+            || s.starts_with("Access denied:")
+            || s == "Knock: Authentication failed"
+            || s == "ComeIn: Authentication failed"
+    )
+}
+
 async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     // Create directories in /run
     make_run_subdir(&opts.rundir)?;
@@ -180,9 +192,12 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                         // Limit the number of simultaneous connections from the same IP address.
                         if !ip_limiter.request_permit_ok(peer_ip) {
                             conn.close().await;
-                            eprintln!(
-                                "Client '{peer_ip}': ERROR: \
-                                Too many simultaneous connections. Dropping connection."
+                            log_security!(
+                                WARN,
+                                "CONN_LIMIT_EXCEEDED",
+                                peer_ip,
+                                conn.l4proto()
+                                => "Per-IP simultaneous connection limit exceeded. Connection dropped."
                             );
                             continue;
                         }
@@ -201,12 +216,19 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                             async move {
                                 let mut proto = Protocol::new(&*conn, &conf, &opts.rundir);
                                 if let Err(e) = proto.run().await {
-                                    eprintln!(
-                                        "Client '{}/{}' ERROR: {}",
-                                        conn.peer_addr(),
-                                        conn.l4proto(),
-                                        e
-                                    );
+                                    let e = e.to_string();
+                                    // Security events that have a dedicated log_security! call
+                                    // inside Protocol::run() do not need a second line here.
+                                    // This catch-all covers unexpected I/O errors and
+                                    // early disconnects that are not security events.
+                                    if !is_expected_connection_error(&e) {
+                                        eprintln!(
+                                            "letmeind: peer={}/{} -- Connection error: {}",
+                                            conn.peer_addr().ip(),
+                                            conn.l4proto(),
+                                            e
+                                        );
+                                    }
                                 }
                                 conn.close().await;
                                 drop(permit);

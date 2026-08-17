@@ -6,11 +6,11 @@
 // or the MIT license, at your option.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{firewall_client::FirewallClient, server::ConnectionOps};
+use crate::{firewall_client::FirewallClient, log_security, server::ConnectionOps};
 use anyhow::{self as ah, format_err as err};
 use letmein_conf::{Config, ErrorPolicy, Resource};
 use letmein_proto::{Message, Operation, ResourceId, UserId};
-use std::path::Path;
+use std::{net::IpAddr, path::Path};
 use tokio::time::timeout;
 
 /// Protocol authentication state.
@@ -32,6 +32,10 @@ pub struct Protocol<'a, C> {
     conn: &'a C,
     conf: &'a Config,
     rundir: &'a Path,
+    /// IP address of the remote peer (for logging).
+    peer_ip: IpAddr,
+    /// Layer-4 protocol label (for logging).
+    proto: &'a str,
     user_id: Option<UserId>,
     resource_id: Option<ResourceId>,
     auth_state: AuthState,
@@ -39,10 +43,14 @@ pub struct Protocol<'a, C> {
 
 impl<'a, C: ConnectionOps> Protocol<'a, C> {
     pub fn new(conn: &'a C, conf: &'a Config, rundir: &'a Path) -> Self {
+        let peer_ip = conn.peer_addr().ip();
+        let proto = conn.l4proto();
         Self {
             conn,
             conf,
             rundir,
+            peer_ip,
+            proto,
             user_id: None,
             resource_id: None,
             auth_state: AuthState::NotAuth,
@@ -50,37 +58,113 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
     }
 
     async fn recv_msg(&mut self, expect_operation: &[Operation]) -> ah::Result<Message> {
-        if let Some(msg) = timeout(self.conf.control_timeout(), self.conn.recv_msg())
-            .await
-            .map_err(|_| err!("RX communication with peer timed out"))??
-        {
-            if !expect_operation.contains(&msg.operation()) {
-                return self
-                    .send_go_away(Err(err!(
-                        "Invalid reply message operation. Expected {:?}, got {:?}",
-                        expect_operation,
-                        msg.operation()
-                    )))
-                    .await;
+        let msg_result = timeout(self.conf.control_timeout(), self.conn.recv_msg()).await;
+
+        // Distinguish pre-auth timeout from post-auth timeout for fail2ban differentiation.
+        let msg_result_inner = match msg_result {
+            Err(_elapsed) => {
+                if self.auth_state == AuthState::NotAuth {
+                    log_security!(
+                        WARN,
+                        "PREAUTH_TIMEOUT",
+                        self.peer_ip,
+                        self.proto
+                        => "Connection timed out before client sent initial message"
+                    );
+                } else {
+                    log_security!(
+                        WARN,
+                        "POSTAUTH_TIMEOUT",
+                        self.peer_ip,
+                        self.proto
+                        => "Connection timed out mid-sequence after authentication"
+                    );
+                }
+                return Err(err!("RX communication with peer timed out"));
             }
-            if let Some(user_id) = self.user_id
-                && msg.user() != user_id
-            {
-                return self
-                    .send_go_away(Err(err!("Received message user mismatch")))
-                    .await;
-            }
-            if let Some(resource_id) = self.resource_id
-                && msg.resource() != resource_id
-            {
-                return self
-                    .send_go_away(Err(err!("Received message resource mismatch")))
-                    .await;
-            }
-            Ok(msg)
-        } else {
-            Err(err!("Disconnected."))
+            Ok(inner) => inner,
+        };
+
+        // Propagate any socket-level I/O or deserialization errors.
+        // A malformed datagram (wrong size, invalid magic, unknown operation value)
+        // is indistinguishable from active probing/fuzzing - log it before dropping.
+        let msg_opt = msg_result_inner.map_err(|e| {
+            log_security!(
+                WARN,
+                "PROTOCOL_ABUSE",
+                self.peer_ip,
+                self.proto,
+                &format!("detail={e}")
+                => "Malformed message received; connection dropped"
+            );
+            e
+        })?;
+
+        let Some(msg) = msg_opt else {
+            return Err(err!("Disconnected."));
+        };
+
+        // Validate that the operation is expected at this stage of the sequence.
+        if !expect_operation.contains(&msg.operation()) {
+            log_security!(
+                ERROR,
+                "PROTOCOL_ABUSE",
+                self.peer_ip,
+                self.proto,
+                &format!(
+                    "expected={:?} got={:?}",
+                    expect_operation,
+                    msg.operation()
+                )
+                => "Unexpected message operation - protocol sequence violated"
+            );
+            return self
+                .send_go_away(Err(err!(
+                    "Invalid reply message operation. Expected {:?}, got {:?}",
+                    expect_operation,
+                    msg.operation()
+                )))
+                .await;
         }
+
+        // Validate that the user ID has not changed mid-session.
+        if let Some(user_id) = self.user_id
+            && msg.user() != user_id
+        {
+            log_security!(
+                ERROR,
+                "PROTOCOL_ABUSE",
+                self.peer_ip,
+                self.proto,
+                &format!("expected_user={user_id} got_user={}", msg.user())
+                => "User ID changed mid-session"
+            );
+            return self
+                .send_go_away(Err(err!("Received message user mismatch")))
+                .await;
+        }
+
+        // Validate that the resource ID has not changed mid-session.
+        if let Some(resource_id) = self.resource_id
+            && msg.resource() != resource_id
+        {
+            log_security!(
+                ERROR,
+                "PROTOCOL_ABUSE",
+                self.peer_ip,
+                self.proto,
+                &format!(
+                    "expected_resource={resource_id} got_resource={}",
+                    msg.resource()
+                )
+                => "Resource ID changed mid-session"
+            );
+            return self
+                .send_go_away(Err(err!("Received message resource mismatch")))
+                .await;
+        }
+
+        Ok(msg)
     }
 
     async fn send_msg(&mut self, msg: &Message) -> ah::Result<()> {
@@ -110,8 +194,14 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 ))
                 .await
             {
-                // Only print a log message and ignore the error.
-                eprintln!("Failed to send GoAway reply: {e}");
+                // Log with peer context so it can be correlated in journal.
+                log_security!(
+                    WARN,
+                    "GOAWAY_SEND_FAILED",
+                    self.peer_ip,
+                    self.proto
+                    => &format!("Failed to send GoAway reply: {e}")
+                );
             }
         }
 
@@ -137,6 +227,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         self.auth_state = AuthState::NotAuth;
 
         // Receive the initial knock/revoke message.
+        // recv_msg() will log PREAUTH_TIMEOUT or PROTOCOL_ABUSE itself on failure.
         let initial_message = self
             .recv_msg(&[Operation::Knock, Operation::Revoke])
             .await?;
@@ -149,16 +240,31 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         let resource_id = initial_message.resource();
         self.resource_id = Some(resource_id);
 
-        // Get the shared key.
+        // Get the shared key - log unknown user ID.
         let Some(key) = self.conf.key(user_id) else {
+            log_security!(
+                WARN,
+                "UNKNOWN_USER",
+                self.peer_ip,
+                self.proto,
+                &format!("user={user_id}")
+                => "User ID not found in server configuration"
+            );
             return self
                 .send_go_away(Err(err!("Unknown user: {user_id}")))
                 .await;
         };
 
-        // Authenticate the received message.
-        // This check is not replay-safe. But that's fine.
+        // Authenticate the received message (not replay-safe, but that's by design).
         if !initial_message.check_auth_ok_no_challenge(key) {
+            log_security!(
+                WARN,
+                "AUTH_FAILURE",
+                self.peer_ip,
+                self.proto,
+                &format!("user={user_id} resource={resource_id} stage=knock")
+                => "Initial knock authentication (HMAC) failed"
+            );
             return self
                 .send_go_away(Err(err!("Knock: Authentication failed")))
                 .await;
@@ -167,6 +273,14 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Get the requested resource from the configuration.
         let Some(resource) = self.conf.resource(resource_id) else {
+            log_security!(
+                WARN,
+                "UNKNOWN_RESOURCE",
+                self.peer_ip,
+                self.proto,
+                &format!("user={user_id} resource={resource_id}")
+                => "Resource ID not found in server configuration"
+            );
             return self
                 .send_go_away(Err(err!("Unknown resource: {resource_id}")))
                 .await;
@@ -174,6 +288,14 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
 
         // Check if the authenticating user is allowed to access this resource.
         if !resource.contains_user(user_id) {
+            log_security!(
+                WARN,
+                "ACCESS_DENIED",
+                self.peer_ip,
+                self.proto,
+                &format!("user={user_id} resource={resource_id}")
+                => "Authenticated user is not permitted to access this resource"
+            );
             return self
                 .send_go_away(Err(err!(
                     "Resource {resource_id} not allowed for user {user_id}"
@@ -213,10 +335,19 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
         self.send_msg(&challenge).await?;
 
         // Receive the response.
+        // recv_msg() will log PROTOCOL_ABUSE / timeout events itself on failure.
         let response = self.recv_msg(&[Operation::Response]).await?;
 
         // Authenticate the challenge-response.
         if !response.check_auth_ok(key, challenge) {
+            log_security!(
+                WARN,
+                "AUTH_FAILURE",
+                self.peer_ip,
+                self.proto,
+                &format!("user={user_id} resource={resource_id} stage=challenge-response")
+                => "Challenge-response authentication (HMAC) failed"
+            );
             return self
                 .send_go_away(Err(err!("Response: Authentication failed")))
                 .await;
@@ -235,7 +366,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                     .await
             }
             Operation::Revoke => {
-                // Send an revoke-rules request to letmeinfwd.
+                // Send a revoke-rules request to letmeinfwd.
                 self.connect_to_fw()
                     .await?
                     .revoke_rules(user_id, resource_id, peer_ip_addr, conf_checksum)
@@ -251,14 +382,19 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 .await;
         }
 
-        let logaction = if initial_operation == Operation::Knock {
-            "knocked"
+        // Log the successful outcome with structured event keyword.
+        let (event, action) = if initial_operation == Operation::Knock {
+            ("KNOCK_SUCCESS", "knocked")
         } else {
-            "revoked"
+            ("REVOKE_SUCCESS", "revoked")
         };
-        println!(
-            "[{peer_ip_addr}]: Resource {resource_id} successfully {logaction}. \
-             Firewall rules changed.",
+        log_security!(
+            INFO,
+            event,
+            self.peer_ip,
+            self.proto,
+            &format!("user={user_id} resource={resource_id}")
+            => &format!("Resource {resource_id} successfully {action}. Firewall rules changed.")
         );
 
         // Send a come-in message.

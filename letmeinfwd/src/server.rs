@@ -123,7 +123,15 @@ impl FirewallConnection {
     async fn recv_msg(&mut self) -> ah::Result<Option<FirewallMessage>> {
         timeout(RECV_TIMEOUT, FirewallMessage::recv(&mut self.stream))
             .await
-            .map_err(|_| err!("IPC receive timed out."))?
+            .map_err(|_| {
+                // An authenticated letmeind connection timed out before sending a
+                // complete IPC message.  This should never happen in normal operation.
+                eprintln!(
+                    "letmeinfwd: [WARN] IPC_TIMEOUT -- \
+                    Timed out waiting for IPC message from letmeind; connection dropped"
+                );
+                err!("IPC receive timed out.")
+            })?
     }
 
     async fn send_msg(&mut self, msg: &FirewallMessage) -> ah::Result<()> {
@@ -145,10 +153,24 @@ impl FirewallConnection {
         msg: &FirewallMessage,
     ) -> ah::Result<()> {
         let Some(conf_cs) = msg.conf_checksum() else {
+            // Missing checksum - legitimate letmeind always includes this.
+            eprintln!(
+                "letmeinfwd: [WARN] IPC_MALFORMED_MESSAGE \
+                reason=missing_checksum \
+                -- IPC message contained no configuration checksum; request rejected"
+            );
             let res = Err(err!("No configuration checksum in message."));
             return self.send_result(res).await;
         };
         if *conf_cs != *conf.checksum() {
+            // Log before returning - this means letmeind and letmeinfwd loaded
+            // different versions of letmeind.conf.  Possible mid-flight config
+            // change or failed deployment.  Firewall request will be rejected.
+            eprintln!(
+                "letmeinfwd: [WARN] IPC_CONF_MISMATCH -- \
+                letmeind.conf checksum mismatch between letmeind and letmeinfwd. \
+                Firewall request rejected. Check that both daemons use the same config file."
+            );
             let res = Err(err!(
                 "letmeind.conf checksum mismatch between letmeind and letmeinfwd."
             ));
@@ -159,11 +181,23 @@ impl FirewallConnection {
 
     async fn get_addr(&mut self, msg: &FirewallMessage) -> ah::Result<IpAddr> {
         let Some(addr) = msg.addr() else {
+            // Missing address in a well-formed IPC message - should never happen
+            // with a legitimate letmeind.  Log as a malformed IPC message.
+            eprintln!(
+                "letmeinfwd: [WARN] IPC_MALFORMED_MESSAGE \
+                reason=missing_address \
+                -- IPC message contained no client address; request rejected"
+            );
             let res = Err(err!("No address in message."));
             return self.send_result(res).await;
         };
         // Check if addr is valid.
         if !addr_check(&addr) {
+            eprintln!(
+                "letmeinfwd: [WARN] IPC_MALFORMED_MESSAGE \
+                reason=invalid_address addr={addr} \
+                -- IPC message contained an invalid client address; request rejected"
+            );
             let res = Err(err!("Invalid address in message."));
             return self.send_result(res).await;
         }
@@ -255,6 +289,14 @@ impl FirewallConnection {
                 }
             },
             FirewallOperation::Ack | FirewallOperation::Nack => {
+                // Ack/Nack are reply operations - letmeind should never send these
+                // as requests.  This is a protocol violation.
+                eprintln!(
+                    "letmeinfwd: [WARN] IPC_MALFORMED_MESSAGE \
+                    reason=invalid_operation op={:?} \
+                    -- IPC message used a reply operation as a request; rejected",
+                    msg.operation()
+                );
                 Err(err!("Received invalid message"))
             }
         }
@@ -337,10 +379,19 @@ impl FirewallServer {
         // This is an additional check that is not strictly needed for the security
         // concept. The socket is only accessible by the `letmeind` group and user.
         let Some(pid) = cred.pid() else {
+            eprintln!(
+                "letmeinfwd: [ERROR] IPC_UNAUTHORIZED_CONNECT -- \
+                Unix socket connection rejected: peer PID could not be determined"
+            );
             return Err(err!("The connected pid is not known. Rejecting."));
         };
         let expected_pid = get_letmeind_pid(&self.rundir).await?;
         if pid != expected_pid {
+            eprintln!(
+                "letmeinfwd: [ERROR] IPC_UNAUTHORIZED_CONNECT \
+                connected_pid={pid} expected_pid={expected_pid} \
+                -- Unix socket connection rejected: PID does not match letmeind"
+            );
             return Err(err!(
                 "The connected pid {pid} is not letmeind ({expected_pid}). Rejecting."
             ));
@@ -351,6 +402,13 @@ impl FirewallServer {
             // This is an additional check that is not strictly needed for the security
             // concept. The socket is only accessible by the `letmeind` group and user.
             if cred.uid() != LETMEIND_UID.load(Relaxed) {
+                eprintln!(
+                    "letmeinfwd: [ERROR] IPC_UNAUTHORIZED_CONNECT \
+                    connected_uid={} expected_uid={} \
+                    -- Unix socket connection rejected: UID does not match letmeind user",
+                    cred.uid(),
+                    LETMEIND_UID.load(Relaxed),
+                );
                 return Err(err!(
                     "The connected uid {} is not letmeind ({}). Rejecting. \
                     Please ensure that the 'letmeind' daemon is running as 'letmeind' user.",
@@ -359,6 +417,13 @@ impl FirewallServer {
                 ));
             }
             if cred.gid() != LETMEIND_GID.load(Relaxed) {
+                eprintln!(
+                    "letmeinfwd: [ERROR] IPC_UNAUTHORIZED_CONNECT \
+                    connected_gid={} expected_gid={} \
+                    -- Unix socket connection rejected: GID does not match letmeind group",
+                    cred.gid(),
+                    LETMEIND_GID.load(Relaxed),
+                );
                 return Err(err!(
                     "The connected gid {} is not letmeind ({}). Rejecting. \
                     Please ensure that the 'letmeind' daemon is running as 'letmeind' group.",

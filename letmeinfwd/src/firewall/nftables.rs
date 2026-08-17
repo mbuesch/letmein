@@ -117,6 +117,15 @@ fn statement_match_saddr<'a>(family: NfFamily, addr: IpAddr) -> ah::Result<State
         IpAddr::V4(addr) => match family {
             NfFamily::INet | NfFamily::IP => ("ip", addr.to_string()),
             _ => {
+                // Rule will not be installed - nftables family is IPv6-only but client
+                // address is IPv4.  The knock will fail safely (port stays closed) but
+                // the operator needs to know their nft-family setting is mismatched.
+                eprintln!(
+                    "letmeinfwd: [WARN] FIREWALL_RULE_SKIPPED \
+                    reason=ip_family_mismatch peer={addr} family={family:?} \
+                    -- IPv4 client address not compatible with configured nftables family; \
+                    rule not installed"
+                );
                 return Err(err!("IP version not supported by nftables firewall family"));
             }
         },
@@ -125,6 +134,12 @@ fn statement_match_saddr<'a>(family: NfFamily, addr: IpAddr) -> ah::Result<State
                 match family {
                     NfFamily::INet | NfFamily::IP => ("ip", addr.to_string()),
                     _ => {
+                        eprintln!(
+                            "letmeinfwd: [WARN] FIREWALL_RULE_SKIPPED \
+                            reason=ip_family_mismatch peer={addr} family={family:?} \
+                            -- IPv4-mapped IPv6 address not compatible with configured \
+                            nftables family; rule not installed"
+                        );
                         return Err(err!("IP version not supported by nftables firewall family"));
                     }
                 }
@@ -132,6 +147,12 @@ fn statement_match_saddr<'a>(family: NfFamily, addr: IpAddr) -> ah::Result<State
                 match family {
                     NfFamily::INet | NfFamily::IP6 => ("ip6", addr.to_string()),
                     _ => {
+                        eprintln!(
+                            "letmeinfwd: [WARN] FIREWALL_RULE_SKIPPED \
+                            reason=ip_family_mismatch peer={addr} family={family:?} \
+                            -- IPv6 client address not compatible with configured nftables family; \
+                            rule not installed"
+                        );
                         return Err(err!("IP version not supported by nftables firewall family"));
                     }
                 }
@@ -208,6 +229,14 @@ fn gen_rule_comment(
     write!(&mut comment, "LETMEIN")?;
 
     if comment.len() > NFTNL_UDATA_COMMENT_MAXLEN {
+        // Rule will not be installed - log so the operator can diagnose the
+        // misconfiguration (e.g. a jump target chain name that is too long).
+        eprintln!(
+            "letmeinfwd: [WARN] FIREWALL_RULE_SKIPPED \
+            reason=comment_too_long length={} max={NFTNL_UDATA_COMMENT_MAXLEN} \
+            -- nftables rule comment exceeds maximum length; rule not installed",
+            comment.len(),
+        );
         Err(err!(
             "Could not generate nftables rule comment. \
             The length {} is longer than the maximum of {}.",
@@ -659,8 +688,10 @@ impl NftFirewallInner {
     /// and rebuild the whole table on failure.
     async fn nftables_remove_leases(&mut self, conf: &Config, leases: &[Lease]) -> ah::Result<()> {
         if let Err(e) = self.nftables_remove_leases_no_rebuild(conf, leases).await {
-            eprintln!("WARNING: Failed to remove lease(s): {e:?}");
-            eprintln!("Trying full rebuild.");
+            eprintln!(
+                "letmeinfwd: [WARN] FIREWALL_REBUILD_TRIGGERED -- \
+                Failed to remove lease(s), attempting full table rebuild: {e:?}"
+            );
             self.nftables_full_rebuild(conf).await?;
         }
         Ok(())

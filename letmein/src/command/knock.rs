@@ -64,22 +64,29 @@ impl KnockSeq<'_> {
     #[allow(clippy::unnecessary_wraps)]
     fn check_reply(&self, msg: &Message) -> ah::Result<()> {
         if msg.user() != self.user {
+            // Emit in the structured format used by letmeind so SIEM/audit logs
+            // from client and server can be correlated.  Also clearly visible to
+            // an interactive user via the SECURITY WARNING prefix.
             eprintln!(
-                "Warning: The server replied with a different user identifier. \
-                 Expected {}, but received {}.",
+                "letmein: [WARN] SERVER_REPLY_MISMATCH \
+                 expected_user={} received_user={} \
+                 -- SECURITY WARNING: Server replied with a different user identifier. \
+                 This may indicate a misconfigured or rogue server. \
+                 Knock attempt will continue but the result should not be trusted.",
                 self.user,
                 msg.user(),
             );
-            // continue processing this message.
         }
         if msg.resource() != self.resource {
             eprintln!(
-                "Warning: The server replied with a different resource identifier. \
-                 Expected {}, but received {}.",
+                "letmein: [WARN] SERVER_REPLY_MISMATCH \
+                 expected_resource={} received_resource={} \
+                 -- SECURITY WARNING: Server replied with a different resource identifier. \
+                 This may indicate a misconfigured or rogue server. \
+                 Knock attempt will continue but the result should not be trusted.",
                 self.resource,
                 msg.resource(),
             );
-            // continue processing this message.
         }
         Ok(())
     }

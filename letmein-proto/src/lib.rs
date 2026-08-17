@@ -715,6 +715,32 @@ mod tests {
     }
 
     #[test]
+    fn test_msg_deserialize_size_mismatch() {
+        // Too short - one byte missing.
+        let short: Vec<u8> = vec![0_u8; MSG_SIZE - 1];
+        let err = Message::try_msg_deserialize(&short).unwrap_err();
+        assert!(
+            err.to_string().contains("size mismatch"),
+            "unexpected error: {err}"
+        );
+
+        // Too long - one extra byte.
+        let long: Vec<u8> = vec![0_u8; MSG_SIZE + 1];
+        let err = Message::try_msg_deserialize(&long).unwrap_err();
+        assert!(
+            err.to_string().contains("size mismatch"),
+            "unexpected error: {err}"
+        );
+
+        // Empty buffer.
+        let err = Message::try_msg_deserialize(&[]).unwrap_err();
+        assert!(
+            err.to_string().contains("size mismatch"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
     #[should_panic(expected = "Invalid Message/Operation value")]
     fn test_msg_raw_invalid_operation() {
         let bytes = [

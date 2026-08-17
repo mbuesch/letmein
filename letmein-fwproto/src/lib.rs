@@ -643,6 +643,65 @@ mod tests {
             ]
         );
     }
+    #[test]
+    fn test_msg_deserialize_size_mismatch() {
+        // Too short - one byte missing.
+        let short: Vec<u8> = vec![0_u8; FWMSG_SIZE - 1];
+        let err = FirewallMessage::try_msg_deserialize(&short).unwrap_err();
+        assert!(
+            err.to_string().contains("size mismatch"),
+            "unexpected error: {err}"
+        );
+
+        // Too long - one extra byte.
+        let long: Vec<u8> = vec![0_u8; FWMSG_SIZE + 1];
+        let err = FirewallMessage::try_msg_deserialize(&long).unwrap_err();
+        assert!(
+            err.to_string().contains("size mismatch"),
+            "unexpected error: {err}"
+        );
+
+        // Empty buffer.
+        let err = FirewallMessage::try_msg_deserialize(&[]).unwrap_err();
+        assert!(
+            err.to_string().contains("size mismatch"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_msg_deserialize_invalid_operation() {
+        // Build a valid Ack message then corrupt the operation field (0xFF, 0xFF).
+        let mut bytes = FirewallMessage::new_ack().msg_serialize().unwrap();
+        bytes[0] = 0xFF;
+        bytes[1] = 0xFF;
+        let err = FirewallMessage::try_msg_deserialize(&bytes).unwrap_err();
+        assert!(
+            err.to_string().contains("Operation value"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_msg_deserialize_invalid_addr_type() {
+        // Build a valid Install message then corrupt the addr_type field (0xFF, 0xFF).
+        let mut bytes = FirewallMessage::new_install(
+            0x1234_5678.into(),
+            0xABCD_EF01.into(),
+            "1.2.3.4".parse().unwrap(),
+            &ConfigChecksum::calculate(b"test"),
+        )
+        .msg_serialize()
+        .unwrap();
+        // addr_type is at FWMSG_OFFS_ADDR_TYPE (bytes 10..12).
+        bytes[FWMSG_OFFS_ADDR_TYPE] = 0xFF;
+        bytes[FWMSG_OFFS_ADDR_TYPE + 1] = 0xFF;
+        let err = FirewallMessage::try_msg_deserialize(&bytes).unwrap_err();
+        assert!(
+            err.to_string().contains("AddrType value"),
+            "unexpected error: {err}"
+        );
+    }
 }
 
 // vim: ts=4 sw=4 expandtab

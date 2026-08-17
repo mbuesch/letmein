@@ -86,6 +86,16 @@ Installing the server will also install the service and socket into systemd and 
 The server is used to receive knock packets from the client.
 Upon successful knock authentication, the server will open the knocked port in its `nftables` firewall.
 
+## Log management
+
+letmein and letmeind write all log output to stderr, which is captured by
+journald on systemd systems. No log files are created and no rotation
+configuration is needed for a standard install.
+
+For retention tuning, syslog forwarding, and platform-specific guidance see
+the [Log management](doc/SECURITY_LOGGING.md#log-management) section of
+`doc/SECURITY_LOGGING.md`.
+
 ## Installing with `cargo install` from crates.io
 
 Alternatively, you can install letmein, letmeind and letmeinfwd with `cargo install` from [crates.io](https://crates.io/).

@@ -269,15 +269,15 @@ trait LeaseMapOps {
 
 impl<K> LeaseMapOps for HashMap<K, Lease> {
     fn prune_timeouts(&mut self, conf: &Config) -> Vec<Lease> {
+        let _ = conf; // conf may be used for future per-resource timeout config
         let mut pruned = vec![];
         let now = Instant::now();
         self.retain(|_, lease| {
             let timed_out = lease.is_timed_out(now);
             if timed_out {
                 pruned.push(lease.clone());
-                if conf.debug() {
-                    println!("firewall: {lease} timed out");
-                }
+                // Always log lease expiry - useful for SIEM audit trails.
+                eprintln!("letmeinfwd: [INFO] LEASE_EXPIRED -- {lease}");
             }
             !timed_out
         });

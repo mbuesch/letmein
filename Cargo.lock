@@ -797,6 +797,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "letmein-fail2ban"
+version = "12.5.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
 name = "letmein-fwproto"
 version = "12.5.0"
 dependencies = [

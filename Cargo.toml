@@ -4,6 +4,7 @@
 members = [
     "letmein",
     "letmein-conf",
+    "letmein-fail2ban",
     "letmein-fwproto",
     "letmein-proto",
     "letmein-seccomp",
