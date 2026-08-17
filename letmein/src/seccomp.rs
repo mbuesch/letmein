@@ -50,6 +50,11 @@ fn do_install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
     use anyhow::Context as _;
 
     if seccomp == Seccomp::Off {
+        // Normal for many client setups - log for audit but do not surface to the user.
+        eprintln!(
+            "letmein: [INFO] SECCOMP_DISABLED -- \
+            Seccomp syscall filter is disabled by configuration"
+        );
         return Ok(());
     }
 
@@ -65,10 +70,18 @@ fn do_install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
             .context("Compile seccomp filter")?
             .install()
             .context("Install seccomp filter")?;
-    } else {
+        // Log for audit; no need to surface to an interactive CLI user on every invocation.
         eprintln!(
-            "WARNING: Not using seccomp. \
-            Letmein does not support seccomp on this architecture, yet."
+            "letmein: [INFO] SECCOMP_ACTIVE mode={seccomp} -- \
+            Seccomp syscall filter installed successfully"
+        );
+    } else {
+        // Seccomp was requested but the architecture does not support it.
+        // Log for audit AND tell the user - their expected hardening is not in effect.
+        eprintln!(
+            "letmein: [WARN] SECCOMP_UNAVAILABLE -- \
+            WARNING: Seccomp was requested but is not supported on this architecture. \
+            Syscall filter not active."
         );
     }
 

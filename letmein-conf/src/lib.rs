@@ -942,28 +942,49 @@ impl Config {
                     if let Some(good_uid) = good_uid {
                         let actual_uid = meta.uid();
                         if actual_uid != good_uid {
-                            eprintln!(
-                                "WARNING: \
-                                Configuration file '{dpath}' has insecure ownership: UID={actual_uid}.\n\
-                                Recommended: chown root:letmeind {dpath}"
-                            );
+                            match self.variant {
+                                ConfigVariant::Server => eprintln!(
+                                    "letmeind: [WARN] CONFIG_INSECURE_OWNERSHIP \
+                                    path={dpath} actual_uid={actual_uid} expected_uid={good_uid} \
+                                    -- WARNING: Configuration file has insecure ownership. \
+                                    Recommended: chown root:letmeind {dpath}"
+                                ),
+                                ConfigVariant::Client => eprintln!(
+                                    "WARNING: Configuration file '{dpath}' has insecure \
+                                    ownership: UID={actual_uid}.\n\
+                                    Recommended: chown root {dpath}"
+                                ),
+                            }
                         }
                     }
                     let mode = meta.mode() & 0o777;
                     if (mode & mask) != 0 {
-                        eprintln!(
-                            "WARNING: \
-                            Configuration file '{dpath}' has insecure permissions: {mode:o}.\n\
-                            Recommended: chmod {recommended:o} {dpath}"
-                        );
+                        match self.variant {
+                            ConfigVariant::Server => eprintln!(
+                                "letmeind: [WARN] CONFIG_INSECURE_PERMISSIONS \
+                                path={dpath} mode={mode:o} recommended={recommended:o} \
+                                -- WARNING: Configuration file has insecure permissions. \
+                                Recommended: chmod {recommended:o} {dpath}"
+                            ),
+                            ConfigVariant::Client => eprintln!(
+                                "WARNING: Configuration file '{dpath}' has insecure \
+                                permissions: {mode:o}.\n\
+                                Recommended: chmod {recommended:o} {dpath}"
+                            ),
+                        }
                     }
                 }
-                Err(e) => {
-                    eprintln!(
-                        "WARNING: \
-                        Failed to check configuration file permissions for '{dpath}': {e}"
-                    );
-                }
+                Err(e) => match self.variant {
+                    ConfigVariant::Server => eprintln!(
+                        "letmeind: [WARN] CONFIG_PERMISSION_CHECK_FAILED \
+                            path={dpath} \
+                            -- WARNING: Failed to check configuration file permissions: {e}"
+                    ),
+                    ConfigVariant::Client => eprintln!(
+                        "WARNING: Failed to check configuration file permissions \
+                            for '{dpath}': {e}"
+                    ),
+                },
             }
         }
 

@@ -1,0 +1,23 @@
+# -*- coding: utf-8 -*-
+
+[package]
+name = "letmein-fail2ban"
+description = "Authenticated port knocking - fail2ban filter and jail configuration"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+categories = { workspace = true }
+keywords = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+
+[lints]
+workspace = true
+
+# vim: ts=4 sw=4 expandtab

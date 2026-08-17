@@ -246,7 +246,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                         if let Ok(permit) = conn_semaphore.acquire_owned().await {
                             task::spawn(async move {
                                 if let Err(e) = conn.handle_message(&conf, fw).await {
-                                    eprintln!("Client error: {e:?}");
+                                    eprintln!("letmeinfwd: [WARN] -- IPC handler error: {e:?}");
                                 }
                                 drop(permit);
                             });
@@ -304,7 +304,13 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     // Try to remove all firewall rules.
     {
         if let Err(e) = fw.shutdown(&conf).await {
-            eprintln!("WARNING: Failed to remove firewall rules: {e:?}");
+            // Log as ERROR - firewall rules may remain active after daemon exit,
+            // leaving ports open beyond their intended lease lifetime.
+            eprintln!(
+                "letmeinfwd: [ERROR] FIREWALL_SHUTDOWN_FAILED -- \
+                Failed to remove firewall rules on shutdown. \
+                Leased ports may remain open in the firewall: {e:?}"
+            );
             if exitcode.is_ok() {
                 exitcode = Err(err!("Failed to remove firewall rules"));
             }

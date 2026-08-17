@@ -33,6 +33,10 @@ const ALLOW_LIST: [Allow; 13] = [
 /// Install the `seccomp` rules, if requested.
 pub fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
     if seccomp == Seccomp::Off {
+        eprintln!(
+            "letmeind: [WARN] SECCOMP_DISABLED -- \
+            Seccomp syscall filter is disabled by configuration"
+        );
         return Ok(());
     }
 
@@ -44,15 +48,19 @@ pub fn install_seccomp_rules(seccomp: Seccomp) -> ah::Result<()> {
 
     // Install seccomp filter.
     if seccomp_supported() {
-        println!("Seccomp mode: {seccomp}");
         Filter::compile(&ALLOW_LIST, action)
             .context("Compile seccomp filter")?
             .install()
             .context("Install seccomp filter")?;
+        eprintln!(
+            "letmeind: [INFO] SECCOMP_ACTIVE mode={seccomp} -- \
+            Seccomp syscall filter installed successfully"
+        );
     } else {
         eprintln!(
-            "WARNING: Not using seccomp. \
-            Letmein does not support seccomp on this architecture, yet."
+            "letmeind: [WARN] SECCOMP_UNAVAILABLE -- \
+            Seccomp is not supported on this architecture; \
+            syscall filter not active"
         );
     }
 
