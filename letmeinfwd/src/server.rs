@@ -268,6 +268,7 @@ pub struct FirewallServer {
 
 impl FirewallServer {
     #[allow(clippy::unused_async)]
+    #[allow(clippy::unused_async_trait_impl)]
     pub async fn new(no_systemd: bool, opts: &Opts) -> ah::Result<Self> {
         // Get socket from systemd?
         if !no_systemd {
