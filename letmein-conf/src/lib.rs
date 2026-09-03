@@ -1007,6 +1007,15 @@ impl Config {
             nft_max_nr_rules = get_nft_max_nr_rules(ini)?;
         }
 
+        if control_error_policy == ErrorPolicy::Always && port.udp {
+            eprintln!(
+                "WARNING: 'control-error-policy' in the configuration is set to 'always' \
+                and UDP 'port' is enabled. \
+                This is insecure and does allow UDP reflection attacks. \
+                Please set the 'control-error-policy' to 'basic-auth' or 'full-auth'."
+            );
+        }
+
         self.checksum = ini.checksum().clone();
         self.debug = debug;
         self.port = port;

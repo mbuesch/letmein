@@ -133,6 +133,10 @@ That is what `basic-auth` is.
 For the purpose of enabling a stealth operation with `control-error-policy` the `basic-auth` is enough.
 During the challenge-response handshake the presence of the server has been revealed anyway.
 
+**WARNING**: If you enable UDP mode (see `port`), then the error policy shall be set to `basic-auth` or `full-auth`.
+**NEVER** set `control-error-policy` to `always` when **UDP** is enabled.
+Otherwise UDP reflection attacks are possible.
+
 Possible values: `always`, `basic-auth`, `full-auth`
 
 The recommended value is: `basic-auth`
