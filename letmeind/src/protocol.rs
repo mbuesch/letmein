@@ -164,6 +164,7 @@ impl<'a, C: ConnectionOps> Protocol<'a, C> {
                 .await;
         }
         self.auth_state = AuthState::BasicAuth;
+        self.conn.set_authenticated();
 
         // Get the requested resource from the configuration.
         let Some(resource) = self.conf.resource(resource_id) else {

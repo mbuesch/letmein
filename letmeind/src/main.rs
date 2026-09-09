@@ -12,13 +12,13 @@
 std::compile_error!("letmeind server does not support non-Linux platforms.");
 
 mod firewall_client;
-mod ip_limiter;
+mod limiter;
 mod protocol;
 mod seccomp;
 mod server;
 
 use crate::{
-    ip_limiter::IpLimiter,
+    limiter::Limiter,
     protocol::Protocol,
     seccomp::install_seccomp_rules,
     server::{ConnectionOps as _, Server},
@@ -37,9 +37,12 @@ use std::{
 use tokio::{
     runtime,
     signal::unix::{SignalKind, signal},
-    sync::{self, Semaphore},
-    task,
+    sync, task,
 };
+
+/// On the UDP level allow a higher connection limit.
+/// The main limiter will quickly drop connections beyond the configured limit.
+const UDP_MAXCONN_SLACK_PERCENT: usize = 25;
 
 /// Create a directory, if it does not exist already.
 fn create_dir_if_not_exists(path: &Path) -> ah::Result<()> {
@@ -82,7 +85,7 @@ fn make_pidfile(rundir: &Path) -> ah::Result<()> {
 }
 
 #[derive(Parser, Debug, Clone)]
-struct Opts {
+pub struct Opts {
     /// Override the default path to the configuration file.
     #[arg(short, long)]
     config: Option<PathBuf>,
@@ -120,12 +123,23 @@ struct Opts {
 
 impl Opts {
     /// Get the configuration path from command line or default.
+    #[must_use]
     pub fn get_config(&self) -> PathBuf {
         if let Some(config) = &self.config {
             config.clone()
         } else {
             Config::get_default_path(ConfigVariant::Server)
         }
+    }
+
+    /// Get the maximum number of simultaneous UDP connections.
+    #[must_use]
+    pub fn get_num_udp_connections(&self) -> usize {
+        (self
+            .num_connections
+            .saturating_mul(100 + UDP_MAXCONN_SLACK_PERCENT))
+        .div_ceil(100)
+        .max(1)
     }
 }
 
@@ -147,8 +161,8 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
     // Create async IPC channels.
     let (exit_tx, mut exit_rx) = sync::mpsc::channel(1);
 
-    // Start the TCP control port listener.
-    let mut srv = Server::new(&conf, opts.no_systemd, opts.num_connections)
+    // Start the TCP/UDP control port listener.
+    let mut srv = Server::new(&conf, opts.no_systemd, opts.get_num_udp_connections())
         .await
         .context("Server init")?;
 
@@ -165,38 +179,21 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
         let opts = Arc::clone(&opts);
 
         async move {
-            let conn_semaphore = Arc::new(Semaphore::new(opts.num_connections));
-            let ip_limiter = Arc::new(IpLimiter::new(
-                opts.num_ip_connections.min(opts.num_connections),
-            ));
+            let limiter = Arc::new(Limiter::new(&opts));
 
             loop {
                 match srv.accept().await {
                     Ok(conn) => {
-                        let conn_semaphore = Arc::clone(&conn_semaphore);
+                        let limiter = Arc::clone(&limiter);
                         let conn = Arc::new(conn);
-                        let peer_ip = conn.peer_addr().ip();
 
-                        // Limit the number of simultaneous connections from the same IP address.
-                        if !ip_limiter.request_permit_ok(peer_ip) {
-                            conn.close().await;
-                            eprintln!(
-                                "Client '{peer_ip}': ERROR: \
-                                Too many simultaneous connections. Dropping connection."
-                            );
+                        let Some(permit) = limiter.acquire_permit(&conn).await else {
                             continue;
-                        }
-
-                        // Acquire a global connection slot.
-                        let permit = conn_semaphore
-                            .acquire_owned()
-                            .await
-                            .expect("Connection semaphore closed");
+                        };
 
                         task::spawn({
                             let conf = Arc::clone(&conf);
                             let opts = Arc::clone(&opts);
-                            let ip_limiter = Arc::clone(&ip_limiter);
 
                             async move {
                                 let mut proto = Protocol::new(&*conn, &conf, &opts.rundir);
@@ -208,9 +205,7 @@ async fn async_main(opts: Arc<Opts>) -> ah::Result<()> {
                                         e
                                     );
                                 }
-                                conn.close().await;
-                                drop(permit);
-                                ip_limiter.return_permit(peer_ip);
+                                permit.drop_permit().await;
                             }
                         });
                     }

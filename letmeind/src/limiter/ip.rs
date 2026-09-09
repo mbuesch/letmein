@@ -9,7 +9,7 @@
 use std::{
     collections::HashMap,
     net::{IpAddr, Ipv6Addr},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 
 /// Rate limiter for incoming connections based on client IP addresses.
@@ -49,18 +49,19 @@ impl IpLimiter {
 
     /// Increment the connection count for the given IP address.
     ///
-    /// Returns `true` if the connection should be accepted,
-    /// or `false` if it should be rejected.
-    #[must_use]
-    pub fn request_permit_ok(&self, addr: IpAddr) -> bool {
+    /// Returns a permit, or `None` if the connection should be rejected.
+    pub fn acquire_permit(self: &Arc<IpLimiter>, addr: IpAddr) -> Option<IpLimiterPermit> {
         let key = Self::rate_limit_key(addr);
         let mut map = self.map.lock().expect("Mutex poisoned");
         let count = map.entry(key).or_insert(0);
         if *count >= self.max_ip_connections {
-            false
+            None
         } else {
             *count = count.saturating_add(1);
-            true
+            Some(IpLimiterPermit {
+                ip_limiter: Arc::clone(self),
+                ip: addr,
+            })
         }
     }
 
@@ -74,6 +75,17 @@ impl IpLimiter {
                 map.remove(&key);
             }
         }
+    }
+}
+
+pub struct IpLimiterPermit {
+    ip_limiter: Arc<IpLimiter>,
+    ip: IpAddr,
+}
+
+impl Drop for IpLimiterPermit {
+    fn drop(&mut self) {
+        self.ip_limiter.return_permit(self.ip);
     }
 }
 

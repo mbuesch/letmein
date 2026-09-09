@@ -14,14 +14,20 @@ use std::{
     convert::Infallible,
     net::{Ipv6Addr, SocketAddr},
     pin::Pin,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{self, AtomicBool, AtomicU64},
+    },
     time::Duration,
 };
 use tokio::{
     net::{TcpListener, TcpStream, UdpSocket},
+    sync::{Mutex, watch},
     task::{self, JoinHandle},
     time,
 };
+
+static NEXT_CONN_ID: AtomicU64 = AtomicU64::new(0);
 
 async fn sleep_forever() -> Infallible {
     loop {
@@ -30,30 +36,51 @@ async fn sleep_forever() -> Infallible {
 }
 
 pub trait ConnectionOps {
+    fn id(&self) -> u64;
     fn peer_addr(&self) -> SocketAddr;
     fn l4proto(&self) -> &'static str;
+    fn is_authenticated(&self) -> bool;
+    fn set_authenticated(&self);
     async fn recv_msg(&self) -> ah::Result<Option<Message>>;
     async fn send_msg(&self, msg: &Message) -> ah::Result<()>;
     async fn close(&self);
 }
 
+#[derive(Debug)]
 pub struct Connection {
+    /// Unique identifier for the connection.
+    id: u64,
+    /// The underlying network socket for the connection.
     socket: MsgNetSocket,
+    /// The peer address of the connection.
     peer_addr: SocketAddr,
+    /// The layer 4 protocol used by the connection ("TCP" or "UDP").
     l4proto: &'static str,
+    /// Becomes `true` once the connection has succeeded `AuthState::BasicAuth`.
+    is_authenticated: AtomicBool,
+    /// Becomes `true` once the connection has been closed.
+    closed_watch: (watch::Sender<bool>, Mutex<watch::Receiver<bool>>),
 }
 
 impl Connection {
     fn new(socket: MsgNetSocket, peer_addr: SocketAddr, l4proto: &'static str) -> Self {
+        let (closed_watch_tx, closed_watch_rx) = watch::channel(false);
         Self {
+            id: NEXT_CONN_ID.fetch_add(1, atomic::Ordering::Relaxed),
             socket,
             peer_addr,
             l4proto,
+            is_authenticated: AtomicBool::new(false),
+            closed_watch: (closed_watch_tx, Mutex::new(closed_watch_rx)),
         }
     }
 }
 
 impl ConnectionOps for Connection {
+    fn id(&self) -> u64 {
+        self.id
+    }
+
     fn peer_addr(&self) -> SocketAddr {
         self.peer_addr
     }
@@ -62,16 +89,35 @@ impl ConnectionOps for Connection {
         self.l4proto
     }
 
+    fn is_authenticated(&self) -> bool {
+        self.is_authenticated.load(atomic::Ordering::SeqCst)
+    }
+
+    fn set_authenticated(&self) {
+        self.is_authenticated.store(true, atomic::Ordering::SeqCst);
+    }
+
     async fn recv_msg(&self) -> ah::Result<Option<Message>> {
-        Message::recv(&self.socket).await
+        let mut closed = self.closed_watch.1.lock().await;
+        tokio::select! {
+            biased;
+            _ = closed.wait_for(|&c| c) =>  Ok(None),
+            res = Message::recv(&self.socket) => res,
+        }
     }
 
     async fn send_msg(&self, msg: &Message) -> ah::Result<()> {
-        msg.send(&self.socket).await
+        let mut closed = self.closed_watch.1.lock().await;
+        tokio::select! {
+            biased;
+            _ = closed.wait_for(|&c| c) => Err(err!("Connection closed")),
+            res = msg.send(&self.socket) => res,
+        }
     }
 
     async fn close(&self) {
         self.socket.close().await;
+        let _ = self.closed_watch.0.send(true);
     }
 }
 
