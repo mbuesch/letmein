@@ -1,7 +1,7 @@
 #!/bin/sh
 # -*- coding: utf-8 -*-
 
-srcdir="$(realpath "$0" | xargs dirname)"
+srcdir="$(dirname "$(realpath "$0")")"
 srcdir="$srcdir/.."
 
 # Import the makerelease.lib
