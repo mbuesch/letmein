@@ -13,6 +13,20 @@ If you installed letmein via distribution package or by other means, the configu
 - server: `/etc/letmeind.conf`
 - client: `/etc/letmein.conf`
 
+## Client configuration on multi-user systems
+
+The client configuration file contains the shared secret keys in the `[KEYS]` section.
+Possession of one of these keys authenticates a client to the server, so another local user who can read a shared client configuration can use its keys to knock open the resources authorized for that key.
+
+By default, the client configuration file is installed at `/opt/letmein/etc/letmein.conf` and is world-readable, which is insecure on multi-user systems.
+
+On a multi-user system, each user shall use a custom client configuration file in that user's home directory, with permissions that prevent other users from reading it.
+Pass that file explicitly when invoking the client:
+
+```
+letmein --config ~/.config/letmein/letmein.conf knock <host> <port>
+```
+
 # Configuration file format
 
 The format of the configuration files is a very simple `ini`-style format.
