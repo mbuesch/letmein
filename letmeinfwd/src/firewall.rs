@@ -10,6 +10,7 @@ pub mod nftables;
 
 use anyhow::{self as ah, format_err as err};
 use letmein_conf::{Config, Resource};
+use letmein_proto::ResourceId;
 use std::{
     collections::HashMap,
     net::IpAddr,
@@ -113,6 +114,7 @@ enum LeaseType {
         port: LeasePort,
     },
     Jump {
+        id: ResourceId,
         chain: FirewallChain,
         target: String,
         match_saddr: bool,
@@ -126,11 +128,12 @@ impl std::fmt::Display for LeaseType {
                 write!(f, "Port({port})")
             }
             Self::Jump {
+                id,
                 chain,
                 target,
                 match_saddr: _,
             } => {
-                write!(f, "Jump({chain}.{target})")
+                write!(f, "Jump({id}/{chain}.{target})")
             }
         }
     }
@@ -166,6 +169,7 @@ impl Lease {
     pub fn new_jump(
         conf: &Config,
         client_addr: IpAddr,
+        id: ResourceId,
         chain: FirewallChain,
         target: &str,
         match_saddr: bool,
@@ -175,6 +179,7 @@ impl Lease {
             conf,
             client_addr,
             LeaseType::Jump {
+                id,
                 chain,
                 target: target.to_string(),
                 match_saddr,
@@ -247,15 +252,15 @@ fn port_lease_id(addr: IpAddr, port: LeasePort) -> PortLeaseId {
 ///
 /// - `0`: Address of the client that initiated this jump.
 /// - `1`: The firewall chain that the jump is added to.
-/// - `2`: The name of the target chain that the jump jumps to.
-type JumpLeaseId = (IpAddr, FirewallChain, String);
+/// - `2`: The resource ID that created this lease.
+type JumpLeaseId = (IpAddr, FirewallChain, ResourceId);
 
 /// A map of jump [Lease]s.
 type JumpLeaseMap = HashMap<JumpLeaseId, Lease>;
 
 /// Make a new `JumpLeaseId`.
-fn jump_lease_id(addr: IpAddr, chain: FirewallChain, target: &str) -> JumpLeaseId {
-    (addr, chain, target.to_string())
+fn jump_lease_id(addr: IpAddr, chain: FirewallChain, id: ResourceId) -> JumpLeaseId {
+    (addr, chain, id)
 }
 
 trait LeaseMapOps {
@@ -297,8 +302,9 @@ pub trait FirewallMaintain {
 }
 
 /// Firewall jump targets for a jump lease.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct FirewallJumpTargets {
+    pub id: ResourceId,
     pub input: Option<String>,
     pub input_match_saddr: bool,
     pub forward: Option<String>,
@@ -309,6 +315,7 @@ pub struct FirewallJumpTargets {
 
 impl std::fmt::Display for FirewallJumpTargets {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "id={} ", self.id)?;
         if let Some(input) = &self.input {
             write!(f, "input={input} ")?;
         }
@@ -327,7 +334,7 @@ impl TryFrom<Resource> for FirewallJumpTargets {
 
     fn try_from(res: Resource) -> ah::Result<Self> {
         if let Resource::Jump {
-            id: _,
+            id,
             input,
             input_match_saddr,
             forward,
@@ -339,6 +346,7 @@ impl TryFrom<Resource> for FirewallJumpTargets {
         } = res
         {
             Ok(Self {
+                id,
                 input,
                 input_match_saddr,
                 forward,

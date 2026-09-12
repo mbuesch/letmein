@@ -13,6 +13,7 @@ use crate::firewall::{
 };
 use anyhow::{self as ah, Context as _, format_err as err};
 use letmein_conf::Config;
+use letmein_proto::ResourceId;
 use nftables::{
     batch::Batch,
     expr::{Expression, NamedExpression, Payload, PayloadField},
@@ -187,10 +188,13 @@ fn statement_accept<'a>() -> Statement<'a> {
 
 /// Comment string for a `Rule`.
 /// It can be used as unique identifier for lease rules.
+///
+/// Port rule layout: `{addr}/port/{port}/accept/LETMEIN`
+/// Jump rule layout: `{addr}/{resource_id}/{target}/LETMEIN`
 fn gen_rule_comment(
     addr: Option<IpAddr>,
     port: Option<SingleLeasePort>,
-    target: Option<&str>,
+    jump: Option<(ResourceId, &str)>,
 ) -> ah::Result<String> {
     let mut comment = String::with_capacity(NFTNL_UDATA_COMMENT_MAXLEN);
 
@@ -202,8 +206,8 @@ fn gen_rule_comment(
     if let Some(port) = port {
         write!(&mut comment, "port/{port}/accept/")?;
     }
-    if let Some(target) = target {
-        write!(&mut comment, "jump/{target}/")?;
+    if let Some((id, target)) = jump {
+        write!(&mut comment, "{id}/{target}/")?;
     }
     write!(&mut comment, "LETMEIN")?;
 
@@ -250,6 +254,7 @@ fn gen_add_jump_cmd<'a>(
     chain: &'a str,
     client_addr: IpAddr,
     match_saddr: Option<IpAddr>,
+    id: ResourceId,
     target: &'a str,
 ) -> ah::Result<NfCmd<'a>> {
     let mut expr = Vec::with_capacity(2);
@@ -267,7 +272,7 @@ fn gen_add_jump_cmd<'a>(
     rule.comment = Some(Cow::Owned(gen_rule_comment(
         Some(client_addr),
         None,
-        Some(target),
+        Some((id, target)),
     )?));
     Ok(NfCmd::Add(NfListObject::Rule(rule)))
 }
@@ -301,6 +306,7 @@ fn gen_add_lease_cmds<'a>(
             }
         }
         LeaseType::Jump {
+            id,
             chain,
             target,
             match_saddr,
@@ -313,6 +319,7 @@ fn gen_add_lease_cmds<'a>(
                 chain,
                 client_addr,
                 match_saddr,
+                *id,
                 target,
             )?);
         }
@@ -360,9 +367,9 @@ impl ListedRuleset<'_> {
         chain: &str,
         client_addr: IpAddr,
         port: Option<SingleLeasePort>,
-        target: Option<&str>,
+        jump: Option<(ResourceId, &str)>,
     ) -> ah::Result<u32> {
-        let comment = gen_rule_comment(Some(client_addr), port, target)?;
+        let comment = gen_rule_comment(Some(client_addr), port, jump)?;
         for obj in &*self.objs {
             if let NfObject::ListObject(obj) = obj {
                 match obj {
@@ -388,7 +395,7 @@ impl ListedRuleset<'_> {
             "Nftables handle for {}/{}/{} not found in the kernel ruleset.",
             client_addr,
             port.map(|p| p.to_string()).unwrap_or_default(),
-            target.unwrap_or_default()
+            jump.map(|(id, t)| format!("{id}/{t}")).unwrap_or_default()
         ))
     }
 
@@ -403,7 +410,7 @@ impl ListedRuleset<'_> {
         let new_rule = |chain: &'a str,
                         client_addr: IpAddr,
                         port: Option<SingleLeasePort>,
-                        target: Option<&str>|
+                        jump: Option<(ResourceId, &str)>|
          -> ah::Result<NfCmd> {
             let mut rule = Rule {
                 family: names.family,
@@ -418,7 +425,7 @@ impl ListedRuleset<'_> {
                 chain,
                 client_addr,
                 port,
-                target,
+                jump,
             )?);
             Ok(NfCmd::Delete(NfListObject::Rule(rule)))
         };
@@ -448,13 +455,14 @@ impl ListedRuleset<'_> {
                 }
             }
             LeaseType::Jump {
+                id,
                 chain,
                 target,
                 match_saddr: _,
             } => {
                 let client_addr = lease.client_addr();
                 let chain = names.get_chain(*chain)?;
-                cmds.push(new_rule(chain, client_addr, None, Some(target))?);
+                cmds.push(new_rule(chain, client_addr, None, Some((*id, target)))?);
             }
         }
         if conf.debug() {
@@ -776,7 +784,7 @@ impl NftFirewallInner {
                 continue;
             };
 
-            let key = jump_lease_id(remote_addr, *chain, target_chain);
+            let key = jump_lease_id(remote_addr, *chain, targets.id);
 
             if self.jump_leases.contains_key(&key) {
                 refresh_leases.push(key);
@@ -784,6 +792,7 @@ impl NftFirewallInner {
                 new_leases.push(Lease::new_jump(
                     conf,
                     remote_addr,
+                    targets.id,
                     *chain,
                     target_chain,
                     *match_saddr,
@@ -799,12 +808,13 @@ impl NftFirewallInner {
             // Add the new leases to our map.
             for lease in new_leases {
                 if let LeaseType::Jump {
+                    id,
                     chain,
-                    target,
+                    target: _,
                     match_saddr: _,
                 } = lease.type_()
                 {
-                    let key = jump_lease_id(lease.client_addr(), *chain, target);
+                    let key = jump_lease_id(lease.client_addr(), *chain, *id);
                     self.jump_leases.insert(key, lease);
                 } else {
                     unreachable!();
@@ -836,11 +846,11 @@ impl NftFirewallInner {
             (targets.forward.as_ref(), FirewallChain::Forward),
             (targets.output.as_ref(), FirewallChain::Output),
         ] {
-            let Some(target_chain) = target_chain else {
+            if target_chain.is_none() {
                 continue;
-            };
+            }
 
-            let key = jump_lease_id(remote_addr, *chain, target_chain);
+            let key = jump_lease_id(remote_addr, *chain, targets.id);
 
             if let Some(lease) = self.jump_leases.remove(&key) {
                 if let Err(e) = self
@@ -858,6 +868,7 @@ impl NftFirewallInner {
         if removed {
             self.print_total_rule_count(conf);
         }
+
         Ok(())
     }
 }
