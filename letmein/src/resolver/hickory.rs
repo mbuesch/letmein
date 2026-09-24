@@ -60,27 +60,18 @@ pub async fn resolve(host: &str, cfg: &ResConf) -> ah::Result<IpAddr> {
         #[cfg(target_os = "android")]
         let print_warning = false;
 
-        if print_warning {
+        if print_warning && !cfg.suppress_warnings {
             #[cfg(target_os = "windows")]
             let os_info = "Is your DNS resolver configured correctly in network settings?";
 
             #[cfg(not(target_os = "windows"))]
             let os_info = "Is /etc/resolv.conf present and configured correctly?";
 
-            if cfg.suppress_warnings {
-                // Quiet retry path (e.g. TryBoth mode) - log for audit only, no user output.
-                eprintln!(
-                    "letmein: [INFO] DNS_FALLBACK host={host} addr_type={addr_type_str} -- \
-                     System DNS resolver failed; falling back to external DNS servers."
-                );
-            } else {
-                // Normal path - structured audit line with human-readable warning for the user.
-                eprintln!(
-                    "letmein: [WARN] DNS_FALLBACK host={host} addr_type={addr_type_str} -- \
-                     Warning: Could not resolve {addr_type_str} address with the system DNS \
-                     resolver. {os_info} Falling back to other DNS servers."
-                );
-            }
+            eprintln!(
+                "Warning: Could not resolve {addr_type_str} address with the system DNS resolver. \
+                 {os_info} \
+                 Falling back to other DNS servers."
+            );
         }
     }
 
