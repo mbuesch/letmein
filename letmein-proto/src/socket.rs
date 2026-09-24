@@ -25,6 +25,11 @@ use tokio::{
     },
 };
 
+/// Enable low-level logging.
+/// This may enable intrusion detection or may enable `DoS` attacks. Be careful!
+/// TODO: This shall be a runtime option.
+const LOWLEVEL_LOGGING: bool = false;
+
 /// One connection for use by [`UdpDispatcherRx`].
 #[derive(Debug)]
 struct UdpConn<const MSG_SIZE: usize, const Q_SIZE: usize> {
@@ -88,14 +93,14 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
         match socket.try_recv_from(&mut buf) {
             Ok((n, peer_addr)) => {
                 if n != MSG_SIZE {
-                    // Malformed datagram - a valid letmein client always sends exactly
-                    // MSG_SIZE bytes.  Log unconditionally for security audit.
-                    eprintln!(
-                        "letmeind: [WARN] UDP_MALFORMED_PACKET \
-                        peer={} expected_size={MSG_SIZE} actual_size={n} \
-                        -- Dropping datagram: invalid size from peer",
-                        peer_addr.ip()
-                    );
+                    if LOWLEVEL_LOGGING {
+                        eprintln!(
+                            "letmeind: [WARN] UDP_MALFORMED_PACKET \
+                            peer={} expected_size={MSG_SIZE} actual_size={n} \
+                            -- Dropping datagram: invalid size from peer",
+                            peer_addr.ip()
+                        );
+                    }
                     return Ok(());
                 }
 
@@ -117,13 +122,14 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 assert!(conn.rx_queue.len() <= Q_SIZE);
                 if conn.rx_queue.len() == Q_SIZE {
                     self.disconnect(peer_addr); // Close connection.
-                    // RX queue flood from a single peer - log for security audit.
-                    eprintln!(
-                        "letmeind: [WARN] UDP_QUEUE_OVERFLOW \
-                        peer={} queue_max={Q_SIZE} \
-                        -- Dropping connection: RX queue overflow from peer",
-                        peer_addr.ip()
-                    );
+                    if LOWLEVEL_LOGGING {
+                        eprintln!(
+                            "letmeind: [WARN] UDP_QUEUE_OVERFLOW \
+                            peer={} queue_max={Q_SIZE} \
+                            -- Dropping connection: RX queue overflow from peer",
+                            peer_addr.ip()
+                        );
+                    }
                     return Ok(());
                 }
                 conn.rx_queue.push_back(buf);
@@ -135,14 +141,15 @@ impl<const MSG_SIZE: usize, const Q_SIZE: usize> UdpDispatcherRx<MSG_SIZE, Q_SIZ
                 // we exceeded the maximum number of connections.
                 if self.conn.len() > self.max_nr_conn {
                     self.disconnect(peer_addr); // Close connection.
-                    // Connection table full - log for security audit.
-                    eprintln!(
-                        "letmeind: [WARN] UDP_CONN_LIMIT_EXCEEDED \
-                        peer={} conn_max={} \
-                        -- Dropping connection: too many simultaneous UDP connections",
-                        peer_addr.ip(),
-                        self.max_nr_conn
-                    );
+                    if LOWLEVEL_LOGGING {
+                        eprintln!(
+                            "letmeind: [WARN] UDP_CONN_LIMIT_EXCEEDED \
+                            peer={} conn_max={} \
+                            -- Dropping connection: too many simultaneous UDP connections",
+                            peer_addr.ip(),
+                            self.max_nr_conn
+                        );
+                    }
                     return Ok(());
                 }
 
