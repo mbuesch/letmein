@@ -15,8 +15,8 @@ use anyhow::{self as ah, Context as _, format_err as err};
 
 #[cfg(any(feature = "udp", feature = "tcp", feature = "unix"))]
 use std::{
+    mem::{offset_of, size_of_val},
     os::fd::{FromRawFd as _, RawFd},
-    mem::{offset_of, size_of_val}
 };
 
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
