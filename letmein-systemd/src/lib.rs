@@ -17,6 +17,7 @@ use anyhow::{self as ah, Context as _, format_err as err};
 use std::{
     mem::{offset_of, size_of_val},
     os::fd::{FromRawFd as _, RawFd},
+    sync::atomic::{AtomicBool, Ordering::SeqCst},
 };
 
 #[cfg(feature = "udp")]
@@ -148,10 +149,14 @@ pub enum SystemdSocket {
 
 impl SystemdSocket {
     /// Get all sockets from systemd.
-    ///
-    /// All environment variables related to this operation will be cleared.
     #[allow(unused_mut)]
     pub fn get_all() -> ah::Result<Vec<SystemdSocket>> {
+        // This function can only be called once.
+        static ONCE: AtomicBool = AtomicBool::new(false);
+        if ONCE.fetch_or(true, SeqCst) {
+            return Err(err!("SystemdSocket::get_all() called twice"));
+        }
+
         let mut sockets = vec![];
         if sd_notify::booted().unwrap_or(false) {
             for fd in sd_notify::listen_fds().context("Systemd listen_fds")? {
@@ -192,7 +197,14 @@ impl SystemdSocket {
 
 /// Notify ready-status to systemd.
 pub fn systemd_notify_ready() -> ah::Result<()> {
+    // This function can only be called once.
+    static ONCE: AtomicBool = AtomicBool::new(false);
+    if ONCE.fetch_or(true, SeqCst) {
+        return Err(err!("systemd_notify_ready() called twice"));
+    }
+
     sd_notify::notify(&[sd_notify::NotifyState::Ready])?;
+
     Ok(())
 }
 
