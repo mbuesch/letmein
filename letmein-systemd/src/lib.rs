@@ -14,10 +14,10 @@ std::compile_error!("letmeind server and letmein-systemd do not support non-Linu
 use anyhow::{self as ah, Context as _, format_err as err};
 
 #[cfg(any(feature = "tcp", feature = "unix"))]
-use std::{
-    mem::{offset_of, size_of_val},
-    os::fd::{FromRawFd as _, RawFd},
-};
+use std::os::fd::{FromRawFd as _, RawFd};
+
+#[cfg(any(feature = "udp", feature = "tcp", feature = "unix"))]
+use std::mem::{offset_of, size_of_val};
 
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
