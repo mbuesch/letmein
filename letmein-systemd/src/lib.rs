@@ -15,7 +15,7 @@ use anyhow::{self as ah, Context as _, format_err as err};
 
 #[cfg(any(feature = "tcp", feature = "unix"))]
 use std::{
-    mem::size_of_val,
+    mem::{offset_of, size_of_val},
     os::fd::{FromRawFd as _, RawFd},
 };
 
@@ -81,16 +81,19 @@ unsafe fn get_socket_type(fd: RawFd) -> Option<libc::c_int> {
 /// SAFETY: The passed `fd` must be a socket `fd`.
 #[cfg(any(feature = "udp", feature = "tcp", feature = "unix"))]
 unsafe fn get_socket_family(fd: RawFd) -> Option<libc::c_int> {
-    // SAFETY: Initializing `libc::sockaddr` structure with zero is an allowed pattern.
-    let mut saddr: libc::sockaddr = unsafe { std::mem::zeroed() };
-    let sizeof_saddr: u32 = size_of_val(&saddr).try_into().expect("libc::sockaddr size");
+    // SAFETY: Initializing `libc::sockaddr_un` structure with zero is an allowed pattern.
+    // Use `libc::sockaddr_un` because its size is sufficient to hold all socket types.
+    let mut saddr: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    let sizeof_saddr: u32 = size_of_val(&saddr).try_into().expect("libc::sockaddr_un");
     let mut len: libc::socklen_t = sizeof_saddr as _;
 
     // SAFETY: The `fd` is valid, `saddr` and `len` are initialized and valid.
-    let ret = unsafe { libc::getsockname(fd, &raw mut saddr, &raw mut len) };
+    let ret =
+        unsafe { libc::getsockname(fd, (&raw mut saddr).cast::<libc::sockaddr>(), &raw mut len) };
 
-    if ret == 0 && len >= sizeof_saddr as _ {
-        Some(saddr.sa_family.into())
+    let min_len = offset_of!(libc::sockaddr_un, sun_family) + size_of::<libc::sa_family_t>();
+    if ret == 0 && len as usize >= min_len {
+        Some(saddr.sun_family.into())
     } else {
         None
     }
