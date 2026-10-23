@@ -58,6 +58,10 @@ jobs:
         run: |
           cargo build --no-default-features --features cli,libc-resolver
           cargo build
+          cargo build --package letmein-systemd --no-default-features
+          cargo build --package letmein-systemd --no-default-features --features udp
+          cargo build --package letmein-systemd --no-default-features --features tcp
+          cargo build --package letmein-systemd --no-default-features --features unix
       - if: matrix.os.name != 'linux'
         run: |
           cargo build --package letmein --no-default-features --features cli,libc-resolver
