@@ -17,8 +17,9 @@ use anyhow::{self as ah, Context as _, format_err as err};
 use std::{
     mem::{offset_of, size_of_val},
     os::fd::{FromRawFd as _, RawFd},
-    sync::atomic::{AtomicBool, Ordering::SeqCst},
 };
+
+use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
 #[cfg(feature = "udp")]
 use std::net::UdpSocket;
