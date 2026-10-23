@@ -110,12 +110,33 @@ fn is_udp_socket(fd: RawFd) -> bool {
     }
 }
 
+/// Check if the stream socket `fd` is in the listening state.
+#[cfg(any(feature = "tcp", feature = "unix"))]
+fn is_listening(fd: RawFd) -> bool {
+    let mut val: libc::c_int = 0;
+    let mut len: libc::socklen_t = size_of::<libc::c_int>().try_into().expect("libc::c_int");
+
+    // SAFETY: The `fd` is valid, `val` and `len` are initialized and valid.
+    let ret = unsafe {
+        libc::getsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_ACCEPTCONN,
+            (&raw mut val).cast(),
+            &raw mut len,
+        )
+    };
+
+    ret == 0 && val != 0
+}
+
 #[cfg(feature = "tcp")]
 fn is_tcp_socket(fd: RawFd) -> bool {
     // SAFETY: Check if `fd` is a socket before using the socket functions.
     unsafe {
         is_socket(fd)
             && get_socket_type(fd) == Some(libc::SOCK_STREAM)
+            && is_listening(fd)
             && INET46.contains(&get_socket_family(fd))
     }
 }
@@ -126,6 +147,7 @@ fn is_unix_socket(fd: RawFd) -> bool {
     unsafe {
         is_socket(fd)
             && get_socket_type(fd) == Some(libc::SOCK_STREAM)
+            && is_listening(fd)
             && get_socket_family(fd) == Some(libc::AF_UNIX)
     }
 }
