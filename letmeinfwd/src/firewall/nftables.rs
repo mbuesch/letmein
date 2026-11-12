@@ -360,6 +360,7 @@ impl ListedRuleset<'_> {
 
     /// Get the nftables handle corresponding to the lease.
     /// The rule's comment is the main identifier.
+    #[allow(clippy::map_unwrap_or)]
     fn find_handle(
         &self,
         family: NfFamily,
