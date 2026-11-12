@@ -156,6 +156,7 @@ fn need_retry_throttling(e: &std::io::Error) -> bool {
 
 type TcpJoinHandle = Pin<Box<JoinHandle<ah::Result<(TcpStream, SocketAddr)>>>>;
 
+#[allow(unreachable_code)]
 fn spawn_tcp_accept(tcp: Arc<Option<TcpListener>>) -> TcpJoinHandle {
     Box::pin(task::spawn(async move {
         if let Some(tcp) = tcp.as_ref() {
@@ -179,6 +180,7 @@ fn spawn_tcp_accept(tcp: Arc<Option<TcpListener>>) -> TcpJoinHandle {
 
 type UdpJoinHandle = Pin<Box<JoinHandle<ah::Result<(Arc<MsgUdpDispatcher>, SocketAddr)>>>>;
 
+#[allow(unreachable_code)]
 fn spawn_udp_accept(udp: Arc<Option<Arc<MsgUdpDispatcher>>>) -> UdpJoinHandle {
     Box::pin(task::spawn(async move {
         if let Some(udp) = udp.as_ref() {
